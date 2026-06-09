@@ -1,0 +1,64 @@
+# Gradle
+.gradle/
+build/
+**/build/
+gradle-wrapper.jar
+local.properties
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.DS_Store
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+/captures
+.externalNativeBuild/
+.cxx/
+google-services.json
+
+# iOS / Xcode
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+.xcode.env.local
+
+# Kotlin/Native
+*.klib
+/kotlin-native/
+
+# CocoaPods
+Podfile.lock
+
+# Web (if targeting JS/WASM)
+node_modules/
+.kotlin/
+dist/
+web/
+
+# Desktop
+*.exe
+*.app
+*.dmg
+
+# Environment / secrets
+*.env
+*.keystore
+keystore.properties
+secrets.properties
+
+# Compose compiler metrics (optional, can be useful to keep)
+**/composeCompilerReports/
+**/composeMetrics/*.db
+*.db
