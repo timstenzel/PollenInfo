@@ -28,58 +28,63 @@ points at a fictional documentation host.
 
 ### Implementation steps
 
-- [ ] Introduce the backend base address as a platform-provided value (`10.0.2.2` for the Android
+- [x] Introduce the backend base address as a platform-provided value (`10.0.2.2` for the Android
       emulator, `localhost` for the iOS simulator) with actuals for both platforms, and inject it into
       the API service through Koin rather than referencing it as a top-level constant, so tests can
       point a mock engine at any host.
-- [ ] Allow unencrypted traffic in **debug builds only**, via a new debug source-set manifest, so a
+- [x] Allow unencrypted traffic in **debug builds only**, via a new debug source-set manifest, so a
       release build can never permit it.
-- [ ] Build the station retrieval path: wire DTO matching the server's station payload, a mapper to a
+- [x] Build the station retrieval path: wire DTO matching the server's station payload, a mapper to a
       domain model that sorts alphabetically by name, an API service, and a repository returning the
       project's own `Result` type via `safeCall`. Add a comment on the sort explaining why a plain
       comparison is correct and a JVM-only collator must not be introduced.
-- [ ] Add the onboarding UI state (loading / content / error, with the error carrying the exception as
+- [x] Add the onboarding UI state (loading / content / error, with the error carrying the exception as
       the existing reference screen's state does) and a view model that loads on init, exposes retry,
       and records the selected station.
-- [ ] Build the onboarding screen: no title bar, welcome headline and subtitle, and a read-only
+- [x] Build the onboarding screen: no title bar, welcome headline and subtitle, and a read-only
       dropdown labelled `Station`. Full-screen message plus retry action in the error state.
-- [ ] Register the onboarding destination and make it the start destination. **Keep the existing
+- [x] Register the onboarding destination and make it the start destination. **Keep the existing
       reference destination registered** so that feature remains reachable and unchanged in function.
-- [ ] Write the tests, and update the project documentation with the backend base address convention,
+- [x] Write the tests, and update the project documentation with the backend base address convention,
       the debug-only cleartext manifest, and the iOS transport-security note the future iOS app wrapper
       will need for a cleartext development backend. Correct the reference API service's comment that
       says to point a real feature at our own backend, now that one does.
 
+> Note: the debug manifest lives at `composeApp/src/debug/AndroidManifest.xml`, **not**
+> `src/androidDebug/`. Despite `./gradlew :composeApp:sourceSets` reporting the latter as the debug
+> manifest path in this KMP + AGP setup, only `src/debug/AndroidManifest.xml` is actually merged —
+> verified against the merged manifest both ways.
+
 ### Acceptance criteria
 
-- [ ] With the backend running locally, launching the app on an Android emulator shows the onboarding
+- [x] With the backend running locally, launching the app on an Android emulator shows the onboarding
       screen, and the dropdown lists all 15 stations with Basel first and Zürich last.
-- [ ] An automated test proves the mapper's ordering, including that `Lausanne` precedes
+- [x] An automated test proves the mapper's ordering, including that `Lausanne` precedes
       `Locarno / Monti` — the case the server's own ordering gets wrong — and that accented names sort
       where expected.
-- [ ] Automated tests drive the repository through a real HTTP client backed by a mock engine and show:
+- [x] Automated tests drive the repository through a real HTTP client backed by a mock engine and show:
       a valid payload yields success with all 15 stations and every field mapped; HTTP 500 yields
       failure; malformed JSON yields failure; a payload containing an unknown extra field still
       succeeds.
-- [ ] With the backend stopped, the screen shows the error state with a retry action; starting the
+- [x] With the backend stopped, the screen shows the error state with a retry action; starting the
       backend and using retry loads the list.
-- [ ] Each dropdown row shows the station name only — no canton, coordinates or altitude.
-- [ ] The merged manifest of a release build contains no cleartext-traffic permission, while the debug
+- [x] Each dropdown row shows the station name only — no canton, coordinates or altitude.
+- [x] The merged manifest of a release build contains no cleartext-traffic permission, while the debug
       build's does.
-- [ ] The project documentation describes the backend base address convention, the debug-only cleartext
+- [x] The project documentation describes the backend base address convention, the debug-only cleartext
       manifest, and the iOS transport-security requirement.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] No `java.*`, `String.format`, `UUID` or `SimpleDateFormat` reference is introduced in
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] No `java.*`, `String.format`, `UUID` or `SimpleDateFormat` reference is introduced in
       `commonMain`.
-- [ ] Every file using the result type imports it explicitly from the project's own result package; no
+- [x] Every file using the result type imports it explicitly from the project's own result package; no
       use of `runCatching`.
-- [ ] No station name, abbreviation list or station coordinate is hardcoded in `commonMain`,
+- [x] No station name, abbreviation list or station coordinate is hardcoded in `commonMain`,
       `androidMain` or `iosMain` — test sources are exempt, since fixtures legitimately contain them.
-- [ ] DTOs remain confined to the feature's data layer and are not referenced from domain or
+- [x] DTOs remain confined to the feature's data layer and are not referenced from domain or
       presentation code.
 
 ---

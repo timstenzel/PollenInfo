@@ -172,7 +172,47 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `PollenSeverity`. Consequence: the example screen cannot load data at runtime and will land in its
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
+For a real feature that talks to our own backend, mirror `feature/onboarding` instead — it is the
+same layering pointed at `:server` through `apiBaseUrl`.
+
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`).
+
+### Talking to our own backend
+
+`core/network/ApiConfig.kt` declares `expect val apiBaseUrl: String` — the base address of `:server`,
+without a trailing slash. There is one actual per platform because a development server on the host
+machine is reachable under a different name from each emulator:
+
+| Platform | `apiBaseUrl`            | Why                                                    |
+| -------- | ----------------------- | ------------------------------------------------------ |
+| Android  | `http://10.0.2.2:8080`  | The emulator's alias for the host's loopback interface |
+| iOS      | `http://localhost:8080` | The simulator shares the host's network stack          |
+
+**API services never read `apiBaseUrl` themselves.** They take the base URL as a constructor
+parameter and Koin supplies it (`single { StationApiService(get(), apiBaseUrl) }`), so a test can
+construct one against whatever host its `MockEngine` answers for. Replace the actuals with an
+`https` address once the backend is deployed; there is deliberately no BuildConfig or Gradle
+flavour machinery for this yet.
+
+Because those addresses are plain HTTP, both platforms need a transport-security exception:
+
+- **Android** — `composeApp/src/debug/AndroidManifest.xml` sets `android:usesCleartextTraffic="true"`
+  on `<application>`. It lives in the **debug source set only**, so a release build can never ship
+  it (verify with `grep usesCleartextTraffic composeApp/build/intermediates/merged_manifest/<variant>/…`).
+  Note the path is `src/debug/`, not `src/androidDebug/`: despite what `./gradlew :composeApp:sourceSets`
+  reports, only `src/debug/AndroidManifest.xml` is actually merged in this KMP + AGP setup.
+- **iOS** — no `Info.plist` exists yet (there is no iOS app project). Whoever creates the iOS
+  wrapper must add an ATS exception, `NSAllowsLocalNetworking = true`, or the simulator will refuse
+  the cleartext development backend. See "iOS wrapper configuration" below.
+
+### iOS wrapper configuration
+
+The project has no `iosApp` Xcode project, so these keys cannot be set today. They are the
+`Info.plist` entries the shared code already depends on, listed here for whoever creates the wrapper:
+
+| Key                                       | Value  | Needed by                                            |
+| ----------------------------------------- | ------ | ---------------------------------------------------- |
+| `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` | The cleartext development backend on `localhost` |
 
 ### Error handling
 
@@ -203,7 +243,9 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 ### Navigation
 
 Type-safe Compose Navigation: destinations are `@Serializable` objects/classes nested in the
-`Screen` sealed interface, registered via `composable<Screen.X>` in `AppNavigation`.
+`Screen` sealed interface, registered via `composable<Screen.X>` in `AppNavigation`. The start
+destination is `Screen.Onboarding`; `Screen.Example` stays registered so the reference feature
+remains reachable, but nothing navigates to it.
 
 ### Multiplatform gotchas
 
