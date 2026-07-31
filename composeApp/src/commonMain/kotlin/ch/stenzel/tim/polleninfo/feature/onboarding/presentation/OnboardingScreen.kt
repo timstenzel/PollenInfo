@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +34,26 @@ import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-fun OnboardingScreen(viewModel: OnboardingViewModel = koinViewModel()) {
+fun OnboardingScreen(
+    onOnboardingComplete: () -> Unit,
+    viewModel: OnboardingViewModel = koinViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // One-shot events, not state: collecting a Channel here means the navigation below runs exactly
+    // once per completion, rather than on every recomposition that reads a flag.
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is OnboardingEvent.Completed -> onOnboardingComplete()
+            }
+        }
+    }
 
     OnboardingContent(
         uiState = uiState,
         onStationSelected = viewModel::onStationSelected,
+        onConfirm = viewModel::onConfirm,
         onRetry = viewModel::retry,
     )
 }
@@ -51,6 +66,7 @@ fun OnboardingScreen(viewModel: OnboardingViewModel = koinViewModel()) {
 private fun OnboardingContent(
     uiState: OnboardingUiState,
     onStationSelected: (Station) -> Unit,
+    onConfirm: () -> Unit,
     onRetry: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -62,7 +78,9 @@ private fun OnboardingContent(
             is OnboardingUiState.Content -> StationPickerView(
                 stations = uiState.stations,
                 selected = uiState.selected,
+                saveError = uiState.saveError,
                 onStationSelected = onStationSelected,
+                onConfirm = onConfirm,
             )
         }
     }
@@ -103,7 +121,9 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
 private fun StationPickerView(
     stations: List<Station>,
     selected: Station?,
+    saveError: Boolean,
     onStationSelected: (Station) -> Unit,
+    onConfirm: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -122,6 +142,23 @@ private fun StationPickerView(
             selected = selected,
             onStationSelected = onStationSelected,
         )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onConfirm,
+            // Nothing to confirm until a station is picked, so a mis-tap cannot commit anything.
+            enabled = selected != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue")
+        }
+        if (saveError) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Could not save your selection. Please try again.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

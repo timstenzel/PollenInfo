@@ -102,48 +102,53 @@ does not yet have, so it needs a comment saying why.
 
 ### Implementation steps
 
-- [ ] Add the preferences-storage dependency to the version catalog.
-- [ ] Introduce the platform Koin module (with actuals for both platforms) and register it alongside
+- [x] Add the preferences-storage dependency to the version catalog.
+- [x] Introduce the platform Koin module (with actuals for both platforms) and register it alongside
       the existing modules. The Android actual obtains the application context from Koin; each actual
       constructs the preference store itself, including its own file path and IO dispatcher.
-- [ ] Add a persisted-selection repository in the shared core layer, exposing the stored station as an
+- [x] Add a persisted-selection repository in the shared core layer, exposing the stored station as an
       observable stream that emits nothing-selected when absent, and a suspending write returning the
       project's `Result` type.
-- [ ] Add the confirm action to the onboarding screen, enabled only when a station is selected.
-- [ ] Emit a one-shot completion event on a successful write, collected by the screen and surfaced to
+- [x] Add the confirm action to the onboarding screen, enabled only when a station is selected.
+- [x] Emit a one-shot completion event on a successful write, collected by the screen and surfaced to
       navigation as a completion callback; on a failed write, set an inline error under the confirm
       action and emit nothing.
-- [ ] Add the placeholder main destination and screen, which reads the stored selection directly and
+- [x] Add the placeholder main destination and screen, which reads the stored selection directly and
       displays its name, with a comment marking it as a stand-in for the real dashboard. Navigate to
       it such that the back gesture leaves the app rather than returning to onboarding.
-- [ ] Write hand-written in-memory fakes and the tests, and document the persisted-selection location,
+- [x] Write hand-written in-memory fakes and the tests, and document the persisted-selection location,
       the platform module and the one-shot event pattern in the project documentation.
+
+> Note: the iOS actual uses `Dispatchers.Default`, not `Dispatchers.IO` — the latter is `internal`
+> in kotlinx-coroutines on Kotlin/Native and does not compile there. The Android actual uses
+> `Dispatchers.IO` as intended. This is exactly the kind of per-platform difference the platform
+> module exists to absorb; documented in `CLAUDE.md`.
 
 ### Acceptance criteria
 
-- [ ] The confirm action is unavailable when the screen loads and becomes available once a station is
+- [x] The confirm action is unavailable when the screen loads and becomes available once a station is
       selected — verified by an automated view-model test and observable at runtime.
-- [ ] Confirming a selection leaves onboarding and shows the placeholder main screen displaying the
+- [x] Confirming a selection leaves onboarding and shows the placeholder main screen displaying the
       selected station's name.
-- [ ] From the placeholder main screen, the device back gesture leaves the app and does not return to
+- [x] From the placeholder main screen, the device back gesture leaves the app and does not return to
       onboarding.
-- [ ] An automated test shows the view model emits its completion event exactly once for a successful
+- [x] An automated test shows the view model emits its completion event exactly once for a successful
       write, and that the stored value contains both the station's abbreviation and its display name.
-- [ ] An automated test shows that when the write fails, no completion event is emitted and the state
+- [x] An automated test shows that when the write fails, no completion event is emitted and the state
       carries the save-failure flag; a static check shows the message
       `Could not save your selection. Please try again.` appears exactly once in the source.
-- [ ] The project documentation describes the persisted-selection location, the platform Koin module
+- [x] The project documentation describes the persisted-selection location, the platform Koin module
       and the one-shot event pattern, including why it is not a state flag.
 
 ### Quality gates
 
-- [ ] Full test suite and iOS compile check pass.
-- [ ] Completion is delivered through a one-shot channel; the UI state contains no boolean standing
+- [x] Full test suite and iOS compile check pass.
+- [x] Completion is delivered through a one-shot channel; the UI state contains no boolean standing
       for "already navigated".
-- [ ] Test doubles are hand-written; no mocking framework is added to the project.
-- [ ] No `java.*` or other JVM-only API is introduced in `commonMain`; the storage factory and its
+- [x] Test doubles are hand-written; no mocking framework is added to the project.
+- [x] No `java.*` or other JVM-only API is introduced in `commonMain`; the storage factory and its
       dispatcher live in the platform actuals.
-- [ ] The persisted-selection implementation contains no logic beyond reading and writing its two keys,
+- [x] The persisted-selection implementation contains no logic beyond reading and writing its two keys,
       since it is deliberately not unit-tested.
 
 ---

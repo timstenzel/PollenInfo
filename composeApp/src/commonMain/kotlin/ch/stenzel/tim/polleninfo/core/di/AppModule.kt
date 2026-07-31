@@ -2,6 +2,8 @@ package ch.stenzel.tim.polleninfo.core.di
 
 import ch.stenzel.tim.polleninfo.core.network.apiBaseUrl
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
+import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.feature.example.data.remote.ExampleApiService
 import ch.stenzel.tim.polleninfo.feature.example.data.repository.ExampleRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleRepository
@@ -26,6 +28,9 @@ val dataModule = module {
     // construct one against any host.
     single { StationApiService(get(), apiBaseUrl) }
     single<StationRepository> { StationRepositoryImpl(get()) }
+
+    // The DataStore itself comes from platformModule; only the thin repository over it is common.
+    single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
 }
 
 val domainModule = module {
@@ -34,7 +39,7 @@ val domainModule = module {
 
 val presentationModule = module {
     viewModel { ExampleViewModel(get()) }
-    viewModel { OnboardingViewModel(get()) }
+    viewModel { OnboardingViewModel(get(), get()) }
 }
 
-val appModules = listOf(networkModule, dataModule, domainModule, presentationModule)
+val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

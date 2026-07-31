@@ -233,6 +233,38 @@ One sealed interface per screen with `Loading` / `Content` / `Error` (see
 previous data on screen. ViewModels expose a single `StateFlow<XUiState>` and collect with
 `collectAsStateWithLifecycle()`.
 
+### One-shot events
+
+State is what the screen should **show**; an event is what it should **do**, once. Navigation and
+one-off snackbars are events. A ViewModel delivers them on a `Channel<XEvent>(Channel.BUFFERED)`
+exposed as `receiveAsFlow()`, collected in a `LaunchedEffect` that calls a lambda supplied by
+`AppNavigation` — see `OnboardingEvent` / `OnboardingViewModel.events`.
+
+**Do not model these as a boolean on the UI state.** A flag like `isComplete` describes a state, but
+"navigate away" must happen exactly once: a flag re-fires on every state re-emission and every
+recomposition that reads it, so the screen navigates again on a configuration change or any later
+update, and the flag then has to be cleared — bookkeeping that exists only to undo the wrong model.
+A channel delivers each event to exactly one collector exactly once and needs no reset.
+
+Anything the screen should keep displaying — including error flags such as
+`OnboardingUiState.Content.saveError` — stays in the UI state.
+
+### Persisted user selections
+
+`core/preferences/` owns everything the user has chosen and the app must remember.
+`SelectedStationRepository` is the only one so far: a `Flow<SelectedStation?>` that emits `null`
+while nothing is stored, plus `suspend fun select(...): Result<Unit>` — a write can fail on IO, and
+the caller must react rather than move on to a screen with nothing to read.
+
+It lives in `core/` rather than in `feature/onboarding` because it already has three consumers:
+onboarding writes it, the startup gate reads it, and the home screen reads it to label itself.
+
+`DataStoreSelectedStationRepository` is **deliberately logic-free** — it reads and writes two string
+keys and nothing else. It has no unit test: a real one would need a platform file path, and app
+tests may not live in `androidUnitTest`. Every consumer is tested against
+`FakeSelectedStationRepository` in `commonTest` instead. Keep the implementation trivial enough that
+this stays an honest trade; anything worth testing belongs in a caller.
+
 ### DI
 
 Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`, `dataModule`,
@@ -240,12 +272,26 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 `viewModel { }` and injected with `koinViewModel()`. Use cases are `factory`, everything else
 `single`.
 
+Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
+(`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
+`appModules`. It currently provides the `DataStore<Preferences>`: the factory needs a file path and
+an IO dispatcher, neither of which exists in `commonMain`. Each actual builds the store itself —
+Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
+Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
+is `internal` on Kotlin/Native, so the iOS actual uses `Dispatchers.Default`. Keeping this module
+separate is what keeps `AppModule.kt` free of `expect`/`actual` noise.
+
 ### Navigation
 
 Type-safe Compose Navigation: destinations are `@Serializable` objects/classes nested in the
 `Screen` sealed interface, registered via `composable<Screen.X>` in `AppNavigation`. The start
 destination is `Screen.Onboarding`; `Screen.Example` stays registered so the reference feature
 remains reachable, but nothing navigates to it.
+
+Completing onboarding navigates to `Screen.Home` with `popUpTo<Screen.Onboarding> { inclusive =
+true }`, so the back gesture from Home leaves the app instead of reopening a setup screen whose
+purpose is already fulfilled. `feature/home` is a **placeholder** standing in for the real
+dashboard: it reads the stored selection and renders its name, with no ViewModel and no network.
 
 ### Multiplatform gotchas
 

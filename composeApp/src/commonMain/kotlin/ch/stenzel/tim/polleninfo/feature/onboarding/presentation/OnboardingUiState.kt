@@ -8,10 +8,14 @@ sealed interface OnboardingUiState {
     /**
      * The screen can do its job: [stations] is the list to offer, [selected] the user's current
      * pick (`null` until they make one).
+     *
+     * [saveError] is a failure the screen must keep *showing*; it deliberately does not stand for
+     * "already navigated" — completion is a one-shot [OnboardingEvent], not a state flag.
      */
     data class Content(
         val stations: List<Station>,
         val selected: Station? = null,
+        val saveError: Boolean = false,
     ) : OnboardingUiState
 
     /**

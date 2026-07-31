@@ -1,12 +1,17 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
+import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.onboarding.FakeStationRepository
 import ch.stenzel.tim.polleninfo.feature.onboarding.expectedStationNamesAlphabetical
 import ch.stenzel.tim.polleninfo.feature.onboarding.station
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -17,11 +22,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
 
     private val repository = FakeStationRepository()
+    private val selectedStationRepository = FakeSelectedStationRepository()
 
     @BeforeTest
     fun setUp() {
@@ -33,7 +40,7 @@ class OnboardingViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = OnboardingViewModel(repository)
+    private fun viewModel() = OnboardingViewModel(repository, selectedStationRepository)
 
     @Test
     fun `starts in Loading before the station list arrives`() = runTest {
@@ -157,4 +164,137 @@ class OnboardingViewModelTest {
 
         assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
     }
+
+    // --- confirming and persisting ---------------------------------------------------------
+
+    @Test
+    fun `confirming without a selection persists nothing and emits nothing`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), selectedStationRepository.writes)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `confirming stores the abbreviation and the display name of the selected station`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val geneve = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
+            .stations.single { it.abbr == "PGE" }
+
+        viewModel.onStationSelected(geneve)
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(SelectedStation(abbr = "PGE", name = "Genève"), selectedStationRepository.stored)
+    }
+
+    @Test
+    fun `confirming emits the completion event exactly once`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+
+        viewModel.onStationSelected(station())
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(listOf(OnboardingEvent.Completed), events)
+    }
+
+    @Test
+    fun `a failed write emits no completion event and flags the save error`() = runTest {
+        selectedStationRepository.failWrite = true
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+
+        viewModel.onStationSelected(station())
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), events, "a failed write must not navigate away")
+        val state = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
+        assertTrue(state.saveError)
+        assertNull(selectedStationRepository.stored)
+    }
+
+    @Test
+    fun `a failed write leaves the selection on screen so confirming again is possible`() = runTest {
+        selectedStationRepository.failWrite = true
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+        val bern = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
+            .stations.single { it.abbr == "PBE" }
+
+        viewModel.onStationSelected(bern)
+        viewModel.onConfirm()
+        advanceUntilIdle()
+        assertEquals(bern, assertIs<OnboardingUiState.Content>(viewModel.uiState.value).selected)
+
+        selectedStationRepository.failWrite = false
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(SelectedStation(abbr = "PBE", name = "Bern"), selectedStationRepository.stored)
+        assertEquals(listOf(OnboardingEvent.Completed), events)
+    }
+
+    @Test
+    fun `picking another station clears a previous save error`() = runTest {
+        selectedStationRepository.failWrite = true
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val stations = assertIs<OnboardingUiState.Content>(viewModel.uiState.value).stations
+
+        viewModel.onStationSelected(stations.first())
+        viewModel.onConfirm()
+        advanceUntilIdle()
+        assertTrue(assertIs<OnboardingUiState.Content>(viewModel.uiState.value).saveError)
+
+        viewModel.onStationSelected(stations.last())
+
+        assertTrue(!assertIs<OnboardingUiState.Content>(viewModel.uiState.value).saveError)
+    }
+
+    @Test
+    fun `confirming twice emits one event per successful write rather than replaying the first`() =
+        runTest {
+            val viewModel = viewModel()
+            advanceUntilIdle()
+            val events = viewModel.collectEvents(this)
+
+            viewModel.onStationSelected(station())
+            viewModel.onConfirm()
+            advanceUntilIdle()
+            assertEquals(1, events.size, "one confirm must produce exactly one event")
+
+            viewModel.onConfirm()
+            advanceUntilIdle()
+
+            assertEquals(2, events.size)
+        }
+}
+
+/**
+ * Drains the one-shot event channel into a list for the duration of [scope].
+ *
+ * The collector is started before the action under test so nothing is missed, and it is cancelled
+ * with the test scope. Asserting on list *size* is what proves "exactly once" — a state flag would
+ * replay on every re-emission and show up here as duplicates.
+ */
+private fun OnboardingViewModel.collectEvents(scope: TestScope): List<OnboardingEvent> {
+    val received = mutableListOf<OnboardingEvent>()
+    // UnconfinedTestDispatcher so the collector is already subscribed when this returns, rather
+    // than only after the next advanceUntilIdle().
+    scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) {
+        events.collect { received += it }
+    }
+    return received
 }
