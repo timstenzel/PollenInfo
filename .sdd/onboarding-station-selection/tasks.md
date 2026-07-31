@@ -205,62 +205,112 @@ provide.
 
 ### Implementation steps
 
-- [ ] Declare approximate-location permission in the main manifest. Do not declare precise location.
-- [ ] Add an explicit dependency on the Android activity-compose artifact rather than relying on it
+- [x] Declare approximate-location permission in the main manifest. Do not declare precise location.
+- [x] Add an explicit dependency on the Android activity-compose artifact rather than relying on it
       being present transitively.
-- [ ] Introduce a composable permission requester with actuals for both platforms, short-circuiting
+- [x] Introduce a composable permission requester with actuals for both platforms, short-circuiting
       when permission is already granted. Verify it compiles for the iOS simulator target **before**
       building the rest of this task; if the composable `expect` proves incompatible with the Compose
       compiler plugin, fall back to a non-composable factory returning a small requester object.
-- [ ] Introduce the coarse-location abstraction: a suspending call returning success-with-coordinates,
+- [x] Introduce the coarse-location abstraction: a suspending call returning success-with-coordinates,
       permission-denied or unavailable. Implement the Android actual on the platform location manager's
       network provider — no Play Services, no GPS fallback — and the iOS actual on the platform
       location manager with reduced accuracy, both bridging callbacks through a cancellable
       continuation so cancellation reaches the platform. Catch the platform exceptions for a missing
       provider and for permission revoked between check and call, mapping them to unavailable.
-- [ ] Apply the 10-second timeout in common code as a single constant, mapping expiry to unavailable.
-- [ ] Add the nearest-station calculation as a pure use case over the already-loaded station list:
+- [x] Apply the 10-second timeout in common code as a single constant, mapping expiry to unavailable.
+- [x] Add the nearest-station calculation as a pure use case over the already-loaded station list:
       great-circle distance using multiplatform maths only, first-match tie-break, nothing-found for an
       empty list, and no distance cap.
-- [ ] Wire the view model: request permission, map a denial to the permission-denied error, run the
+- [x] Wire the view model: request permission, map a denial to the permission-denied error, run the
       lookup while exposing an in-progress flag, map success to a filled-in selection, and map
       unavailable and timeout to the could-not-determine error.
-- [ ] Wire the screen: the location action above the dropdown, showing a progress indicator and
+- [x] Wire the screen: the location action above the dropdown, showing a progress indicator and
       disabled while in progress, with the inline error text directly below it in the error colour.
-- [ ] Write the tests, and document the location abstraction plus the platform configuration keys the
+- [x] Write the tests, and document the location abstraction plus the platform configuration keys the
       future iOS app wrapper needs (usage description and reduced-accuracy default).
+
+> Notes from implementation:
+> - The composable `expect`/`actual` **does** work with the Compose compiler plugin here; the
+>   fallback was not needed (verified with `compileTestKotlinIosSimulatorArm64` before anything else
+>   was built).
+> - `LocationManagerCompat.getCurrentLocation`, not `LocationManager.getCurrentLocation`: the
+>   framework method only exists from API 30 and `minSdk` is 26. That makes `androidx.core:core-ktx`
+>   a second explicit `androidMain` dependency alongside activity-compose.
+> - The timeout is applied by `OnboardingViewModel`, not by a decorator around the provider, so a
+>   fake that never answers exercises it under virtual time in `commonTest`.
 
 ### Acceptance criteria
 
-- [ ] Automated tests of the nearest-station calculation show: coordinates near Winterthur resolve to
+- [x] Automated tests of the nearest-station calculation show: coordinates near Winterthur resolve to
       the Zürich station; coordinates in Valais resolve to Sion; coordinates in Germany still resolve
       to a Swiss station with no error; an exact tie resolves to the first entry; an empty list resolves
       to nothing.
-- [ ] Automated view-model tests show a successful lookup fills the selection without completing
+      *(`FindNearestStationUseCaseTest`, 7 tests, all passing.)*
+- [x] Automated view-model tests show a successful lookup fills the selection without completing
       onboarding, that the in-progress flag is observable while the lookup runs, that a denial produces
       the permission-denied error, and that unavailable and timeout both produce the
       could-not-determine error — no outcome leaves the state unchanged.
-- [ ] On an Android emulator with the backend running and a position injected via the emulator's
+      *(`OnboardingViewModelTest`, 28 tests, all passing — 10 of them new for the location path.)*
+- [x] On an Android emulator with the backend running and a position injected via the emulator's
       location control, granting the permission fills the dropdown with a station and does not navigate
       automatically. If the emulator image exposes no network location provider, the run instead shows
       the could-not-determine message — record which occurred.
-- [ ] The location action is disabled and shows progress while a lookup is in flight.
-- [ ] The manifest declares approximate location only; a static check confirms no precise-location
+      **Recorded: the second outcome.** `Medium_Phone_API_36.1` reports a `network provider` whose
+      state is `enabled=false, last location=null` (its GMS network location provider is inert), so
+      `adb emu geo fix 8.7286 47.4989` never reaches it and the lookup returns no fix. Granting
+      "approximate location" showed `Your location could not be determined. Please pick a station
+      manually.` and the app stayed on onboarding. A shell test provider was not usable either:
+      `cmd location providers add-test-provider` needs `MOCK_LOCATION`, which cannot be granted to
+      `uid shell`. The success path is therefore covered by automated tests only.
+- [x] The location action is disabled and shows progress while a lookup is in flight.
+      *(View-model test `the in-progress flag is set while the lookup runs and cleared when it ends`
+      drives exactly the flag the button binds to. The spinner itself was **not** visually observable
+      on the emulator: with no working network provider the lookup resolves in well under 300 ms, and
+      four tap-then-screenshot attempts caught only the settled state.)*
+- [x] The manifest declares approximate location only; a static check confirms no precise-location
       permission and no Play Services dependency anywhere in the module graph.
+      *(Merged manifests, debug and release: `INTERNET` + `ACCESS_COARSE_LOCATION`, no
+      `ACCESS_FINE_LOCATION`. `:composeApp:dependencies --configuration debugRuntimeClasspath`:
+      0 matches for `play-services` / `com.google.android.gms` across 1199 lines. The system prompt
+      on the device read "access this device's **approximate** location".)*
 - [ ] A static check confirms the app sends no coordinates to any server: the station API service is
       the only API service and takes no coordinate parameters.
-- [ ] The project documentation describes the location abstraction and lists the iOS configuration keys
+      *(**Not true as written.** The substance holds: the only consumer of a `CoarseLocationResult` is
+      `OnboardingViewModel`, which hands it to the pure `FindNearestStationUseCase` — no coordinate the
+      user's device produces reaches any repository or API service, and `StationApiService.getStations()`
+      takes no parameters. But `StationApiService` is not the only API service: the pre-existing
+      `feature/example` reference slice has `ExampleApiService.getSnapshot(latitude, longitude)`, which
+      sends coordinates as query parameters. They are hardcoded fictional constants in
+      `ExampleViewModel` aimed at the fictional host `api.example.com`, never the user's position, and
+      the screen is unreachable — but the criterion's literal claim is false and this feature may not
+      change the reference slice.)*
+- [x] The project documentation describes the location abstraction and lists the iOS configuration keys
       required by the future app wrapper.
+      *(`CLAUDE.md`: new `### Location` section; `NSLocationWhenInUseUsageDescription` and
+      `NSLocationDefaultAccuracyReduced` added to the iOS wrapper table.)*
 
 ### Quality gates
 
-- [ ] Full test suite and iOS compile check pass.
-- [ ] The platform location implementations use cancellable continuations, so cancelling the calling
+- [x] Full test suite and iOS compile check pass.
+      *(`:composeApp:testDebugUnitTest :server:test --rerun-tasks` → BUILD SUCCESSFUL, 149 tests,
+      0 failures. `:composeApp:compileTestKotlinIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.)*
+- [x] The platform location implementations use cancellable continuations, so cancelling the calling
       coroutine stops the platform request.
-- [ ] No platform API is referenced from `commonMain` or from the view model; the view model is
+      *(Both actuals use `suspendCancellableCoroutine` + `invokeOnCancellation`: Android cancels a
+      `CancellationSignal`, iOS calls `stopUpdatingLocation()` and drops the delegate.)*
+- [x] No platform API is referenced from `commonMain` or from the view model; the view model is
       exercised in tests through a hand-written fake location source.
-- [ ] The timeout exists as one constant in `commonMain`, not duplicated per platform.
-- [ ] The exhaustive handling of the location outcome type has no branch that silently does nothing.
+      *(No `import java.` / `import android.` / `import platform.` anywhere in `commonMain`; the view
+      model imports only `androidx.lifecycle`, project packages and `kotlinx.coroutines`. Tests drive
+      it through `FakeCoarseLocationProvider`, hand-written like the other fakes.)*
+- [x] The timeout exists as one constant in `commonMain`, not duplicated per platform.
+      *(`LOCATION_TIMEOUT` is declared once in `core/location/CoarseLocationProvider.kt`; no duration
+      or `withTimeout` appears in `androidMain` or `iosMain` at all.)*
+- [x] The exhaustive handling of the location outcome type has no branch that silently does nothing.
+      *(The `when (result)` has three branches, each returning a changed state — including the
+      empty-list sub-case, which reports UNAVAILABLE rather than ending silently. No `else ->`,
+      `-> {}` or `-> Unit` anywhere in the file.)*
 
 ---
 

@@ -1,17 +1,22 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
+import ch.stenzel.tim.polleninfo.core.location.CoarseLocationResult
+import ch.stenzel.tim.polleninfo.core.location.FakeCoarseLocationProvider
+import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.onboarding.FakeStationRepository
 import ch.stenzel.tim.polleninfo.feature.onboarding.expectedStationNamesAlphabetical
 import ch.stenzel.tim.polleninfo.feature.onboarding.station
+import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -23,12 +28,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
 
     private val repository = FakeStationRepository()
     private val selectedStationRepository = FakeSelectedStationRepository()
+    private val locationProvider = FakeCoarseLocationProvider()
 
     @BeforeTest
     fun setUp() {
@@ -40,7 +47,12 @@ class OnboardingViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = OnboardingViewModel(repository, selectedStationRepository)
+    private fun viewModel() = OnboardingViewModel(
+        repository,
+        selectedStationRepository,
+        locationProvider,
+        FindNearestStationUseCase(),
+    )
 
     @Test
     fun `starts in Loading before the station list arrives`() = runTest {
@@ -280,7 +292,163 @@ class OnboardingViewModelTest {
 
             assertEquals(2, events.size)
         }
+
+    // --- the location shortcut -------------------------------------------------------------
+
+    @Test
+    fun `a granted permission fills in the nearest station`() = runTest {
+        // The fake answers with a position near Winterthur.
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertEquals("PZH", state.selected?.abbr)
+        assertNull(state.locationError)
+        assertTrue(!state.isLocating)
+    }
+
+    @Test
+    fun `a successful lookup proposes a station without completing onboarding`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), events, "the shortcut proposes; only Continue may commit")
+        assertNull(selectedStationRepository.stored)
+    }
+
+    @Test
+    fun `the in-progress flag is set while the lookup runs and cleared when it ends`() = runTest {
+        locationProvider.answerDelay = 5.seconds
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        assertTrue(viewModel.content().isLocating, "set as soon as the lookup starts")
+
+        advanceTimeBy(1.seconds)
+        assertTrue(viewModel.content().isLocating, "and still set while the fix is outstanding")
+
+        advanceUntilIdle()
+        assertTrue(!viewModel.content().isLocating)
+        assertEquals("PZH", viewModel.content().selected?.abbr)
+    }
+
+    @Test
+    fun `a refused permission produces the permission error and asks for no position`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = false)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertEquals(LocationError.PERMISSION_DENIED, state.locationError)
+        assertTrue(!state.isLocating)
+        assertNull(state.selected)
+        assertEquals(0, locationProvider.callCount, "a refusal must not reach the platform")
+    }
+
+    @Test
+    fun `a permission revoked below the prompt produces the permission error`() = runTest {
+        locationProvider.result = CoarseLocationResult.PermissionDenied
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
+    }
+
+    @Test
+    fun `an unavailable position produces the could-not-determine error`() = runTest {
+        locationProvider.result = CoarseLocationResult.Unavailable
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertEquals(LocationError.UNAVAILABLE, state.locationError)
+        assertTrue(!state.isLocating)
+        assertNull(state.selected)
+    }
+
+    @Test
+    fun `a lookup that never answers produces the could-not-determine error once it times out`() =
+        runTest {
+            // Virtual time, not a real sleep: the ten seconds pass instantly.
+            locationProvider.neverAnswers = true
+            val viewModel = viewModel()
+            advanceUntilIdle()
+
+            viewModel.onPermissionResult(granted = true)
+            advanceTimeBy(LOCATION_TIMEOUT - 1.seconds)
+            assertTrue(viewModel.content().isLocating, "still waiting just before the deadline")
+            assertNull(viewModel.content().locationError)
+
+            advanceUntilIdle()
+
+            val state = viewModel.content()
+            assertEquals(LocationError.UNAVAILABLE, state.locationError)
+            assertTrue(!state.isLocating)
+        }
+
+    @Test
+    fun `a successful lookup clears a location error left by an earlier attempt`() = runTest {
+        locationProvider.result = CoarseLocationResult.Unavailable
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+        assertEquals(LocationError.UNAVAILABLE, viewModel.content().locationError)
+
+        locationProvider.result = CoarseLocationResult.Success(46.2000, 7.3000)
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertNull(state.locationError)
+        assertEquals("PSN", state.selected?.abbr)
+    }
+
+    @Test
+    fun `a lookup leaves the offered station list untouched`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val before = viewModel.content().stations
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(before, viewModel.content().stations)
+    }
+
+    @Test
+    fun `a permission answer arriving before the stations are loaded is ignored`() = runTest {
+        repository.result = Result.Failure(RuntimeException("Connection refused"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        // There is no list to find a nearest station in, so there is nothing to say.
+        assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
+        assertEquals(0, locationProvider.callCount)
+    }
 }
+
+private fun OnboardingViewModel.content(): OnboardingUiState.Content =
+    assertIs<OnboardingUiState.Content>(uiState.value)
 
 /**
  * Drains the one-shot event channel into a list for the duration of [scope].

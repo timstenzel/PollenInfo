@@ -212,6 +212,8 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | Key                                       | Value  | Needed by                                            |
 | ----------------------------------------- | ------ | ---------------------------------------------------- |
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` | The cleartext development backend on `localhost` |
+| `NSLocationWhenInUseUsageDescription`      | A sentence explaining the station shortcut | `rememberCoarseLocationPermissionRequester` — **mandatory**: without it `CLLocationManager` silently never prompts, so the shortcut fails with no error to debug |
+| `NSLocationDefaultAccuracyReduced`         | `true` | `IosCoarseLocationProvider` — the direct expression of "coarse is enough": iOS then never asks for precise access at all |
 
 ### Error handling
 
@@ -264,6 +266,46 @@ tests may not live in `androidUnitTest`. Every consumer is tested against
 `FakeSelectedStationRepository` in `commonTest` instead. Keep the implementation trivial enough that
 this stays an honest trade; anything worth testing belongs in a caller.
 
+### Location
+
+`core/location/` holds the whole location story, split into **two** pieces on purpose.
+
+`CoarseLocationProvider` is `suspend fun currentLocation(): CoarseLocationResult`, and
+`CoarseLocationResult` has exactly three cases — `Success(lat, lon)`, `PermissionDenied`,
+`Unavailable`. Everything a platform can fail with (no provider, provider disabled, no fix, delegate
+error, timeout) folds into `Unavailable`, because the screen has two messages and every one of those
+cases ends in the same advice: pick a station manually. `AndroidCoarseLocationProvider` /
+`IosCoarseLocationProvider` are plain platform classes bound in `platformModule` — no
+`expect`/`actual`, since only the *implementation* differs, not the shape.
+
+Both actuals bridge their platform's callback API through `suspendCancellableCoroutine`, so
+cancelling the calling coroutine reaches the platform (`CancellationSignal.cancel()` /
+`stopUpdatingLocation()`) instead of abandoning a request that keeps running.
+
+Android uses `LocationManagerCompat.getCurrentLocation` on `NETWORK_PROVIDER` only. **No Play
+Services**, and no GPS fallback: `ACCESS_COARSE_LOCATION` does not grant `GPS_PROVIDER`, and
+`FUSED_PROVIDER` needs API 31 against `minSdk` 26. The compat shim is what makes this work below API
+30, which is why `androidx.core:core-ktx` is an explicit `androidMain` dependency. There is
+deliberately no `getLastKnownLocation` fallback — a days-old fix from another country would silently
+resolve to the wrong station.
+
+**The 10-second timeout is `LOCATION_TIMEOUT` in `commonMain` and is applied by
+`OnboardingViewModel`, not by either actual.** One constant that cannot drift between platforms, and
+one that `commonTest` can drive under virtual time with a fake that never answers.
+
+`rememberCoarseLocationPermissionRequester` is a **`@Composable expect fun`** and is the reason
+prompting is separate from looking up: Android's request needs an activity-scoped
+`ActivityResultLauncher`, which a Koin-injected class holding only the application context cannot
+provide. The screen prompts and hands the resulting boolean to `onPermissionResult(granted)`, so the
+ViewModel touches no platform API and is fully testable against `FakeCoarseLocationProvider`. (A
+composable `expect`/`actual` pair does work with the Compose compiler plugin here — verified against
+`compileTestKotlinIosSimulatorArm64`.)
+
+The manifest declares `ACCESS_COARSE_LOCATION` and **not** `ACCESS_FINE_LOCATION`. The coordinates
+never leave the device: the nearest-station calculation is `FindNearestStationUseCase`, pure
+`kotlin.math` over the station list the app already holds, and no API service in the app takes a
+coordinate parameter.
+
 ### DI
 
 Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`, `dataModule`,
@@ -273,8 +315,9 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 
 Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
-`appModules`. It currently provides the `DataStore<Preferences>`: the factory needs a file path and
-an IO dispatcher, neither of which exists in `commonMain`. Each actual builds the store itself —
+`appModules`. It provides the `DataStore<Preferences>` and the `CoarseLocationProvider`. The
+DataStore factory needs a file path and an IO dispatcher, neither of which exists in `commonMain`;
+the location provider is a different platform class on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
 Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
 is `internal` on Kotlin/Native, so the iOS actual uses `Dispatchers.Default`. Keeping this module

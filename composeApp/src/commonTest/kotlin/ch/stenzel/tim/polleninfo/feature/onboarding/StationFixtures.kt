@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding
 
+import ch.stenzel.tim.polleninfo.feature.onboarding.data.mapper.toDomain
 import ch.stenzel.tim.polleninfo.feature.onboarding.data.remote.dto.StationDto
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
 
@@ -38,6 +39,9 @@ val stationsJson: String = stationDtosInServerOrder.joinToString(
     """{"abbr":"${dto.abbr}","name":"${dto.name}","canton":"${dto.canton}",""" +
         """"latitude":${dto.latitude},"longitude":${dto.longitude},"altitudeMasl":${dto.altitudeMasl}}"""
 }
+
+/** All 15 stations as the app holds them: domain models, already sorted the way the app shows them. */
+val allStations: List<Station> = stationDtosInServerOrder.toDomain()
 
 /** Display names in the order the app must show them. */
 val expectedStationNamesAlphabetical = listOf(

@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -30,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ch.stenzel.tim.polleninfo.core.location.rememberCoarseLocationPermissionRequester
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -50,8 +54,14 @@ fun OnboardingScreen(
         }
     }
 
+    // The permission prompt has to be requested from the composition: Android's launcher is scoped
+    // to the activity, so no injected class can own it. The ViewModel only ever sees the boolean.
+    val requestLocationPermission =
+        rememberCoarseLocationPermissionRequester(onResult = viewModel::onPermissionResult)
+
     OnboardingContent(
         uiState = uiState,
+        onUseMyLocation = requestLocationPermission,
         onStationSelected = viewModel::onStationSelected,
         onConfirm = viewModel::onConfirm,
         onRetry = viewModel::retry,
@@ -65,6 +75,7 @@ fun OnboardingScreen(
 @Composable
 private fun OnboardingContent(
     uiState: OnboardingUiState,
+    onUseMyLocation: () -> Unit,
     onStationSelected: (Station) -> Unit,
     onConfirm: () -> Unit,
     onRetry: () -> Unit,
@@ -78,7 +89,10 @@ private fun OnboardingContent(
             is OnboardingUiState.Content -> StationPickerView(
                 stations = uiState.stations,
                 selected = uiState.selected,
+                isLocating = uiState.isLocating,
+                locationError = uiState.locationError,
                 saveError = uiState.saveError,
+                onUseMyLocation = onUseMyLocation,
                 onStationSelected = onStationSelected,
                 onConfirm = onConfirm,
             )
@@ -121,7 +135,10 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
 private fun StationPickerView(
     stations: List<Station>,
     selected: Station?,
+    isLocating: Boolean,
+    locationError: LocationError?,
     saveError: Boolean,
+    onUseMyLocation: () -> Unit,
     onStationSelected: (Station) -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -137,6 +154,17 @@ private fun StationPickerView(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(32.dp))
+        // The shortcut comes first: it is the fastest path, so it is the most prominent one.
+        UseMyLocationButton(isLocating = isLocating, onClick = onUseMyLocation)
+        if (locationError != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = locationError.message(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Spacer(Modifier.height(24.dp))
         StationDropdown(
             stations = stations,
             selected = selected,
@@ -160,6 +188,39 @@ private fun StationPickerView(
             )
         }
     }
+}
+
+@Composable
+private fun UseMyLocationButton(isLocating: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        // Disabled only while a lookup is in flight, so impatient taps cannot stack up requests. A
+        // refused permission deliberately leaves it enabled — the device may still allow a prompt.
+        enabled = !isLocating,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (isLocating) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = LocalContentColor.current,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text("Use my location")
+    }
+}
+
+/**
+ * The single home of the two location failure messages. Wording that exists once cannot drift
+ * between copies, which is why this is a function rather than a literal at each use site.
+ */
+private fun LocationError.message(): String = when (this) {
+    LocationError.PERMISSION_DENIED ->
+        "Location permission is off. Enable it in Settings to find your nearest station."
+
+    LocationError.UNAVAILABLE ->
+        "Your location could not be determined. Please pick a station manually."
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

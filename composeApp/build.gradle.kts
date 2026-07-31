@@ -69,6 +69,11 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.android)
             implementation(libs.kotlinx.coroutines.android)
+            // Declared explicitly rather than leant on transitively: MainActivity and the coarse
+            // location permission launcher both use them directly, so a version bump elsewhere must
+            // not be able to take them away.
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.ktx)
         }
 
         iosMain.dependencies {

@@ -13,6 +13,7 @@ import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleViewModel
 import ch.stenzel.tim.polleninfo.feature.onboarding.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.feature.onboarding.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -36,12 +37,14 @@ val dataModule = module {
 
 val domainModule = module {
     factory { GetPollenSnapshotUseCase(get()) }
+    factory { FindNearestStationUseCase() }
 }
 
 val presentationModule = module {
     viewModel { StartupViewModel(get()) }
     viewModel { ExampleViewModel(get()) }
-    viewModel { OnboardingViewModel(get(), get()) }
+    // CoarseLocationProvider comes from platformModule; the ViewModel only knows the interface.
+    viewModel { OnboardingViewModel(get(), get(), get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

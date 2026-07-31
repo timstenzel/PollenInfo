@@ -3,6 +3,8 @@ package ch.stenzel.tim.polleninfo.core.di
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import ch.stenzel.tim.polleninfo.core.location.CoarseLocationProvider
+import ch.stenzel.tim.polleninfo.core.location.IosCoarseLocationProvider
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +19,7 @@ import platform.Foundation.NSUserDomainMask
 
 actual val platformModule: Module = module {
     single<DataStore<Preferences>> { createDataStore() }
+    single<CoarseLocationProvider> { IosCoarseLocationProvider() }
 }
 
 /**

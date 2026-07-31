@@ -2,11 +2,15 @@ package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.stenzel.tim.polleninfo.core.location.CoarseLocationProvider
+import ch.stenzel.tim.polleninfo.core.location.CoarseLocationResult
+import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,10 +19,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class OnboardingViewModel(
     private val stationRepository: StationRepository,
     private val selectedStationRepository: SelectedStationRepository,
+    private val coarseLocationProvider: CoarseLocationProvider,
+    private val findNearestStation: FindNearestStationUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Loading)
@@ -52,6 +59,69 @@ class OnboardingViewModel(
                 state.copy(selected = station, saveError = false)
             } else {
                 state
+            }
+        }
+    }
+
+    /**
+     * The answer to the permission prompt the screen showed.
+     *
+     * The prompt itself lives in the composition — Android's launcher is activity-scoped — so the
+     * ViewModel learns of it only as this boolean and stays free of platform APIs.
+     */
+    fun onPermissionResult(granted: Boolean) {
+        val content = _uiState.value as? OnboardingUiState.Content ?: return
+
+        if (!granted) {
+            _uiState.value = content.copy(
+                isLocating = false,
+                locationError = LocationError.PERMISSION_DENIED,
+            )
+            return
+        }
+
+        _uiState.value = content.copy(isLocating = true, locationError = null)
+        viewModelScope.launch { resolveNearestStation() }
+    }
+
+    /**
+     * Fills in the dropdown with the nearest station — it never confirms. The shortcut proposes; the
+     * user still commits, so a surprising proposal is visible and overridable.
+     *
+     * The timeout is applied here rather than in either platform actual: one [LOCATION_TIMEOUT]
+     * constant that cannot drift between platforms, and one testable under virtual time.
+     */
+    private suspend fun resolveNearestStation() {
+        val result = withTimeoutOrNull(LOCATION_TIMEOUT) { coarseLocationProvider.currentLocation() }
+            ?: CoarseLocationResult.Unavailable
+
+        _uiState.update { state ->
+            if (state !is OnboardingUiState.Content) return@update state
+
+            when (result) {
+                is CoarseLocationResult.Success -> {
+                    val nearest =
+                        findNearestStation(result.latitude, result.longitude, state.stations)
+                    if (nearest != null) {
+                        state.copy(selected = nearest, isLocating = false, locationError = null)
+                    } else {
+                        // Only reachable with an empty station list. Reported rather than shrugged
+                        // off: a lookup that ends with no visible outcome looks like a hang.
+                        state.copy(isLocating = false, locationError = LocationError.UNAVAILABLE)
+                    }
+                }
+
+                CoarseLocationResult.PermissionDenied -> state.copy(
+                    isLocating = false,
+                    locationError = LocationError.PERMISSION_DENIED,
+                )
+
+                // Includes the timeout above: from the screen's point of view "nothing arrived in
+                // ten seconds" and "no provider" are the same problem with the same answer.
+                CoarseLocationResult.Unavailable -> state.copy(
+                    isLocating = false,
+                    locationError = LocationError.UNAVAILABLE,
+                )
             }
         }
     }

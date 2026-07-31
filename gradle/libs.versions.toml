@@ -9,6 +9,8 @@ coroutines = "1.10.2"
 lifecycle = "2.9.1"
 navigationCompose = "2.9.0"
 datastore = "1.1.7"
+androidxActivity = "1.9.3"
+androidxCore = "1.13.1"
 
 [libraries]
 # Ktor Client
@@ -48,6 +50,10 @@ navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-co
 
 # DataStore (KMP) — persisted user selections
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+
+# AndroidX (android only) — permission launcher and the location compat shim
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 
 # Test
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
