@@ -8,10 +8,14 @@ import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
 
+/**
+ * [startDestination] is decided by the startup gate in `App()` — see its documentation for why the
+ * graph is not built until that answer is known.
+ */
 @Composable
-fun AppNavigation() {
+fun AppNavigation(startDestination: Screen) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Screen.Onboarding) {
+    NavHost(navController = navController, startDestination = startDestination) {
         composable<Screen.Onboarding> {
             OnboardingScreen(
                 onOnboardingComplete = {

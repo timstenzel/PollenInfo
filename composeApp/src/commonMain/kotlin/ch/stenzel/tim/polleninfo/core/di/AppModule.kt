@@ -4,6 +4,7 @@ import ch.stenzel.tim.polleninfo.core.network.apiBaseUrl
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.startup.StartupViewModel
 import ch.stenzel.tim.polleninfo.feature.example.data.remote.ExampleApiService
 import ch.stenzel.tim.polleninfo.feature.example.data.repository.ExampleRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleRepository
@@ -38,6 +39,7 @@ val domainModule = module {
 }
 
 val presentationModule = module {
+    viewModel { StartupViewModel(get()) }
     viewModel { ExampleViewModel(get()) }
     viewModel { OnboardingViewModel(get(), get()) }
 }

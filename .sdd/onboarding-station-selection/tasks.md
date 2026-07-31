@@ -10,8 +10,8 @@
 >   the `DataStore<Preferences>` itself, because the factory needs `Dispatchers.IO`, which does not
 >   exist in `commonMain`. The common code depends only on `DataStore<Preferences>`.
 >
-> Environment: no JDK on `PATH`. Export
-> `JAVA_HOME="/Applications/Android Studio Panda 4.app/Contents/jbr/Contents/Home"` first.
+> Environment: `JAVA_HOME`, `java`, `adb` and `emulator` come from `~/.zshrc`; no export prefix is
+> needed. (This note previously claimed there was no JDK on `PATH` — that was stale.)
 
 ---
 
@@ -162,30 +162,30 @@ than a spinner, because the read takes milliseconds and a one-frame spinner read
 
 ### Implementation steps
 
-- [ ] Add a startup state holder in the shared core layer exposing resolving / needs-onboarding / ready,
+- [x] Add a startup state holder in the shared core layer exposing resolving / needs-onboarding / ready,
       derived from the first value of the persisted selection, and register it for injection.
-- [ ] Restructure the app's root composable to collect that state and construct the navigation graph
+- [x] Restructure the app's root composable to collect that state and construct the navigation graph
       only after it resolves, choosing the start destination accordingly.
-- [ ] Render an empty themed surface while the state is unresolved.
-- [ ] Write the tests and note the startup gate in the project documentation.
+- [x] Render an empty themed surface while the state is unresolved.
+- [x] Write the tests and note the startup gate in the project documentation.
 
 ### Acceptance criteria
 
-- [ ] An automated test shows the startup state resolves to ready when a station is stored, to
+- [x] An automated test shows the startup state resolves to ready when a station is stored, to
       needs-onboarding when none is, and that the resolving state is observable first.
-- [ ] After completing onboarding, closing and reopening the app shows the placeholder main screen
+- [x] After completing onboarding, closing and reopening the app shows the placeholder main screen
       directly; onboarding does not appear.
-- [ ] A static reading of the root composable confirms the navigation graph is not composed while the
+- [x] A static reading of the root composable confirms the navigation graph is not composed while the
       startup state is unresolved — the checkable form of "no onboarding flash".
-- [ ] With no station stored, launching the app shows onboarding.
-- [ ] The project documentation describes the startup gate.
+- [x] With no station stored, launching the app shows onboarding.
+- [x] The project documentation describes the startup gate.
 
 ### Quality gates
 
-- [ ] Full test suite and iOS compile check pass.
-- [ ] The startup state holder is registered in the common Koin module and injected, not constructed
+- [x] Full test suite and iOS compile check pass.
+- [x] The startup state holder is registered in the common Koin module and injected, not constructed
       inline in a composable.
-- [ ] No navigation-graph destination exists for the resolving state — it is not modelled as a
+- [x] No navigation-graph destination exists for the resolving state — it is not modelled as a
       navigable screen.
 
 ---

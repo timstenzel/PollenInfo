@@ -33,11 +33,10 @@ Package root everywhere: `ch.stenzel.tim.polleninfo`.
 
 ## Commands
 
-There is **no JDK on `PATH`** in this environment. Prefix Gradle calls with the Android Studio JBR:
-
-```bash
-export JAVA_HOME="/Applications/Android Studio Panda 4.app/Contents/jbr/Contents/Home"
-```
+`JAVA_HOME`, `java`, `adb` and `emulator` all come from `~/.zshrc` — **no export prefix is needed.**
+`JAVA_HOME` points at an Android Studio JBR (JDK 21); any of the installed Studio JBRs work, they
+ship the same build. If a Gradle call ever reports no JDK, that shell did not source the profile —
+export `JAVA_HOME` for that one call rather than adding it back to the docs.
 
 | Task                            | Command                                     |
 | ------------------------------- | ------------------------------------------- |
@@ -292,6 +291,26 @@ Completing onboarding navigates to `Screen.Home` with `popUpTo<Screen.Onboarding
 true }`, so the back gesture from Home leaves the app instead of reopening a setup screen whose
 purpose is already fulfilled. `feature/home` is a **placeholder** standing in for the real
 dashboard: it reads the stored selection and renders its name, with no ViewModel and no network.
+
+### The startup gate
+
+`App()` does not compose `AppNavigation` until `core/startup/StartupViewModel` has resolved
+`StartupState` (`Loading` → `NeedsOnboarding` | `Ready`) from the **first** value of
+`SelectedStationRepository.selectedStation`. `AppNavigation` therefore takes its `startDestination`
+as a parameter and is built once, already correct.
+
+This is what makes "no onboarding flash" structural rather than a timing accident: while the answer
+is unknown there is no navigation graph at all, so onboarding cannot appear and then be navigated
+away from. No launch-time `popUpTo` bookkeeping, and no splash destination reachable with back.
+
+Two deliberate choices:
+
+- **`Loading` is not a navigation destination.** It is a moment before the graph exists, not a place
+  the user can be. `App()` renders an empty themed `Surface` for it — not a spinner, since the read
+  is a local file access and a one-frame indicator reads as a glitch.
+- **First value only, not an ongoing subscription.** "Where does the app start" is asked once.
+  Following the flow would rebuild the graph the instant onboarding writes its selection, yanking
+  the user out of the navigation that write just triggered.
 
 ### Multiplatform gotchas
 
