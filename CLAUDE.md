@@ -1,0 +1,275 @@
+# PollenInfo
+
+Compose Multiplatform (Android + iOS) app for checking Swiss pollen levels per measuring station,
+plus a Ktor backend that owns all contact with the MeteoSwiss public API.
+
+## Architecture
+
+```
+┌─────────────────────┐        REST         ┌──────────────┐   1h scheduled poll   ┌───────────────────┐
+│ composeApp          │ ──────────────────> │  server      │ ────────────────────> │ MeteoSwiss OGD    │
+│ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │                       │ pollen (public)   │
+└─────────────────────┘   JSON              └──────────────┘                       └───────────────────┘
+         ▲                                        │
+         └──────────── push (FCM / APNS) ─────────┘
+```
+
+**The apps never call the MeteoSwiss API directly.** All upstream polling, parsing, caching and
+severity classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV
+parsing, station metadata and threshold logic in one place and off the devices.
+
+Push notifications are a later feature and there is no push code in the tree — when they land, the
+server gains an outbound leg to FCM/APNS and the apps a subscription call.
+
+### Modules
+
+| Module       | Type                        | Contains                                                    |
+| ------------ | --------------------------- | ----------------------------------------------------------- |
+| `:composeApp`| KMP (android, ios*)         | The app: UI, ViewModels, repositories, REST client           |
+| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss polling |
+| `:theme`     | KMP (android, ios*)         | Shared Material 3 colors / typography / `PollenInfoTheme`    |
+
+Package root everywhere: `ch.stenzel.tim.polleninfo`.
+
+## Commands
+
+There is **no JDK on `PATH`** in this environment. Prefix Gradle calls with the Android Studio JBR:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio Panda 4.app/Contents/jbr/Contents/Home"
+```
+
+| Task                            | Command                                     |
+| ------------------------------- | ------------------------------------------- |
+| App unit tests (fast, JVM)      | `./gradlew :composeApp:testDebugUnitTest`   |
+| Server unit tests               | `./gradlew :server:test`                    |
+| All unit tests we can run here  | `./gradlew :composeApp:testDebugUnitTest :server:test` |
+| Verify iOS sources compile      | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
+| Run the backend on :8080        | `./gradlew :server:run`                     |
+| Android debug APK               | `./gradlew :composeApp:assembleDebug`       |
+
+Notes:
+
+- `commonTest` is the single source of truth for app tests; `testDebugUnitTest` executes it on the
+  JVM. **`:composeApp:iosSimulatorArm64Test` requires full Xcode** — with only Command Line Tools
+  installed (`xcode-select -p` → `/Library/Developer/CommandLineTools`) linking the test binary
+  fails at `xcrun`. Compile the iOS test sources instead to catch non-portable code.
+- Prefer the targeted test tasks over `./gradlew check` for the same reason.
+- The Gradle configuration cache is enabled; if a build behaves oddly after editing build scripts,
+  add `--no-configuration-cache`.
+
+## Data source: MeteoSwiss OGD pollen
+
+This is the **only** upstream source. Docs:
+<https://opendatadocs.meteoswiss.ch/a-data-groundbased/a7-pollen-stations>.
+
+Base: `https://data.geo.admin.ch/ch.meteoschweiz.ogd-pollen/`. Public, no auth, no API key.
+All files are **CSV, `;`-separated, ISO-8859-1 encoded** (not UTF-8 — transcode on read).
+Timestamps are `dd.MM.yyyy HH:mm` in **UTC**.
+
+| File                                                 | Contents                                    |
+| ---------------------------------------------------- | ------------------------------------------- |
+| `ogd-pollen_meta_stations.csv`                       | All 15 stations: abbr, name, canton, WGS84 lat/lon, altitude |
+| `ogd-pollen_meta_parameters.csv`                     | Parameter codes → taxon, unit, granularity  |
+| `ogd-pollen_meta_datainventory.csv`                  | Which station reports which parameter since when |
+| `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — poll this on the schedule |
+| `<abbr>/ogd-pollen_<abbr>_h_recent.csv`              | Hourly, year to date                        |
+| `<abbr>/ogd-pollen_<abbr>_d_recent.csv`              | Daily averages, year to date                |
+
+`<abbr>` is the lowercase station abbreviation, e.g. `pzh/ogd-pollen_pzh_h_now.csv`.
+
+### The 15 stations
+
+`PBE` Bern · `PBS` Basel · `PBU` Buchs SG · `PCF` La Chaux-de-Fonds · `PDS` Davos/Wolfgang ·
+`PGE` Genève · `PLO` Locarno/Monti · `PLS` Lausanne · `PLU` Lugano · `PLZ` Luzern ·
+`PMU` Münsterlingen · `PNE` Neuchâtel · `PPY` Payerne · `PSN` Sion · `PZH` Zürich
+
+### Hourly parameter codes → taxon
+
+Values are integer concentrations in **grains/m³** (`No/m³`).
+
+| Code       | Taxon                  |
+| ---------- | ---------------------- |
+| `kaalnuh0` | Alder (*Alnus*)        |
+| `kabetuh0` | Birch (*Betula*)       |
+| `kacoryh0` | Hazel (*Corylus*)      |
+| `kafaguh0` | Beech (*Fagus*)        |
+| `kafraxh0` | Ash (*Fraxinus*)       |
+| `kaquerh0` | Oak (*Quercus*)        |
+| `khpoach0` | Grasses (*Poaceae*)    |
+
+Daily equivalents use `d0` (06–06 UTC average) and `d1` (00–00 UTC average) suffixes, e.g.
+`kabetud0`. We use the `d0` variant.
+
+> **These 7 taxa are the whole set** (automatic measurement method, since 2023-01-01). There is no
+> mugwort, olive or ragweed in this dataset. `PollenSpecies` in `:server` is the authoritative
+> vocabulary — the `PollenType` inside `feature/example` is invented placeholder data and is not it.
+
+Stations and species are modelled as exhaustive enums in
+`server/.../pollen/domain/` (`PollenStation`, `PollenSpecies`) with the parameter codes and station
+coordinates baked in and covered by tests. Use those rather than re-deriving codes or paths.
+
+## Severity thresholds
+
+**Thresholds are per species and live in the server** — see
+`server/.../pollen/domain/PollenThresholds.kt`. The apps never classify concentrations; they render
+the severity the server computes, and can read the table from `GET /pollen/thresholds` to label and
+colour their UI with the same numbers.
+
+`SpeciesThresholds` holds the *inclusive lower bound* of each band, in grains/m³:
+
+```
+0        1..moderate-1   moderate..high-1   high..veryHigh-1   veryHigh..
+NONE     LOW             MODERATE           HIGH               VERY_HIGH
+```
+
+Configuration is a `Map<PollenSpecies, SpeciesThresholds>` — one entry per species, so any single
+taxon can be retuned without touching the others. Construction fails fast if a species is missing
+or if the bounds are not strictly increasing.
+
+Seeded values follow the Swiss exposure classes (Gehrig et al. 2018), which currently give the six
+tree taxa one set of bounds and grasses a much lower one:
+
+| Species                          | MODERATE from | HIGH from | VERY_HIGH from |
+| -------------------------------- | ------------- | --------- | -------------- |
+| Alder, Birch, Hazel, Beech, Ash, Oak | 15        | 90        | 1500           |
+| Grasses                          | 5             | 20        | 200            |
+
+So 20 grains/m³ is `MODERATE` for birch but already `HIGH` for grasses. Note MeteoSwiss does not
+publish these numbers in machine-readable form; if you get an authoritative per-taxon table,
+`PollenThresholds.DEFAULTS` is the single place to change.
+
+`PollenSeverity` is ordered `NONE < LOW < MODERATE < HIGH < VERY_HIGH`, so a "at least this severe"
+comparison is expressible as `severity.atLeast(minimum)`.
+
+## Conventions
+
+### Feature package layout (`:composeApp`)
+
+Each feature is a vertical slice under `feature/<name>/`:
+
+```
+feature/example/
+├── data/
+│   ├── remote/          <Name>ApiService + dto/  (@Serializable, DTOs never leave data/)
+│   ├── mapper/          DTO -> domain extension functions (`fun XDto.toDomain()`)
+│   └── repository/      <Name>RepositoryImpl
+├── domain/
+│   ├── model/           Plain data classes + enums, no serialization annotations
+│   ├── repository/      Repository interface
+│   └── usecase/         Single-purpose classes with `suspend operator fun invoke(...)`
+└── presentation/        <Name>Screen.kt, <Name>ViewModel.kt, <Name>UiState.kt
+```
+
+**`feature/example` is a reference implementation, not a product feature.** It exists to show the
+layering end to end — DTO → mapper → domain model → repository → use case → ViewModel → UI, with
+tests at each level. Come back to it when starting a real feature and mirror its structure; don't
+extend it.
+
+Everything it names is deliberately fictional: it calls `https://api.example.com/v1/pollen`
+(RFC 2606 documentation host, nothing served there), and its `PollenType` / `PollenLevel` are
+invented placeholders, **not** the real vocabulary — that lives in `:server` as `PollenSpecies` /
+`PollenSeverity`. Consequence: the example screen cannot load data at runtime and will land in its
+`Error` state. Its tests all pass because they drive it through `MockEngine`.
+
+Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`).
+
+### Error handling
+
+Never let exceptions escape the data layer. Repositories wrap calls in `safeCall { }` and return
+`Result<T>` (`core/result/Result.kt`), a `Success`/`Failure` sealed class with
+`map`/`onSuccess`/`onFailure` helpers. ViewModels turn `Result` into a UI state — they do not
+rethrow.
+
+Our `Result` deliberately shadows `kotlin.Result`, which is a default import. **Always import
+`ch.stenzel.tim.polleninfo.core.result.Result` explicitly** — the explicit import wins, but a file
+that omits it binds to the stdlib type and fails to compile against `Success` / `Failure`. Use
+`safeCall`, not `runCatching` (which returns the stdlib type).
+
+### UI state
+
+One sealed interface per screen with `Loading` / `Content` / `Error` (see
+`ExampleUiState`). `Content` carries an `isRefreshing` flag so pull-to-refresh keeps the
+previous data on screen. ViewModels expose a single `StateFlow<XUiState>` and collect with
+`collectAsStateWithLifecycle()`.
+
+### DI
+
+Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`, `dataModule`,
+`domainModule`, `presentationModule`), aggregated into `appModules`. ViewModels are registered with
+`viewModel { }` and injected with `koinViewModel()`. Use cases are `factory`, everything else
+`single`.
+
+### Navigation
+
+Type-safe Compose Navigation: destinations are `@Serializable` objects/classes nested in the
+`Screen` sealed interface, registered via `composable<Screen.X>` in `AppNavigation`.
+
+### Multiplatform gotchas
+
+- **`commonMain` has no `String.format`** — it is JVM-only. It compiles for Android and then breaks
+  the iOS build. Same for `java.*` anything, `UUID`, `SimpleDateFormat`. Use `kotlin.math` and
+  `kotlinx-datetime` instead. (`ExampleMapper.format` is a hand-rolled multiplatform
+  replacement.)
+- Platform-specific pieces use `expect`/`actual` with a `.android.kt` / `.ios.kt` filename suffix,
+  as in `core/network/HttpClientEngine.kt`.
+- Always compile an iOS target after touching `commonMain`; the Android build alone will not catch
+  non-portable code.
+
+### Server conventions
+
+Ktor plugin configuration is split into `plugins/` extension functions on `Application`
+(`configureSerialization`, `configureLogging`, `configureRouting`) and composed in
+`Application.module()`. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
+feature package, taking their collaborators as parameters so tests can supply their own instances.
+
+```
+server/src/main/kotlin/.../server/
+├── plugins/            configureSerialization / configureLogging / configureRouting
+└── pollen/
+    ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
+    ├── model/          Wire DTOs (@Serializable)
+    └── PollenRoutes.kt
+```
+
+Domain enums and threshold logic have no Ktor or serialization-transport concerns beyond
+`@Serializable`; wire shapes are separate DTOs in `model/` so the public API can evolve
+independently of the domain.
+
+### REST API
+
+| Method | Path                      | Returns                                              |
+| ------ | ------------------------- | ---------------------------------------------------- |
+| GET    | `/health`                 | `OK`                                                 |
+| GET    | `/pollen/stations`        | All 15 stations with coordinates and altitude        |
+| GET    | `/pollen/stations/{abbr}` | One station (case-insensitive abbr), 404 if unknown  |
+| GET    | `/pollen/species`         | The 7 taxa with display and latin names              |
+| GET    | `/pollen/thresholds`      | Per-species severity bands + unit                    |
+
+## Testing
+
+| Source set                    | Deps                                                        |
+| ----------------------------- | ----------------------------------------------------------- |
+| `composeApp/src/commonTest`   | `kotlin("test")`, `kotlinx-coroutines-test`, `ktor-client-mock` |
+| `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation` |
+
+Rules of the road:
+
+- Put app tests in `commonTest`, never in `androidUnitTest` — they must run on every target.
+- Test names are backtick sentences describing behaviour, e.g.
+  ``fun `returns Failure when the upstream responds with a server error`()``.
+- Test the repository through a **real `HttpClient` backed by `MockEngine`**, not a mocked service.
+  `createHttpClient(engine)` accepts an engine so the production JSON/plugin config is under test
+  too. This covers the serialization contract, which is where upstream changes bite.
+- ViewModel tests use `Dispatchers.setMain(StandardTestDispatcher())` and `advanceUntilIdle()`, so
+  the intermediate `Loading` / `isRefreshing` states are observable. Reset with
+  `Dispatchers.resetMain()`.
+- Shared test fixtures go in a plain file in `commonTest` (see `FakeExampleRepository.kt`) —
+  hand-written fakes, no mocking framework in this project.
+- Server route tests use `testApplication { application { configureSerialization();
+  configureRouting(ownThresholds) } }` and pass in their own collaborators, so a test can assert
+  against the exact configuration it installed (see `PollenRoutesTest`).
+- Pin boundaries from both sides. `SpeciesThresholdsTest` is the model: every band bound is
+  asserted at the edge and just below it, since an off-by-one there silently mislabels severity.
+- When a test documents behaviour that is probably wrong, say so in a comment on the test rather
+  than silently encoding it.

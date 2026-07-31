@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.core.network
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
@@ -8,7 +9,7 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-fun createHttpClient(): HttpClient = HttpClient(httpClientEngine()) {
+fun createHttpClient(engine: HttpClientEngine = httpClientEngine()): HttpClient = HttpClient(engine) {
     install(ContentNegotiation) {
         json(
             Json {
