@@ -324,40 +324,99 @@ overwrite that choice, which would silently select a station the user did not pi
 
 ### Implementation steps
 
-- [ ] Clear the location error when a lookup is retried and when a station is picked from the dropdown.
-- [ ] Keep the location action enabled after a denial, so a device that still permits a prompt can
+- [x] Clear the location error when a lookup is retried and when a station is picked from the dropdown.
+- [x] Keep the location action enabled after a denial, so a device that still permits a prompt can
       grant the permission without leaving the app.
-- [ ] Keep the dropdown and the confirm action usable while a lookup is in progress.
-- [ ] Make a late-arriving location result yield to an existing manual selection instead of replacing
+- [x] Keep the dropdown and the confirm action usable while a lookup is in progress.
+- [x] Make a late-arriving location result yield to an existing manual selection instead of replacing
       it.
-- [ ] Extend the tests to cover clearing, the post-denial retry, the timeout under virtual time, and
+- [x] Extend the tests to cover clearing, the post-denial retry, the timeout under virtual time, and
       the late-result race.
-- [ ] Verify the two failure states on a device: deny the permission, then switch location services off.
+- [x] Verify the two failure states on a device: deny the permission, then switch location services off.
+
+> Notes from implementation:
+> - Two of these were already true when the task started and needed no code: the retry path already
+>   cleared `locationError` (`onPermissionResult(granted = true)`), and neither the dropdown nor
+>   `Continue` ever read `isLocating`. Both are now pinned by tests and a comment so a later change
+>   cannot quietly undo them.
+> - The late-result race is solved by **cancelling** the lookup on a manual pick
+>   (`OnboardingViewModel.locationJob`), not by filtering the result when it lands. Cancellation
+>   makes the overwrite impossible rather than guarded against, and it reaches the platform through
+>   the actuals' `suspendCancellableCoroutine`, so the device stops looking for a position nobody is
+>   waiting for. Consequence: a lookup that fails *after* a manual pick reports nothing at all,
+>   which is the intended reading of "an error never outlives its cause".
+> - `FakeCoarseLocationProvider` gained a `wasCancelled` flag so a test can assert the cancellation
+>   actually reached the source rather than only that the state looks right.
 
 ### Acceptance criteria
 
-- [ ] Denying the permission shows one line of text below the location action, and a static check
+- [x] Denying the permission shows one line of text below the location action, and a static check
       confirms the exact wording
       `Location permission is off. Enable it in Settings to find your nearest station.` appears exactly
       once in the source.
-- [ ] With the permission granted and location services switched off, the text below the action is
+      *(Emulator `Medium_Phone_API_36.1`, backend running: tapping `Use my location` with the
+      permission revoked prompted for **approximate** location; `Don't allow` rendered the wording
+      verbatim on one line directly below the button, in `colorScheme.error`. `grep -rF` over
+      `composeApp/src`: 1 occurrence, `OnboardingScreen.kt:222`.)*
+- [x] With the permission granted and location services switched off, the text below the action is
       exactly `Your location could not be determined. Please pick a station manually.`, and the
       dropdown still opens and can be used.
-- [ ] An automated test using virtual time — not a real-time sleep — shows a source that never returns
+      *(`settings put secure location_mode 0` → `cmd location is-location-enabled` = false, permission
+      granted via `pm grant`. The message appeared verbatim within a second of the tap, and the
+      dropdown then opened and listed the stations with the message still on screen; picking Genève
+      cleared it and enabled `Continue`. Reproduced on two consecutive clean runs. One earlier run
+      was confounded: Play Services put its own `LocationOffWarningActivity` over the app and on
+      returning the screen was in its initial state — not reproducible in three later runs,
+      including one that deliberately backgrounded the app for 15 s mid-lookup and came back with
+      the message intact, so the likely cause was process death behind that activity.)*
+- [x] An automated test using virtual time — not a real-time sleep — shows a source that never returns
       produces the could-not-determine error once the timeout elapses.
-- [ ] Automated tests show the error clears both when a station is picked manually and when the
+      *(`a lookup that never answers produces the could-not-determine error once it times out` drives
+      `FakeCoarseLocationProvider(neverAnswers = true)` with `advanceTimeBy(LOCATION_TIMEOUT - 1s)`,
+      asserting `isLocating` just before the deadline and `UNAVAILABLE` after. Wall-clock: 0.001 s
+      for a 10-second timeout.)*
+- [x] Automated tests show the error clears both when a station is picked manually and when the
       location action is used again, and that the location action remains enabled after a denial.
-- [ ] An automated test shows a successful lookup arriving after a manual pick leaves the manual
+      *(`picking a station clears the location error it replaces`, `retrying the lookup clears the
+      previous error as soon as the attempt starts`, `the location shortcut still works after the
+      permission was refused`, `a repeated refusal leaves the permission message in place`. Confirmed
+      on device too: after a denial the button stayed enabled, prompted again, and granting it
+      replaced the permission wording with the could-not-determine wording.)*
+- [x] An automated test shows a successful lookup arriving after a manual pick leaves the manual
       selection in place, and that confirming during an in-flight lookup persists the manually picked
       station.
-- [ ] The state model carries exactly two location error variants; a static check finds no third
+      *(`a fix that lands after a manual pick leaves the picked station in place` — the fake is set to
+      answer `PZH` after 5 s, the user picks Bern at 1 s, and Bern is still selected once time is
+      advanced past the answer. `a manual pick stops the lookup rather than letting it run on` asserts
+      the source was cancelled. `picking and confirming while a lookup is outstanding persists the
+      picked station` stores Genève and emits `Completed` while the 5-second lookup is outstanding.
+      Note the pick **cancels** the lookup, so the result is never delivered rather than delivered
+      and discarded.)*
+- [x] The state model carries exactly two location error variants; a static check finds no third
       location error message in the app.
+      *(`enum class LocationError { PERMISSION_DENIED, UNAVAILABLE }` — the only two, both exhausted
+      by `LocationError.message()`, which is the single home of both strings. No other location-
+      related literal exists in `commonMain`/`androidMain`/`iosMain`.)*
 
 ### Quality gates
 
-- [ ] Full test suite and iOS compile check pass.
-- [ ] No test in the suite sleeps in real time; the timeout test advances virtual time.
-- [ ] Every user-visible message introduced by this feature exists exactly once in the source, so
+- [x] Full test suite and iOS compile check pass.
+      *(`:composeApp:testDebugUnitTest :server:test --rerun-tasks` → BUILD SUCCESSFUL, 157 tests,
+      0 failures, 0 skipped (was 149; 8 new). `:composeApp:compileTestKotlinIosSimulatorArm64
+      --rerun-tasks` → BUILD SUCCESSFUL.)*
+- [x] No test in the suite sleeps in real time; the timeout test advances virtual time.
+      *(No `Thread.sleep`, `runBlocking` or `System.currentTimeMillis` in `composeApp/src/commonTest`
+      or `server/src/test`. The only `delay`/`awaitCancellation` is inside `FakeCoarseLocationProvider`,
+      driven by `runTest`'s scheduler — `OnboardingViewModelTest` totals 0.041 s for 36 tests while
+      advancing 10+ virtual seconds.)*
+- [x] Every user-visible message introduced by this feature exists exactly once in the source, so
       wording cannot drift between duplicated literals.
-- [ ] All app tests added by tasks 01–05 live in the common test source set, none in the
+      *(`grep -rF` over `composeApp/src` for each string — the two location messages, the save-failure
+      message, `Welcome to PollenInfo`, the subtitle, `Use my location`, `The station list could not
+      be loaded.` — returns exactly 1 hit each. `Retry` also appears once in this feature; its second
+      occurrence in the tree is in the pre-existing `feature/example` reference slice, which this
+      feature does not touch.)*
+- [x] All app tests added by tasks 01–05 live in the common test source set, none in the
       Android-only test source set.
+      *(`composeApp/src` contains exactly one test source set, `commonTest`; `androidUnitTest`,
+      `androidTest` and `iosTest` do not exist.)*

@@ -282,6 +282,13 @@ Both actuals bridge their platform's callback API through `suspendCancellableCor
 cancelling the calling coroutine reaches the platform (`CancellationSignal.cancel()` /
 `stopUpdatingLocation()`) instead of abandoning a request that keeps running.
 
+**That cancellation is load-bearing, not just tidy.** Picking a station from the dropdown cancels any
+lookup still in flight (`OnboardingViewModel.locationJob`). The shortcut proposes and the user
+commits, so a fix that lands *after* they have already chosen must not re-pick for them — cancelling
+makes that impossible rather than something a guard has to remember to check, and it stops the device
+looking for a position nobody is waiting for. The two location messages clear on the same pick: an
+error must not outlive its cause.
+
 Android uses `LocationManagerCompat.getCurrentLocation` on `NETWORK_PROVIDER` only. **No Play
 Services**, and no GPS fallback: `ACCESS_COARSE_LOCATION` does not grant `GPS_PROVIDER`, and
 `FUSED_PROVIDER` needs API 31 against `minSdk` 26. The compat shim is what makes this work below API

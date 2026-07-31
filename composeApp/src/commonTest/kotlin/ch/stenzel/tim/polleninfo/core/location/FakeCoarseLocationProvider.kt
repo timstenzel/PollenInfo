@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.location
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
@@ -21,10 +22,22 @@ class FakeCoarseLocationProvider(
     var callCount: Int = 0
         private set
 
+    /**
+     * Set when a lookup was cancelled before it could answer. It stands in for "the platform
+     * request stopped": the real actuals hang their `invokeOnCancellation` off the same signal.
+     */
+    var wasCancelled: Boolean = false
+        private set
+
     override suspend fun currentLocation(): CoarseLocationResult {
         callCount++
-        if (neverAnswers) awaitCancellation()
-        if (answerDelay > Duration.ZERO) delay(answerDelay)
+        try {
+            if (neverAnswers) awaitCancellation()
+            if (answerDelay > Duration.ZERO) delay(answerDelay)
+        } catch (cancellation: CancellationException) {
+            wasCancelled = true
+            throw cancellation
+        }
         return result
     }
 }

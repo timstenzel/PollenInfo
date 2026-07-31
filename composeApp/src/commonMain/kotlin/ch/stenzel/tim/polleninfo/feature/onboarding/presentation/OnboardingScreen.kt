@@ -165,6 +165,8 @@ private fun StationPickerView(
             )
         }
         Spacer(Modifier.height(24.dp))
+        // Neither the dropdown nor Continue below takes `isLocating` into account, on purpose: a
+        // slow lookup must never block the manual path. Picking here calls the lookup off.
         StationDropdown(
             stations = stations,
             selected = selected,

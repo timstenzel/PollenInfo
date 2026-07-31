@@ -11,6 +11,7 @@ import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,9 @@ class OnboardingViewModel(
     private val _events = Channel<OnboardingEvent>(Channel.BUFFERED)
     val events: Flow<OnboardingEvent> = _events.receiveAsFlow()
 
+    /** The lookup currently in flight, if any. Held only so [onStationSelected] can call it off. */
+    private var locationJob: Job? = null
+
     init {
         loadStations()
     }
@@ -52,11 +56,29 @@ class OnboardingViewModel(
 
     fun retry() = loadStations()
 
-    /** Records the user's pick. Nothing is persisted until they confirm it. */
+    /**
+     * Records the user's pick. Nothing is persisted until they confirm it.
+     *
+     * A pick also calls off any lookup still running. Cancelling rather than filtering the late
+     * result is what makes "a fix that lands after the user has chosen must not silently replace
+     * their choice" structural instead of guarded: there is no result left to apply. It also
+     * reaches the platform — both actuals bridge through a cancellable continuation — so the
+     * device stops looking for a position nobody is waiting for.
+     *
+     * Both error flags clear here as well: neither outlives the pick that answers it.
+     */
     fun onStationSelected(station: Station) {
+        locationJob?.cancel()
+        locationJob = null
+
         _uiState.update { state ->
             if (state is OnboardingUiState.Content) {
-                state.copy(selected = station, saveError = false)
+                state.copy(
+                    selected = station,
+                    isLocating = false,
+                    locationError = null,
+                    saveError = false,
+                )
             } else {
                 state
             }
@@ -68,6 +90,9 @@ class OnboardingViewModel(
      *
      * The prompt itself lives in the composition — Android's launcher is activity-scoped — so the
      * ViewModel learns of it only as this boolean and stays free of platform APIs.
+     *
+     * A refusal is recorded and nothing else: it leaves the shortcut usable, so a user who changes
+     * their mind while the device still permits a prompt can grant it without leaving the app.
      */
     fun onPermissionResult(granted: Boolean) {
         val content = _uiState.value as? OnboardingUiState.Content ?: return
@@ -80,8 +105,11 @@ class OnboardingViewModel(
             return
         }
 
+        // Retrying clears the previous complaint the moment the attempt starts, rather than only
+        // once it succeeds — a message that outlives its cause reads as the new attempt failing.
         _uiState.value = content.copy(isLocating = true, locationError = null)
-        viewModelScope.launch { resolveNearestStation() }
+        locationJob?.cancel()
+        locationJob = viewModelScope.launch { resolveNearestStation() }
     }
 
     /**

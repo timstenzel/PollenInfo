@@ -432,6 +432,145 @@ class OnboardingViewModelTest {
         assertEquals(before, viewModel.content().stations)
     }
 
+    // --- recovering from a failed lookup -----------------------------------------------------
+
+    @Test
+    fun `picking a station clears the location error it replaces`() = runTest {
+        locationProvider.result = CoarseLocationResult.PermissionDenied
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
+
+        viewModel.onStationSelected(viewModel.content().stations.first())
+
+        val state = viewModel.content()
+        assertNull(state.locationError, "the message must not outlive the pick that answers it")
+        assertEquals(state.stations.first(), state.selected)
+    }
+
+    @Test
+    fun `retrying the lookup clears the previous error as soon as the attempt starts`() = runTest {
+        locationProvider.result = CoarseLocationResult.Unavailable
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+        assertEquals(LocationError.UNAVAILABLE, viewModel.content().locationError)
+
+        locationProvider.answerDelay = 5.seconds
+        viewModel.onPermissionResult(granted = true)
+
+        // Not "once the retry succeeds" — the stale message would otherwise read as this attempt
+        // having already failed.
+        val state = viewModel.content()
+        assertNull(state.locationError)
+        assertTrue(state.isLocating)
+    }
+
+    @Test
+    fun `the location shortcut still works after the permission was refused`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = false)
+        advanceUntilIdle()
+        // Nothing about the refusal blocks another attempt: the action is bound to isLocating
+        // alone, so the device may still prompt if it permits one.
+        assertTrue(!viewModel.content().isLocating)
+
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertEquals(1, locationProvider.callCount)
+        assertEquals("PZH", state.selected?.abbr)
+        assertNull(state.locationError)
+    }
+
+    @Test
+    fun `a repeated refusal leaves the permission message in place`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = false)
+        viewModel.onPermissionResult(granted = false)
+        advanceUntilIdle()
+
+        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
+    }
+
+    // --- the manual path is never overruled by a lookup ---------------------------------------
+
+    @Test
+    fun `a fix that lands after a manual pick leaves the picked station in place`() = runTest {
+        // The fake would answer with a position near Winterthur — i.e. propose PZH — but only
+        // after the user has already picked Bern.
+        locationProvider.answerDelay = 5.seconds
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val bern = viewModel.content().stations.single { it.abbr == "PBE" }
+
+        viewModel.onPermissionResult(granted = true)
+        advanceTimeBy(1.seconds)
+        viewModel.onStationSelected(bern)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertEquals(bern, state.selected, "a late fix must not silently re-pick for the user")
+        assertTrue(!state.isLocating)
+        assertNull(state.locationError)
+    }
+
+    @Test
+    fun `a manual pick stops the lookup rather than letting it run on`() = runTest {
+        locationProvider.answerDelay = 5.seconds
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onPermissionResult(granted = true)
+        advanceTimeBy(1.seconds)
+        viewModel.onStationSelected(viewModel.content().stations.first())
+        advanceUntilIdle()
+
+        assertTrue(locationProvider.wasCancelled, "cancellation must reach the platform request")
+    }
+
+    @Test
+    fun `a failed lookup that lands after a manual pick raises no error`() = runTest {
+        locationProvider.result = CoarseLocationResult.Unavailable
+        locationProvider.answerDelay = 5.seconds
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val sion = viewModel.content().stations.single { it.abbr == "PSN" }
+
+        viewModel.onPermissionResult(granted = true)
+        viewModel.onStationSelected(sion)
+        advanceUntilIdle()
+
+        val state = viewModel.content()
+        assertNull(state.locationError, "the lookup was called off; it has nothing left to report")
+        assertEquals(sion, state.selected)
+    }
+
+    @Test
+    fun `picking and confirming while a lookup is outstanding persists the picked station`() = runTest {
+        locationProvider.answerDelay = 5.seconds
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val events = viewModel.collectEvents(this)
+        val geneve = viewModel.content().stations.single { it.abbr == "PGE" }
+
+        viewModel.onPermissionResult(granted = true)
+        viewModel.onStationSelected(geneve)
+        viewModel.onConfirm()
+        advanceUntilIdle()
+
+        assertEquals(SelectedStation(abbr = "PGE", name = "Genève"), selectedStationRepository.stored)
+        assertEquals(listOf(OnboardingEvent.Completed), events)
+    }
+
     @Test
     fun `a permission answer arriving before the stations are loaded is ignored`() = runTest {
         repository.result = Result.Failure(RuntimeException("Connection refused"))
