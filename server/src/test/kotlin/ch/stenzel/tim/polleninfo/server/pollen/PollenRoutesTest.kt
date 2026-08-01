@@ -2,12 +2,17 @@ package ch.stenzel.tim.polleninfo.server.pollen
 
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.domain.SpeciesThresholds
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
 import ch.stenzel.tim.polleninfo.server.pollen.model.SpeciesDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationDto
+import ch.stenzel.tim.polleninfo.server.pollen.model.StationMeasurementDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.ThresholdsDto
+import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenFileSource
+import ch.stenzel.tim.polleninfo.server.pollen.upstream.hourlyCsv
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
@@ -17,16 +22,20 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PollenRoutesTest {
 
+    private val fileSource = FakePollenFileSource()
+
     private fun ApplicationTestBuilder.installApp(
         thresholds: PollenThresholds = PollenThresholds(),
+        measurementService: MeasurementService = MeasurementService(fileSource, thresholds),
     ) {
         application {
             configureSerialization()
-            configureRouting(thresholds)
+            configureRouting(thresholds, measurementService)
         }
     }
 
@@ -119,5 +128,101 @@ class PollenRoutesTest {
 
         assertEquals(SpeciesThresholds(3, 10, 40), bySpecies.getValue("BIRCH"))
         assertEquals(SpeciesThresholds(15, 90, 1500), bySpecies.getValue("OAK"))
+    }
+
+    @Test
+    fun `measurements endpoint returns the station, the timestamp, the unit and seven taxa`() =
+        testApplication {
+            fileSource.bytes = hourlyCsv(
+                rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.BIRCH to 42)),
+            )
+            installApp()
+
+            val body = jsonClient()
+                .get("/pollen/stations/PZH/measurements")
+                .body<StationMeasurementDto>()
+
+            assertEquals("PZH", body.stationAbbr)
+            assertEquals("2026-08-01T09:00:00Z", body.measuredAt)
+            assertEquals("grains/m3", body.unit)
+            assertEquals(PollenSpecies.entries.map { it.name }, body.species.map { it.id })
+        }
+
+    @Test
+    fun `an unmeasured taxon is distinguishable from one measuring zero`() = testApplication {
+        fileSource.bytes = hourlyCsv(
+            rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.BIRCH to 0)),
+            columns = listOf(PollenSpecies.BIRCH),
+        )
+        installApp()
+
+        val species = jsonClient()
+            .get("/pollen/stations/PZH/measurements")
+            .body<StationMeasurementDto>()
+            .species.associateBy { it.id }
+
+        val birch = species.getValue("BIRCH")
+        assertEquals(0, birch.concentration)
+        assertEquals(PollenSeverity.NONE, birch.severity)
+
+        val ash = species.getValue("ASH")
+        assertNull(ash.concentration)
+        assertNull(ash.severity)
+        // Still named, so a client can list it as unmeasured rather than omitting it.
+        assertEquals("Ash", ash.name)
+        assertEquals("Fraxinus", ash.latinName)
+    }
+
+    @Test
+    fun `measurements are classified per taxon`() = testApplication {
+        fileSource.bytes = hourlyCsv(
+            rows = listOf(
+                "01.08.2026 09:00" to mapOf(
+                    PollenSpecies.BIRCH to 20,
+                    PollenSpecies.GRASSES to 20,
+                ),
+            ),
+        )
+        installApp()
+
+        val species = jsonClient()
+            .get("/pollen/stations/PZH/measurements")
+            .body<StationMeasurementDto>()
+            .species.associateBy { it.id }
+
+        assertEquals(PollenSeverity.MODERATE, species.getValue("BIRCH").severity)
+        assertEquals(PollenSeverity.HIGH, species.getValue("GRASSES").severity)
+    }
+
+    @Test
+    fun `measurements can be requested with a lowercase abbreviation`() = testApplication {
+        installApp()
+
+        assertEquals(
+            HttpStatusCode.OK,
+            jsonClient().get("/pollen/stations/pzh/measurements").status,
+        )
+    }
+
+    @Test
+    fun `measurements for an unknown station return 404`() = testApplication {
+        installApp()
+
+        assertEquals(
+            HttpStatusCode.NotFound,
+            jsonClient().get("/pollen/stations/XXX/measurements").status,
+        )
+    }
+
+    @Test
+    fun `a station whose file holds no usable row returns 404`() = testApplication {
+        fileSource.bytes = hourlyCsv(rows = listOf("01.08.2026 09:00" to emptyMap()))
+        installApp()
+
+        // A 200 with seven blank rows would be indistinguishable from a calm day.
+        assertEquals(
+            HttpStatusCode.NotFound,
+            jsonClient().get("/pollen/stations/PZH/measurements").status,
+        )
     }
 }

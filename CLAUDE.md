@@ -141,6 +141,18 @@ publish these numbers in machine-readable form; if you get an authoritative per-
 `PollenSeverity` is ordered `NONE < LOW < MODERATE < HIGH < VERY_HIGH`, so a "at least this severe"
 comparison is expressible as `severity.atLeast(minimum)`.
 
+### Accepted limitation: hourly readings against daily-mean bands
+
+**These bands are defined over daily mean concentrations; `/pollen/stations/{abbr}/measurements`
+applies them to hourly readings, so the severities it reports skew high.** An hourly birch reading
+of 100 grains/m³ comes back as `HIGH` even on a day whose mean would land in `MODERATE`.
+
+This was chosen over the alternatives rather than overlooked. Daily averages are only complete for
+the previous day, so a screen built on them would show yesterday's air while claiming to describe
+today; inventing our own hourly bands would replace a documented approximation with undocumented
+guesswork. `PollenThresholds.DEFAULTS` stays the one place to change, so an authoritative hourly
+table can be adopted later without touching anything else.
+
 ## Conventions
 
 ### Feature package layout (`:composeApp`)
@@ -339,8 +351,13 @@ remains reachable, but nothing navigates to it.
 
 Completing onboarding navigates to `Screen.Home` with `popUpTo<Screen.Onboarding> { inclusive =
 true }`, so the back gesture from Home leaves the app instead of reopening a setup screen whose
-purpose is already fulfilled. `feature/home` is a **placeholder** standing in for the real
-dashboard: it reads the stored selection and renders its name, with no ViewModel and no network.
+purpose is already fulfilled. `feature/home` is the app's dashboard: `HomeViewModel` observes the
+stored selection and loads that station's reading from `/pollen/stations/{abbr}/measurements`.
+
+It **observes** the selection rather than taking its first value, unlike the startup gate below —
+see that section for why the two differ. There is deliberately no way to change the station from
+Home; the pin in its top bar is decorative, and station changes belong to the planned settings
+feature.
 
 ### The startup gate
 
@@ -368,6 +385,11 @@ Two deliberate choices:
   the iOS build. Same for `java.*` anything, `UUID`, `SimpleDateFormat`. Use `kotlin.math` and
   `kotlinx-datetime` instead. (`ExampleMapper.format` is a hand-rolled multiplatform
   replacement.)
+- **`Icons.Default.*` is not transitive.** `compose.material3` supplies it for the Android target
+  and not for iOS, so a screen using an icon compiles for Android and then fails to resolve
+  `androidx.compose.material.icons` on `compileKotlinIosSimulatorArm64`. `compose.materialIconsExtended`
+  is an explicit `commonMain` dependency for exactly this reason — a second instance of the same
+  trap as `String.format` above.
 - Platform-specific pieces use `expect`/`actual` with a `.android.kt` / `.ios.kt` filename suffix,
   as in `core/network/HttpClientEngine.kt`.
 - Always compile an iOS target after touching `commonMain`; the Android build alone will not catch
@@ -385,6 +407,8 @@ server/src/main/kotlin/.../server/
 ├── plugins/            configureSerialization / configureLogging / configureRouting
 └── pollen/
     ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
+    ├── upstream/       PollenFileSource + implementations, PollenCsvParser
+    ├── measurement/    MeasurementService, StationMeasurement
     ├── model/          Wire DTOs (@Serializable)
     └── PollenRoutes.kt
 ```
@@ -395,13 +419,47 @@ independently of the domain.
 
 ### REST API
 
-| Method | Path                      | Returns                                              |
-| ------ | ------------------------- | ---------------------------------------------------- |
-| GET    | `/health`                 | `OK`                                                 |
-| GET    | `/pollen/stations`        | All 15 stations with coordinates and altitude        |
-| GET    | `/pollen/stations/{abbr}` | One station (case-insensitive abbr), 404 if unknown  |
-| GET    | `/pollen/species`         | The 7 taxa with display and latin names              |
-| GET    | `/pollen/thresholds`      | Per-species severity bands + unit                    |
+| Method | Path                                    | Returns                                              |
+| ------ | --------------------------------------- | ---------------------------------------------------- |
+| GET    | `/health`                               | `OK`                                                 |
+| GET    | `/pollen/stations`                      | All 15 stations with coordinates and altitude        |
+| GET    | `/pollen/stations/{abbr}`               | One station (case-insensitive abbr), 404 if unknown  |
+| GET    | `/pollen/stations/{abbr}/measurements`  | That station's latest reading, classified            |
+| GET    | `/pollen/species`                       | The 7 taxa with display and latin names              |
+| GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
+
+#### `GET /pollen/stations/{abbr}/measurements`
+
+```json
+{ "stationAbbr": "PZH", "measuredAt": "2026-08-01T09:00:00Z", "unit": "grains/m3",
+  "species": [ { "id": "BIRCH", "name": "Birch", "latinName": "Betula",
+                 "concentration": 42, "severity": "MODERATE" },
+               { "id": "ASH", "name": "Ash", "latinName": "Fraxinus",
+                 "concentration": null, "severity": null } ] }
+```
+
+- **All seven taxa are always present**, in `PollenSpecies` declaration order. `concentration` and
+  `severity` are nullable **together** and mean *no reading* — the station does not report that
+  taxon. That is a different fact from `0` / `NONE`: a station that does not measure ash is not a
+  station reporting no ash, and a client must be able to say so.
+- **No `overallSeverity` field, and `species` is unsorted.** Both the worst severity and the display
+  order are pure functions of `species` and are presentation rules; a derived copy on the wire only
+  gives the two sides two answers that can disagree.
+- **`measuredAt` is mandatory** — a response that can be served from a cache after an upstream
+  failure has to say when its reading is from.
+
+| Case | Status |
+| --- | --- |
+| Success | `200` |
+| Unknown abbr | `404` |
+| Published file holds no usable row | `404` |
+
+The pipeline behind it lives in `server/.../pollen/`: `upstream/PollenFileSource` (where the bytes
+come from), `upstream/PollenCsvParser` (decode, parse, pick the row) and
+`measurement/MeasurementService` (compose the two and classify against `PollenThresholds`).
+`ClasspathPollenFileSource` currently serves verbatim copies of the published files from
+`server/src/main/resources/fixtures/ogd-pollen/`, so the whole path runs without the network; the
+HTTP implementation replaces it behind the same interface.
 
 ## Testing
 

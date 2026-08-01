@@ -10,6 +10,11 @@ import ch.stenzel.tim.polleninfo.feature.example.data.repository.ExampleReposito
 import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleRepository
 import ch.stenzel.tim.polleninfo.feature.example.domain.usecase.GetPollenSnapshotUseCase
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleViewModel
+import ch.stenzel.tim.polleninfo.feature.home.data.remote.StationMeasurementApiService
+import ch.stenzel.tim.polleninfo.feature.home.data.repository.StationMeasurementRepositoryImpl
+import ch.stenzel.tim.polleninfo.feature.home.domain.repository.StationMeasurementRepository
+import ch.stenzel.tim.polleninfo.feature.home.domain.usecase.GetStationMeasurementUseCase
+import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeViewModel
 import ch.stenzel.tim.polleninfo.feature.onboarding.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.feature.onboarding.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.repository.StationRepository
@@ -31,6 +36,9 @@ val dataModule = module {
     single { StationApiService(get(), apiBaseUrl) }
     single<StationRepository> { StationRepositoryImpl(get()) }
 
+    single { StationMeasurementApiService(get(), apiBaseUrl) }
+    single<StationMeasurementRepository> { StationMeasurementRepositoryImpl(get()) }
+
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
 }
@@ -38,6 +46,7 @@ val dataModule = module {
 val domainModule = module {
     factory { GetPollenSnapshotUseCase(get()) }
     factory { FindNearestStationUseCase() }
+    factory { GetStationMeasurementUseCase(get()) }
 }
 
 val presentationModule = module {
@@ -45,6 +54,7 @@ val presentationModule = module {
     viewModel { ExampleViewModel(get()) }
     // CoarseLocationProvider comes from platformModule; the ViewModel only knows the interface.
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

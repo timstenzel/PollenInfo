@@ -36,6 +36,10 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
+            // `Icons.Default.*` is NOT transitive here. It resolves for the Android target through
+            // material3's own dependencies and then fails to link for iOS, so the Android build
+            // alone does not catch its absence — verified against compileKotlinIosSimulatorArm64.
+            implementation(compose.materialIconsExtended)
 
             implementation(libs.navigation.compose)
 
