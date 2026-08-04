@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.server.pollen.upstream
 
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -9,8 +10,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Fixtures are under `src/test/resources/csv`, written in ISO-8859-1 with CRLF endings exactly as
- * the publisher emits them. No test here contacts MeteoSwiss.
+ * Two sets of fixtures, both under `src/test/resources` and both ISO-8859-1 with CRLF endings
+ * exactly as the publisher emits them. `csv/` holds small hand-written files that isolate one
+ * parsing rule each; `fixtures/ogd-pollen/` holds verbatim downloads of all 15 published files,
+ * which is what keeps the rules honest against the real column layout. No test here contacts
+ * MeteoSwiss.
  */
 class PollenCsvParserTest {
 
@@ -121,18 +125,48 @@ class PollenCsvParserTest {
     }
 
     @Test
-    fun `parses the real published file checked in as a sample`() {
-        val bytes = checkNotNull(
-            javaClass.classLoader.getResourceAsStream(
-                "${ClasspathPollenFileSource.ROOT}/pzh/ogd-pollen_pzh_h_now.csv",
-            ),
-        ).use { it.readBytes() }
+    fun `every station's real published sample parses to a reading`() {
+        PollenStation.entries.forEach { station ->
+            val reading = checkNotNull(PollenCsvParser.parseHourly(publishedSample(station))) {
+                "no usable row in the checked-in sample for ${station.abbr}"
+            }
 
-        val reading = checkNotNull(PollenCsvParser.parseHourly(bytes))
+            // Only that the real column layout maps to all seven taxa — the values themselves are
+            // a frozen snapshot and are nobody's business to assert.
+            assertEquals(PollenSpecies.entries.toSet(), reading.concentrations.keys, station.abbr)
+            assertTrue(
+                reading.concentrations.values.any { it != null },
+                "every taxon reads as absent in the sample for ${station.abbr}",
+            )
+        }
+    }
 
-        // Only that the real column layout maps to all seven taxa — the values themselves are a
-        // frozen snapshot and are nobody's business to assert.
-        assertEquals(PollenSpecies.entries.toSet(), reading.concentrations.keys)
-        assertTrue(reading.concentrations.values.any { it != null })
+    @Test
+    fun `each sample is filed under its own station's published path`() {
+        PollenStation.entries.forEach { station ->
+            // The first field of every row is the abbreviation, so a sample downloaded into the
+            // wrong directory is visible in the content rather than only in a file name.
+            val firstDataRow = decodePublished(publishedSample(station)).lineSequence().drop(1)
+
+            assertTrue(
+                firstDataRow.first().startsWith("${station.abbr};"),
+                "the sample at ${station.hourlyNowPath} does not hold ${station.abbr}'s rows",
+            )
+        }
+    }
+
+    /**
+     * A verbatim download of a station's published file, resolved by the same relative path the
+     * open-data service serves it under — so a change to [PollenStation.hourlyNowPath] that the
+     * fixtures do not follow fails here.
+     */
+    private fun publishedSample(station: PollenStation): ByteArray =
+        checkNotNull(
+            javaClass.classLoader.getResourceAsStream("$PUBLISHED_SAMPLES/${station.hourlyNowPath}"),
+        ) { "no checked-in sample at ${station.hourlyNowPath}" }
+            .use { it.readBytes() }
+
+    private companion object {
+        const val PUBLISHED_SAMPLES = "fixtures/ogd-pollen"
     }
 }

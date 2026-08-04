@@ -5,7 +5,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.domain.SpeciesThresholds
-import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenFileSource
+import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenService
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.hourlyCsv
 import kotlinx.coroutines.test.runTest
 import java.time.Instant
@@ -17,11 +17,11 @@ import kotlin.test.assertNull
 class MeasurementServiceTest {
 
     private val thresholds = PollenThresholds()
-    private val fileSource = FakePollenFileSource()
-    private val service = MeasurementService(fileSource, thresholds)
+    private val pollenService = FakePollenService()
+    private val service = MeasurementService(pollenService, thresholds)
 
     private suspend fun severityOf(species: PollenSpecies, concentration: Int): PollenSeverity? {
-        fileSource.bytes = hourlyCsv(
+        pollenService.bytes = hourlyCsv(
             rows = listOf("01.08.2026 09:00" to mapOf(species to concentration)),
         )
         return service.measurementFor(PollenStation.ZUERICH)
@@ -31,10 +31,10 @@ class MeasurementServiceTest {
     }
 
     @Test
-    fun `asks the file source for the station it was given`() = runTest {
+    fun `asks the pollen service for the station it was given`() = runTest {
         service.measurementFor(PollenStation.LUGANO)
 
-        assertEquals(listOf(PollenStation.LUGANO), fileSource.requested)
+        assertEquals(listOf(PollenStation.LUGANO), pollenService.requested)
     }
 
     @Test
@@ -80,7 +80,7 @@ class MeasurementServiceTest {
 
     @Test
     fun `a taxon with no column has neither a concentration nor a severity`() = runTest {
-        fileSource.bytes = hourlyCsv(
+        pollenService.bytes = hourlyCsv(
             rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.GRASSES to 20)),
             columns = listOf(PollenSpecies.GRASSES),
         )
@@ -94,14 +94,14 @@ class MeasurementServiceTest {
 
     @Test
     fun `returns null when the file holds no usable row`() = runTest {
-        fileSource.bytes = hourlyCsv(rows = listOf("01.08.2026 09:00" to emptyMap()))
+        pollenService.bytes = hourlyCsv(rows = listOf("01.08.2026 09:00" to emptyMap()))
 
         assertNull(service.measurementFor(PollenStation.ZUERICH))
     }
 
     @Test
-    fun `propagates a file source failure rather than reporting an empty station`() = runTest {
-        fileSource.failure = IllegalStateException("upstream down")
+    fun `propagates a pollen service failure rather than reporting an empty station`() = runTest {
+        pollenService.failure = IllegalStateException("upstream down")
 
         assertFailsWith<IllegalStateException> { service.measurementFor(PollenStation.ZUERICH) }
     }
@@ -109,12 +109,12 @@ class MeasurementServiceTest {
     @Test
     fun `reflects a retuned threshold table`() = runTest {
         val retuned = MeasurementService(
-            fileSource,
+            pollenService,
             PollenThresholds(
                 PollenThresholds.DEFAULTS + (PollenSpecies.BIRCH to SpeciesThresholds(3, 10, 40)),
             ),
         )
-        fileSource.bytes = hourlyCsv(
+        pollenService.bytes = hourlyCsv(
             rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.BIRCH to 20)),
         )
 

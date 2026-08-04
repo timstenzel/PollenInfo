@@ -22,8 +22,14 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
+    // Outbound leg to the MeteoSwiss OGD file service. CIO because the server has no other engine
+    // requirement and it pulls in no platform HTTP stack.
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)
+    testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotlinx.coroutines.test)
 }

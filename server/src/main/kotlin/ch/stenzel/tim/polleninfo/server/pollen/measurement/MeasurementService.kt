@@ -4,7 +4,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.PollenCsvParser
-import ch.stenzel.tim.polleninfo.server.pollen.upstream.PollenFileSource
+import ch.stenzel.tim.polleninfo.server.pollen.upstream.PollenService
 
 /**
  * Turns a station's published file into a classified reading.
@@ -14,18 +14,19 @@ import ch.stenzel.tim.polleninfo.server.pollen.upstream.PollenFileSource
  * is the single source of truth for what "High" means.
  */
 class MeasurementService(
-    private val fileSource: PollenFileSource,
+    private val pollenService: PollenService,
     private val thresholds: PollenThresholds,
 ) {
 
     /**
-     * The station's latest usable reading, or `null` when its file contains no row with a value.
+     * The station's latest usable reading, or `null` when its published file contains no row with
+     * a value.
      *
-     * Propagates whatever [PollenFileSource] throws: a file that could not be obtained is not a
-     * station with nothing to report.
+     * Propagates whatever [PollenService] throws: measurements that could not be obtained are not
+     * a station with nothing to report.
      */
     suspend fun measurementFor(station: PollenStation): StationMeasurement? {
-        val reading = PollenCsvParser.parseHourly(fileSource.hourlyNow(station)) ?: return null
+        val reading = PollenCsvParser.parseHourly(pollenService.hourlyNow(station)) ?: return null
 
         return StationMeasurement(
             station = station,

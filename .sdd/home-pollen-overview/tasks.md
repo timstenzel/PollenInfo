@@ -167,35 +167,77 @@ are right.
 
 ### Implementation steps
 
-- [ ] Add an HTTP client to the backend's main source set and a mock engine to its test source set;
+- [x] Add an HTTP client to the backend's main source set and a mock engine to its test source set;
       the backend currently has neither. Both are already in the version catalog.
-- [ ] Add an HTTP implementation of the file source, taking its client and base address as
+      *(`ktor-client-core` + `ktor-client-cio` on `implementation`, `ktor-client-mock` on
+      `testImplementation`.)*
+- [x] Add an HTTP implementation of the file source, taking its client and base address as
       constructor parameters so tests can drive it against a mock engine.
-- [ ] Wire the HTTP implementation into the running application, leaving the fixture-backed one for
-      tests.
-- [ ] Update the architecture overview in the project documentation to describe on-demand fetching
+      *(`MeteoSwissPollenService`; throws on any non-2xx so an error body can never reach the
+      parser as if it were a file.)*
+- [x] Wire the HTTP implementation into the running application, leaving the fixture-backed one for
+      tests. *(`configureRouting`'s production default builds `HttpClient(CIO)` with a 15-second
+      request/connect timeout and closes it on `ApplicationStopped`.)*
+- [x] Update the architecture overview in the project documentation to describe on-demand fetching
       rather than scheduled hourly polling, and document the new backend dependencies.
+      *(`CLAUDE.md`: diagram edge, the new "Fetching is on demand" paragraph, the module table, the
+      file table, the pipeline section — which now names both implementations and the new
+      dependencies — and the `server/src/test` deps row.)*
+- [x] Retire the fixture-backed implementation now that production no longer wires it, and rename
+      the HTTP one after what it is rather than after where its bytes come from.
+      *(The whole seam is now named after what it provides rather than where the bytes sit:
+      `PollenFileSource` → `PollenService`, `MeteoSwissPollenFileSource` → `MeteoSwissPollenService`,
+      `PollenFileFixtures.kt`/`FakePollenFileSource` → `FakePollenService.kt`/`FakePollenService`,
+      and the `fileSource` parameters, locals and test names with them.
+      `ClasspathPollenFileSource` is deleted outright — task 02 took away its only
+      production caller, leaving a class whose sole consumer was its own test. Its 15 sample CSVs
+      moved to `server/src/test/resources/fixtures/ogd-pollen/` and `PollenCsvParserTest` now reads
+      them directly by `PollenStation.hourlyNowPath`, asserting every station's file parses to a
+      reading covering all seven taxa and holds the abbreviation of the directory it sits in —
+      strictly more than the deleted tests checked. Both assertions were mutation-checked: swapping
+      PBE's sample into `pzh/` and deleting `pmu/` each fail the suite.)*
 
 ### Acceptance criteria
 
-- [ ] The file source requests the path derived from the station's own abbreviation, verified
+- [x] The file source requests the path derived from the station's own abbreviation, verified
       against a mock engine for more than one station.
-- [ ] An upstream response that is not a success surfaces as a failure from the file source rather
+      *(`MeteoSwissPollenServiceTest`: "the requested path is derived from the station's own
+      abbreviation" — PZH then PBE, asserting `…/pzh/ogd-pollen_pzh_h_now.csv` and
+      `…/pbe/ogd-pollen_pbe_h_now.csv`; "the default base URL is the published open-data root" pins
+      base address and path convention together for PMU.)*
+- [x] An upstream response that is not a success surfaces as a failure from the file source rather
       than as empty or partial content.
-- [ ] The running application resolves the HTTP implementation, and the fixture-backed one is no
+      *(`MeteoSwissPollenServiceTest`: `IOException` for 404, 500 and 502; "the published bytes
+      are returned undecoded" shows the success path returns the payload verbatim, `0xFC` intact.)*
+- [x] The running application resolves the HTTP implementation, and the fixture-backed one is no
       longer reachable from production wiring.
+      *(Structural, not conventional: the fixture-backed implementation no longer exists, and its
+      sample files are test resources, so `unzip -l` on the server jar finds no `fixtures/` entry
+      at all. Live: `GET /pollen/stations/PZH/measurements` returned
+      `measuredAt` `2026-08-04T04:00:00Z` — today — while the checked-in fixture's latest row is
+      `01.08.2026 08:00`, so the response cannot have come from the classpath.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] With the backend running, requesting measurements for a real station returns a successful
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+      *(BUILD SUCCESSFUL — server 85 tests, composeApp 143 tests, 0 failures, 0 errors.)*
+- [x] With the backend running, requesting measurements for a real station returns a successful
       response whose timestamp is from today and which contains at least one non-null concentration
       — confirming the base address, the station path convention and the published column layout
       against the live service.
-- [ ] The app, run against the local backend, displays a severity for the selected station that
+      *(Three stations on 2026-08-04: PZH → `2026-08-04T04:00:00Z`, grasses 3 `LOW`; PGE →
+      `2026-08-04T06:00:00Z`, grasses 3 `LOW`; PDS → `2026-08-04T06:00:00Z`, grasses 31 `HIGH`. All
+      seven taxa present with non-null concentrations, so the column layout parses.)*
+- [x] The app, run against the local backend, displays a severity for the selected station that
       matches the response observed above.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+      *(Emulator, debug build against `http://10.0.2.2:8080`: Zürich → pin + "Zürich" with "Low",
+      matching PZH. Re-onboarded to Davos → pin + "Davos / Wolfgang" with "High", matching PDS's
+      live grasses 31. The Davos fixture's latest row is grasses 6, so "High" could only come from
+      the live fetch.)*
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
+      *(`--rerun-tasks` over `:server:compileKotlin` and `:server:compileTestKotlin`: no `w:` lines
+      at all. `:composeApp` and `:theme` are untouched by this task.)*
 
 ---
 

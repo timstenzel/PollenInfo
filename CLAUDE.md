@@ -6,7 +6,7 @@ plus a Ktor backend that owns all contact with the MeteoSwiss public API.
 ## Architecture
 
 ```
-┌─────────────────────┐        REST         ┌──────────────┐   1h scheduled poll   ┌───────────────────┐
+┌─────────────────────┐        REST         ┌──────────────┐  on-demand CSV fetch  ┌───────────────────┐
 │ composeApp          │ ──────────────────> │  server      │ ────────────────────> │ MeteoSwiss OGD    │
 │ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │                       │ pollen (public)   │
 └─────────────────────┘   JSON              └──────────────┘                       └───────────────────┘
@@ -14,9 +14,15 @@ plus a Ktor backend that owns all contact with the MeteoSwiss public API.
          └──────────── push (FCM / APNS) ─────────┘
 ```
 
-**The apps never call the MeteoSwiss API directly.** All upstream polling, parsing, caching and
-severity classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV
-parsing, station metadata and threshold logic in one place and off the devices.
+**Fetching is on demand, not scheduled.** A request for a station's measurements fetches that
+station's current-day CSV; nothing is polled on a timer. This means no scheduler lifecycle, no
+cold-start "the first poll failed" state, and no traffic for the fourteen stations nobody is
+looking at. A scheduled poll becomes the right shape once push notifications need severities for
+stations nobody has open.
+
+**The apps never call the MeteoSwiss API directly.** All upstream fetching, parsing and severity
+classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
+station metadata and threshold logic in one place and off the devices.
 
 Push notifications are a later feature and there is no push code in the tree — when they land, the
 server gains an outbound leg to FCM/APNS and the apps a subscription call.
@@ -26,7 +32,7 @@ server gains an outbound leg to FCM/APNS and the apps a subscription call.
 | Module       | Type                        | Contains                                                    |
 | ------------ | --------------------------- | ----------------------------------------------------------- |
 | `:composeApp`| KMP (android, ios*)         | The app: UI, ViewModels, repositories, REST client           |
-| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss polling |
+| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching |
 | `:theme`     | KMP (android, ios*)         | Shared Material 3 colors / typography / `PollenInfoTheme`    |
 
 Package root everywhere: `ch.stenzel.tim.polleninfo`.
@@ -71,7 +77,7 @@ Timestamps are `dd.MM.yyyy HH:mm` in **UTC**.
 | `ogd-pollen_meta_stations.csv`                       | All 15 stations: abbr, name, canton, WGS84 lat/lon, altitude |
 | `ogd-pollen_meta_parameters.csv`                     | Parameter codes → taxon, unit, granularity  |
 | `ogd-pollen_meta_datainventory.csv`                  | Which station reports which parameter since when |
-| `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — poll this on the schedule |
+| `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — the only file we fetch |
 | `<abbr>/ogd-pollen_<abbr>_h_recent.csv`              | Hourly, year to date                        |
 | `<abbr>/ogd-pollen_<abbr>_d_recent.csv`              | Daily averages, year to date                |
 
@@ -407,7 +413,7 @@ server/src/main/kotlin/.../server/
 ├── plugins/            configureSerialization / configureLogging / configureRouting
 └── pollen/
     ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
-    ├── upstream/       PollenFileSource + implementations, PollenCsvParser
+    ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
     ├── measurement/    MeasurementService, StationMeasurement
     ├── model/          Wire DTOs (@Serializable)
     └── PollenRoutes.kt
@@ -454,19 +460,38 @@ independently of the domain.
 | Unknown abbr | `404` |
 | Published file holds no usable row | `404` |
 
-The pipeline behind it lives in `server/.../pollen/`: `upstream/PollenFileSource` (where the bytes
-come from), `upstream/PollenCsvParser` (decode, parse, pick the row) and
+The pipeline behind it lives in `server/.../pollen/`: `upstream/PollenService` (where the bytes come
+from), `upstream/PollenCsvParser` (decode, parse, pick the row) and
 `measurement/MeasurementService` (compose the two and classify against `PollenThresholds`).
-`ClasspathPollenFileSource` currently serves verbatim copies of the published files from
-`server/src/main/resources/fixtures/ogd-pollen/`, so the whole path runs without the network; the
-HTTP implementation replaces it behind the same interface.
+
+`PollenService` has exactly one production implementation, **`MeteoSwissPollenService`** — it
+fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` over HTTP, takes its `HttpClient` and base
+address as constructor parameters (the `StationApiService(client, baseUrl)` precedent, so tests
+drive it with `MockEngine`), and throws on any non-2xx rather than letting an error body reach the
+parser as if it were a file. The only other implementation is `FakePollenService` in
+`server/src/test` — programmable bytes, a settable failure and a record of what was requested,
+which is how band boundaries and the "no usable row" case get driven.
+
+Verbatim downloads of all 15 published files live in `server/src/test/resources/fixtures/
+ogd-pollen/`, laid out under the same relative paths the service serves them from. They are test
+resources rather than main ones — they must not ship in the server jar — and no class wraps them:
+`PollenCsvParserTest` reads them directly by `PollenStation.hourlyNowPath` and asserts every one
+still parses to a reading covering all seven taxa, and that each file holds the abbreviation of the
+directory it sits in. That is what keeps the parser honest against the real column layout, and what
+catches a re-download filed into the wrong station's directory.
+
+Production wiring lives in `configureRouting`'s defaults: it builds the `HttpClient(CIO)`, installs
+a 15-second request/connect timeout on it, and closes it on `ApplicationStopped`. Tests pass their
+own `MeasurementService` and never construct that client. This outbound leg is why `:server` has
+`ktor-client-core` + `ktor-client-cio` on `implementation` (CIO because the server needs no
+platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
 
 ## Testing
 
 | Source set                    | Deps                                                        |
 | ----------------------------- | ----------------------------------------------------------- |
 | `composeApp/src/commonTest`   | `kotlin("test")`, `kotlinx-coroutines-test`, `ktor-client-mock` |
-| `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation` |
+| `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation`, `ktor-client-mock` |
 
 Rules of the road:
 
@@ -486,5 +511,8 @@ Rules of the road:
   against the exact configuration it installed (see `PollenRoutesTest`).
 - Pin boundaries from both sides. `SpeciesThresholdsTest` is the model: every band bound is
   asserted at the edge and just below it, since an off-by-one there silently mislabels severity.
+- **No test contacts the real MeteoSwiss service.** `MeteoSwissPollenServiceTest` drives it
+  through `MockEngine`, and parser tests read checked-in CSV samples. That the published address
+  actually serves those paths is a manual check against the running backend, not a test.
 - When a test documents behaviour that is probably wrong, say so in a comment on the test rather
   than silently encoding it.

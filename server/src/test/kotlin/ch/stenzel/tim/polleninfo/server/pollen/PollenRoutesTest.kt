@@ -11,7 +11,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.model.SpeciesDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationMeasurementDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.ThresholdsDto
-import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenFileSource
+import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenService
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.hourlyCsv
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -27,11 +27,11 @@ import kotlin.test.assertTrue
 
 class PollenRoutesTest {
 
-    private val fileSource = FakePollenFileSource()
+    private val pollenService = FakePollenService()
 
     private fun ApplicationTestBuilder.installApp(
         thresholds: PollenThresholds = PollenThresholds(),
-        measurementService: MeasurementService = MeasurementService(fileSource, thresholds),
+        measurementService: MeasurementService = MeasurementService(pollenService, thresholds),
     ) {
         application {
             configureSerialization()
@@ -133,7 +133,7 @@ class PollenRoutesTest {
     @Test
     fun `measurements endpoint returns the station, the timestamp, the unit and seven taxa`() =
         testApplication {
-            fileSource.bytes = hourlyCsv(
+            pollenService.bytes = hourlyCsv(
                 rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.BIRCH to 42)),
             )
             installApp()
@@ -150,7 +150,7 @@ class PollenRoutesTest {
 
     @Test
     fun `an unmeasured taxon is distinguishable from one measuring zero`() = testApplication {
-        fileSource.bytes = hourlyCsv(
+        pollenService.bytes = hourlyCsv(
             rows = listOf("01.08.2026 09:00" to mapOf(PollenSpecies.BIRCH to 0)),
             columns = listOf(PollenSpecies.BIRCH),
         )
@@ -175,7 +175,7 @@ class PollenRoutesTest {
 
     @Test
     fun `measurements are classified per taxon`() = testApplication {
-        fileSource.bytes = hourlyCsv(
+        pollenService.bytes = hourlyCsv(
             rows = listOf(
                 "01.08.2026 09:00" to mapOf(
                     PollenSpecies.BIRCH to 20,
@@ -216,7 +216,7 @@ class PollenRoutesTest {
 
     @Test
     fun `a station whose file holds no usable row returns 404`() = testApplication {
-        fileSource.bytes = hourlyCsv(rows = listOf("01.08.2026 09:00" to emptyMap()))
+        pollenService.bytes = hourlyCsv(rows = listOf("01.08.2026 09:00" to emptyMap()))
         installApp()
 
         // A 200 with seven blank rows would be indistinguishable from a calm day.

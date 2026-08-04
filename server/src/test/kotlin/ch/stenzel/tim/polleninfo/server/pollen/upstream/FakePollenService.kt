@@ -4,15 +4,21 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 
 /**
- * Hand-written stand-in for the published file service — the project adds no mocking framework.
+ * Hand-written stand-in for the published service — the project adds no mocking framework.
  *
- * [failure], when set, is thrown instead of returning bytes, so the "the file could not be
- * obtained" path can be driven without an unreachable host.
+ * Programmable, which is the whole reason it exists alongside the real samples under
+ * `src/test/resources/fixtures`: a caller hands it exactly the file it wants to parse, built with
+ * [hourlyCsv], so band boundaries and the "no usable row" case can be driven from bytes no station
+ * happens to be publishing today.
+ *
+ * [failure], when set, is thrown instead of returning bytes, so the "the measurements could not be
+ * obtained" path can be driven without an unreachable host. [requested] records what was asked for,
+ * so a caller can assert the station reached the service unchanged.
  */
-class FakePollenFileSource(
+class FakePollenService(
     var bytes: ByteArray = hourlyCsv(),
     var failure: Exception? = null,
-) : PollenFileSource {
+) : PollenService {
 
     /** Every station asked for, in order. */
     val requested = mutableListOf<PollenStation>()
