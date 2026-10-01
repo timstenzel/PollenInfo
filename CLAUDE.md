@@ -190,6 +190,26 @@ label. NONE fills a fifth because an empty bar means "no reading". The whole fil
 gradient would leave the left end green during Very high. Colour never carries meaning alone; every
 bar sits beside its severity word.
 
+### Reading age
+
+Above the overall bar, the home screen says how current its reading is. `measuredAt` travels from
+the wire to `HomeUiState.Content` as an `Instant`, and the screen classifies it at render time with
+`readingAgeOf(measuredAt, now)` in `feature/home/domain/model/ReadingAge.kt` — a pure function, so
+the boundary and the UTC → local conversion are tested without a ViewModel or a composable.
+
+- **Less than 3 hours old** (`STALE_AFTER`) → `ReadingAge.Fresh(localTime)`, a quiet caption:
+  "Updated 09:00".
+- **3 hours or older** → `ReadingAge.Stale(localDate)`, a warning in the `errorContainer` colours
+  with an icon: "Data from 29 July — These readings are not current."
+
+Both are in the **device's** time zone, not the source's UTC. The stale warning is the counterpart
+of the backend serving its last known reading through an upstream outage with no maximum age: if the
+warning were ever removed, a stale reading would pass for current. Keep the two together.
+
+This is what `kotlinx-datetime` is in `commonMain` for. It is pinned to **0.6.x**: 0.7 moves
+`Instant` and `Clock` into `kotlin.time`, which is still experimental on our Kotlin 2.1 and would
+need an opt-in at every use. Revisit the pin when Kotlin is bumped.
+
 ## Conventions
 
 ### Feature package layout (`:composeApp`)
@@ -420,8 +440,12 @@ Two deliberate choices:
 
 - **`commonMain` has no `String.format`** — it is JVM-only. It compiles for Android and then breaks
   the iOS build. Same for `java.*` anything, `UUID`, `SimpleDateFormat`. Use `kotlin.math` and
-  `kotlinx-datetime` instead. (`ExampleMapper.format` is a hand-rolled multiplatform
-  replacement.)
+  `kotlinx-datetime` (a `commonMain` dependency) instead — its `LocalTime.Format { … }` builders
+  cover date and time formatting, as in `ReadingAgeLabel.kt`. (`ExampleMapper.format` is a
+  hand-rolled multiplatform replacement for numbers.)
+- **Backtick test names may not contain a comma on Kotlin/Native.** The JVM accepts them, so
+  `testDebugUnitTest` passes and then `compileTestKotlinIosSimulatorArm64` fails with "Name contains
+  illegal characters". Another reason to compile the iOS test sources.
 - **`Icons.Default.*` is not transitive.** `compose.material3` supplies it for the Android target
   and not for iOS, so a screen using an icon compiles for Android and then fails to resolve
   `androidx.compose.material.icons` on `compileKotlinIosSimulatorArm64`. `compose.materialIconsExtended`

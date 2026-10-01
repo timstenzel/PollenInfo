@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.home.domain.model
 
+import kotlinx.datetime.Instant
+
 /**
  * One taxon's reading at the selected station.
  *
@@ -17,12 +19,14 @@ data class SpeciesReading(
 /**
  * A station's latest reading as the app holds it: all seven taxa, in the server's order.
  *
- * The wire response also carries `measuredAt` and each taxon's latin name; both are dropped here
- * because nothing renders them yet, the same way `Station` drops the canton and altitude. The
- * timestamp arrives in the domain model when the reading-age line does.
+ * [measuredAt] is when the station took the reading — not when the backend fetched it, which after
+ * an upstream outage can be much later. The wire response also carries each taxon's latin name;
+ * that is dropped here because nothing renders it yet, the same way `Station` drops the canton and
+ * altitude.
  */
 data class StationMeasurement(
     val stationAbbr: String,
+    val measuredAt: Instant,
     val unit: String,
     val species: List<SpeciesReading>,
 )

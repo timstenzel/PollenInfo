@@ -5,9 +5,13 @@ import ch.stenzel.tim.polleninfo.feature.home.data.remote.dto.StationMeasurement
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.StationMeasurement
+import kotlinx.datetime.Instant
 
 fun StationMeasurementDto.toDomain(): StationMeasurement = StationMeasurement(
     stationAbbr = stationAbbr,
+    // A malformed timestamp throws, which the repository turns into a `Failure`. There is no safe
+    // default: a reading of unknown age cannot be labelled either fresh or stale.
+    measuredAt = Instant.parse(measuredAt),
     unit = unit,
     species = species.map { it.toDomain() },
 )

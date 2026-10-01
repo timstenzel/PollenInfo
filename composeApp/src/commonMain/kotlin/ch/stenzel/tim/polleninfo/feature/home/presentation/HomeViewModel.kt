@@ -47,6 +47,7 @@ class HomeViewModel(
         _uiState.value = when (val result = getStationMeasurement(selected.abbr)) {
             is Result.Success -> HomeUiState.Content(
                 stationName = selected.name,
+                measuredAt = result.data.measuredAt,
                 overallSeverity = result.data.overallSeverity,
                 drivenBy = result.data.drivenBy?.name,
                 unit = result.data.unit,

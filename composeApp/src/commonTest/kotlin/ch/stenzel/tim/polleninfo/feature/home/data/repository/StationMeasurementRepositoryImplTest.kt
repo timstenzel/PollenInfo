@@ -146,6 +146,14 @@ class StationMeasurementRepositoryImplTest {
     }
 
     @Test
+    fun `returns Failure when the timestamp is not an ISO-8601 instant`() = runTest {
+        val body = measurementJson.replace("2026-08-01T09:00:00Z", "yesterday")
+        val repository = repository { respond(body, HttpStatusCode.OK, jsonHeaders) }
+
+        assertIs<Result.Failure>(repository.getMeasurement("PZH"))
+    }
+
+    @Test
     fun `returns Failure when the backend sends a severity the app does not know`() = runTest {
         val body = """
             {

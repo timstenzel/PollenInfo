@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.StationMeasurement
 import ch.stenzel.tim.polleninfo.feature.home.domain.repository.StationMeasurementRepository
+import kotlinx.datetime.Instant
 
 /** Records the abbreviations it was asked for and replays a scripted result. */
 class FakeStationMeasurementRepository(
@@ -30,14 +31,22 @@ fun reading(
     severity = severity,
 )
 
+val MEASURED_AT: Instant = Instant.parse("2026-08-01T09:00:00Z")
+
 fun measurement(
     stationAbbr: String = "PZH",
+    measuredAt: Instant = MEASURED_AT,
     species: List<SpeciesReading> = listOf(
         reading("Birch", 42, PollenSeverity.MODERATE),
         reading("Grasses", 20, PollenSeverity.HIGH),
         reading("Ash"),
     ),
-) = StationMeasurement(stationAbbr = stationAbbr, unit = "grains/m3", species = species)
+) = StationMeasurement(
+    stationAbbr = stationAbbr,
+    measuredAt = measuredAt,
+    unit = "grains/m3",
+    species = species,
+)
 
 /**
  * The seven-taxon body the backend actually sends, with one taxon the station does not report.

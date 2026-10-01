@@ -7,14 +7,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlinx.datetime.Instant
 
 class StationMeasurementMapperTest {
 
     private fun dto(
+        measuredAt: String = "2026-08-01T09:00:00Z",
         species: List<SpeciesReadingDto> = listOf(speciesDto()),
     ) = StationMeasurementDto(
         stationAbbr = "PZH",
-        measuredAt = "2026-08-01T09:00:00Z",
+        measuredAt = measuredAt,
         unit = "grains/m3",
         species = species,
     )
@@ -43,6 +45,19 @@ class StationMeasurementMapperTest {
         assertEquals(listOf("BIRCH", "GRASSES"), domain.species.map { it.id })
         assertEquals(listOf("Birch", "Grasses"), domain.species.map { it.name })
         assertEquals(42, domain.species.first().concentration)
+    }
+
+    @Test
+    fun `parses the timestamp as the instant it names`() {
+        val domain = dto(measuredAt = "2026-08-01T09:00:00Z").toDomain()
+
+        assertEquals(Instant.fromEpochSeconds(1_785_574_800), domain.measuredAt)
+    }
+
+    @Test
+    fun `a malformed timestamp fails the mapping rather than defaulting`() {
+        // A reading of unknown age can be labelled neither fresh nor stale.
+        assertFailsWith<IllegalArgumentException> { dto(measuredAt = "01.08.2026 09:00").toDomain() }
     }
 
     @Test

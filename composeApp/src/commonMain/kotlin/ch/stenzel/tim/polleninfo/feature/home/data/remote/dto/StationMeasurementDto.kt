@@ -6,9 +6,9 @@ import kotlinx.serialization.Serializable
  * Wire shape of `GET /pollen/stations/{abbr}/measurements`, mirroring the server's own DTO. Field
  * names match the JSON exactly, so no `@SerialName` mapping is needed.
  *
- * [measuredAt] is a non-null ISO-8601 instant. Nothing renders it yet, but it is declared — and
- * therefore required — because a response that can be served from a cache after an upstream failure
- * must always say when its reading is from.
+ * [measuredAt] is a non-null ISO-8601 instant, kept as a [String] here and parsed by the mapper. It
+ * is required because a response that can be served from a cache after an upstream failure must
+ * always say when its reading is from.
  */
 @Serializable
 data class StationMeasurementDto(

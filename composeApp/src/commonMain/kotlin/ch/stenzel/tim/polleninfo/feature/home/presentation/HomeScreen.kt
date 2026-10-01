@@ -14,12 +14,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -30,7 +32,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.feature.home.domain.model.ReadingAge
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
+import ch.stenzel.tim.polleninfo.feature.home.domain.model.readingAgeOf
+import kotlinx.datetime.Clock
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -74,6 +79,10 @@ private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
 @Composable
 private fun ReadingView(content: HomeUiState.Content, modifier: Modifier) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        // Classified against the clock at composition, deliberately not remembered: the age is a
+        // fact about now, so a later recomposition must be free to escalate it to stale.
+        ReadingAgeView(readingAgeOf(content.measuredAt, Clock.System.now()))
+        Spacer(Modifier.height(24.dp))
         OverallSeverityView(content.overallSeverity, content.drivenBy)
         HorizontalDivider(Modifier.padding(vertical = 24.dp))
         SpeciesListHeading(content.unit)
@@ -95,6 +104,46 @@ private fun StationTitle(stationName: String) {
         )
         Spacer(Modifier.width(8.dp))
         Text(stationName)
+    }
+}
+
+/**
+ * A fresh reading gets an unobtrusive caption. A stale one gets a warning in the error container
+ * colours with an icon, so it differs in weight and shape rather than only in wording — the backend
+ * keeps serving its last reading through an upstream outage, and this is what stops that reading
+ * passing for today's.
+ */
+@Composable
+private fun ReadingAgeView(age: ReadingAge) {
+    when (age) {
+        is ReadingAge.Fresh -> Text(
+            text = age.label(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        is ReadingAge.Stale -> Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Decorative: the text beside it carries the whole message.
+                Icon(imageVector = Icons.Default.Warning, contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(text = age.label(), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = "These readings are not current.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
     }
 }
 

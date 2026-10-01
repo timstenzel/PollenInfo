@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.home.domain.model
 
+import kotlinx.datetime.Instant
+
 /**
  * What the home screen shows: a station's reading plus the values derived from it.
  *
@@ -12,6 +14,7 @@ package ch.stenzel.tim.polleninfo.feature.home.domain.model
  * only when no taxon has a reading at all.
  */
 data class StationPollenOverview(
+    val measuredAt: Instant,
     val unit: String,
     val overallSeverity: PollenSeverity,
     val drivenBy: SpeciesReading?,

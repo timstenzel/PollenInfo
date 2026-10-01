@@ -58,6 +58,10 @@ kotlin {
 
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.coroutines.core)
+            // Multiplatform instants, time zones and formatting. `java.time` does not exist in
+            // shared code. Pinned to 0.6.x: 0.7 moves `Instant` / `Clock` to `kotlin.time`, which is
+            // still experimental on this Kotlin version and would put an opt-in on every use.
+            implementation(libs.kotlinx.datetime)
             implementation(libs.datastore.preferences)
             implementation(project(":theme"))
         }

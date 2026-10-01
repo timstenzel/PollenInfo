@@ -414,33 +414,62 @@ that resilience becoming deception — the two are a pair, and this half comes f
 
 ### Implementation steps
 
-- [ ] Add a multiplatform date-time library to the version catalog and to the app's shared source
+- [x] Add a multiplatform date-time library to the version catalog and to the app's shared source
       set; the app has none today, and the platform date library is unavailable in shared code.
-- [ ] Add a pure conversion from the reading's timestamp and the current instant to either a fresh
+      *(`kotlinx-datetime` 0.6.2. Pinned below 0.7, which moves `Instant` / `Clock` to `kotlin.time`
+      — still experimental on Kotlin 2.1.21 and an opt-in at every use.)*
+- [x] Add a pure conversion from the reading's timestamp and the current instant to either a fresh
       local time or a stale local date, with the boundary at three hours.
-- [ ] Carry the reading's timestamp through to the screen's content state.
-- [ ] Render the fresh case as a caption beneath the top bar and the stale case as a visually
+      *(`readingAgeOf(measuredAt, now, timeZone)` in `domain/model/ReadingAge.kt`; exactly three
+      hours is already stale. The zone is a defaulted parameter so tests can pin it.)*
+- [x] Carry the reading's timestamp through to the screen's content state.
+      *(Mapper parses it into an `Instant` — a malformed one is a `Failure`, not a default — and it
+      rides through `StationMeasurement` and `StationPollenOverview` to `HomeUiState.Content`. The
+      state holds the raw instant rather than a `ReadingAge`, because freshness depends on when the
+      screen renders, not on when the state was built.)*
+- [x] Render the fresh case as a caption beneath the top bar and the stale case as a visually
       prominent warning.
-- [ ] Document the new dependency in the project documentation.
+      *(Wording in `ReadingAgeLabel.kt`, tested on its own: "Updated 09:00" / "Data from 29 July".
+      Stale is an `errorContainer` surface with a warning icon and a second line, "These readings are
+      not current.")*
+- [x] Document the new dependency in the project documentation.
+      *(New "Reading age" section in `CLAUDE.md`; the multiplatform gotchas now name
+      `kotlinx-datetime` as a real dependency and record that Kotlin/Native rejects commas in
+      backtick test names.)*
 
 ### Acceptance criteria
 
-- [ ] A reading less than three hours old is presented as an update time in the device's local time
+- [x] A reading less than three hours old is presented as an update time in the device's local time
       zone, not the source's zone.
-- [ ] A reading more than three hours old is presented as a warning naming the reading's date, and
+      *(`ReadingAgeTest`: 07:00 UTC → 09:00 Europe/Zurich in summer, 08:00 in winter. Emulator in
+      Europe/Zurich against the live backend: `measuredAt` 17:00 UTC shown as "Updated 19:00".)*
+- [x] A reading more than three hours old is presented as a warning naming the reading's date, and
       is visually distinct from the fresh caption rather than differing only in wording.
-- [ ] The three-hour boundary behaves correctly when tested immediately on either side of it.
+      *(`ReadingAgeLabelTest` pins "Data from 29 July". Emulator against a throwaway stub on :8080
+      serving `measuredAt` 2026-09-29T07:00Z: a tinted warning card with an icon, "Data from 29
+      September / These readings are not current." The fresh case is a small grey caption.)*
+- [x] The three-hour boundary behaves correctly when tested immediately on either side of it.
+      *(`ReadingAgeTest`: 3 h − 1 ns → Fresh; exactly 3 h → Stale; 3 h + 1 ns → Stale.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds — mandatory here, since a
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+      *(composeApp 173 tests, server 83 tests, 0 failures, 0 errors.)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds — mandatory here, since a
       new dependency enters shared code and the Android build alone will not catch non-portable use.
-- [ ] The age conversion is verified without instantiating a view model or any UI component.
-- [ ] Shared code contains no platform-specific date or time API, and no use of the JVM-only string
+      *(It earned its place: the first run rejected test names containing commas, which the JVM had
+      accepted.)*
+- [x] The age conversion is verified without instantiating a view model or any UI component.
+      *(`ReadingAgeTest` calls `readingAgeOf` and `ReadingAgeLabelTest` calls `label()` directly.)*
+- [x] Shared code contains no platform-specific date or time API, and no use of the JVM-only string
       formatting, UUID or legacy date-format types.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+      *(grep of `composeApp/src/commonMain` for `java.`, `javax.`, `String.format`, `UUID`,
+      `SimpleDateFormat`, `NSDate`, `android.icu`, `System.currentTimeMillis` → only KDoc comments
+      warning against them.)*
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
+      *(`--rerun-tasks` over `:composeApp` Android main and unit test plus iOS main and test: only the
+      pre-existing `OnboardingViewModelTest.kt` opt-in warning and KLIB-resolver notices.)*
 
 ---
 

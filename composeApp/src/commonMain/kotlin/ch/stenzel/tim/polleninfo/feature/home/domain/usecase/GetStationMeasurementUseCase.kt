@@ -27,6 +27,7 @@ class GetStationMeasurementUseCase(
         // overall severity are read off the same list rather than computed a second way.
         val drivenBy = ordered.firstOrNull { it.severity != null }
         return StationPollenOverview(
+            measuredAt = measuredAt,
             unit = unit,
             overallSeverity = overallSeverityOf(drivenBy),
             drivenBy = drivenBy,

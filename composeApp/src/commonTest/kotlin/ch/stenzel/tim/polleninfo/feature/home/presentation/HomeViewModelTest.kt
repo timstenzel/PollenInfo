@@ -6,6 +6,7 @@ import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.home.FakeStationMeasurementRepository
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.feature.home.domain.usecase.GetStationMeasurementUseCase
+import ch.stenzel.tim.polleninfo.feature.home.MEASURED_AT
 import ch.stenzel.tim.polleninfo.feature.home.measurement
 import ch.stenzel.tim.polleninfo.feature.home.reading
 import kotlinx.coroutines.Dispatchers
@@ -87,6 +88,15 @@ class HomeViewModelTest {
         assertEquals(listOf("Grasses", "Birch", "Ash"), state.species.map { it.name })
         assertEquals("Grasses", state.drivenBy)
         assertEquals("grains/m3", state.unit)
+    }
+
+    @Test
+    fun `Content carries the reading's timestamp unchanged`() = runTest {
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(MEASURED_AT, assertIs<HomeUiState.Content>(viewModel.uiState.value).measuredAt)
     }
 
     @Test
