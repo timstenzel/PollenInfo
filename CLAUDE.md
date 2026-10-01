@@ -180,10 +180,10 @@ at 3.38).
 
 | Severity  | Light        | Dark         | Fill  |
 | --------- | ------------ | ------------ | ----- |
-| NONE      | `0xFF6B6B60` | `0xFF9C9C90` | 20 %  |
-| LOW       | `0xFF2E7D32` | `0xFF7DD87F` | 40 %  |
-| MODERATE  | `0xFFB08000` | `0xFFF0B429` | 60 %  |
-| HIGH      | `0xFFB4500F` | `0xFFF08135` | 80 %  |
+| NONE      | `0xFF6B6B60` | `0xFF9C9C90` | 4 %   |
+| LOW       | `0xFF2E7D32` | `0xFF7DD87F` | 25 %  |
+| MODERATE  | `0xFFB08000` | `0xFFF0B429` | 50 %  |
+| HIGH      | `0xFFB4500F` | `0xFFF08135` | 75 %  |
 | VERY_HIGH | `0xFFB3261E` | `0xFFF2564B` | 100 % |
 | no reading | —           | —            | 0 %, muted track |
 
@@ -196,7 +196,7 @@ ratios were computed against.
 
 `SeverityBar` fills to fixed stops (`severityFillFraction`) and does **not** track the
 concentration: the bands are so unequal in width that an interpolated bar would contradict its own
-label. NONE fills a fifth because an empty bar means "no reading". The whole fill is one colour — a
+label. NONE fills a 4 % sliver because an empty bar means "no reading"; Low to Very high fill quarters. The whole fill is one colour — a
 gradient would leave the left end green during Very high. Colour never carries meaning alone; every
 bar sits beside its severity word.
 

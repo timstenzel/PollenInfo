@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 class SeverityBarTest {
 
     @Test
-    fun `each severity fills the bar to its fixed fifth`() {
+    fun `each severity fills the bar to its fixed stop`() {
         assertEquals(
-            listOf(0.2f, 0.4f, 0.6f, 0.8f, 1.0f),
+            listOf(0.04f, 0.25f, 0.5f, 0.75f, 1.0f),
             PollenSeverity.entries.map(::severityFillFraction),
         )
     }
