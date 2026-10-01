@@ -490,42 +490,42 @@ against a real clock would mean sleeping.
 
 ### Implementation steps
 
-- [ ] Add a general-purpose time-to-live cache with an injected clock, distinguishing three
+- [x] Add a general-purpose time-to-live cache with an injected clock, distinguishing three
       outcomes: a fresh value, a retained previous value after a failed load, and outright failure.
-- [ ] Give it per-key locking so concurrent misses on one key produce exactly one load without
+- [x] Give it per-key locking so concurrent misses on one key produce exactly one load without
       blocking loads for other keys.
-- [ ] Preserve the original entry timestamp when a reload fails, so a failed refresh cannot make a
+- [x] Preserve the original entry timestamp when a reload fails, so a failed refresh cannot make a
       stale reading appear current.
-- [ ] Wire the cache into the measurement service with a thirty-minute period.
-- [ ] Map the three outcomes onto responses: fresh and retained both succeed; outright failure
+- [x] Wire the cache into the measurement service with a thirty-minute period.
+- [x] Map the three outcomes onto responses: fresh and retained both succeed; outright failure
       returns a gateway error.
-- [ ] Complete the architecture overview in the project documentation with the caching behaviour and
+- [x] Complete the architecture overview in the project documentation with the caching behaviour and
       its period, noting that scheduled polling becomes the right shape when push notifications
       require severities for stations nobody is viewing.
 
 ### Acceptance criteria
 
-- [ ] A second request for the same station within the cache period causes no further contact with
+- [x] A second request for the same station within the cache period causes no further contact with
       the upstream source and returns the same reading.
-- [ ] A request after the cache period has elapsed causes a fresh fetch.
-- [ ] Simultaneous first-time requests for one station result in exactly one upstream fetch, while a
+- [x] A request after the cache period has elapsed causes a fresh fetch.
+- [x] Simultaneous first-time requests for one station result in exactly one upstream fetch, while a
       slow fetch for one station does not delay a request for a different station.
-- [ ] When an upstream fetch fails and a previous reading exists, the request succeeds and returns
+- [x] When an upstream fetch fails and a previous reading exists, the request succeeds and returns
       that reading with its original timestamp, unchanged by the failed reload.
-- [ ] When an upstream fetch fails and no previous reading exists, the request returns a gateway
+- [x] When an upstream fetch fails and no previous reading exists, the request returns a gateway
       error.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] No test sleeps or otherwise depends on real elapsed time; all time-dependent behaviour is
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] No test sleeps or otherwise depends on real elapsed time; all time-dependent behaviour is
       driven by the injected clock.
-- [ ] The cache component is tested through its own interface, with no pollen-specific types in its
+- [x] The cache component is tested through its own interface, with no pollen-specific types in its
       tests.
-- [ ] With the backend running and its upstream address pointed at an unreachable host, the app is
+- [x] With the backend running and its upstream address pointed at an unreachable host, the app is
       observed to show the previously fetched reading together with the stale-age warning; with no
       reading ever fetched under the same conditions, it is observed to show its error state.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
 
 ---

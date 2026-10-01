@@ -7,6 +7,8 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.domain.SpeciesThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.MutableClock
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.TtlCache
 import ch.stenzel.tim.polleninfo.server.pollen.model.SpeciesDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationMeasurementDto
@@ -20,6 +22,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -225,4 +228,41 @@ class PollenRoutesTest {
             jsonClient().get("/pollen/stations/PZH/measurements").status,
         )
     }
+
+    @Test
+    fun `an upstream failure with nothing cached returns 502`() = testApplication {
+        pollenService.failure = IOException("unreachable")
+        installApp()
+
+        assertEquals(
+            HttpStatusCode.BadGateway,
+            jsonClient().get("/pollen/stations/PZH/measurements").status,
+        )
+    }
+
+    @Test
+    fun `an upstream failure after a good fetch returns the previous reading and its timestamp`() =
+        testApplication {
+            val clock = MutableClock()
+            val thresholds = PollenThresholds()
+            installApp(
+                thresholds = thresholds,
+                measurementService = MeasurementService(
+                    pollenService,
+                    thresholds,
+                    TtlCache(MeasurementService.CACHE_TTL, clock),
+                ),
+            )
+            val client = jsonClient()
+            val first = client.get("/pollen/stations/PZH/measurements").body<StationMeasurementDto>()
+
+            clock.advanceBy(MeasurementService.CACHE_TTL)
+            pollenService.failure = IOException("unreachable")
+            val response = client.get("/pollen/stations/PZH/measurements")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(first, response.body<StationMeasurementDto>())
+            assertEquals("2026-08-01T09:00:00Z", response.body<StationMeasurementDto>().measuredAt)
+            assertEquals(2, pollenService.requested.size)
+        }
 }

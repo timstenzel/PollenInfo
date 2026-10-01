@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.server.plugins
 
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.TtlCache
 import ch.stenzel.tim.polleninfo.server.pollen.pollenRoutes
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.MeteoSwissPollenService
 import io.ktor.client.HttpClient
@@ -30,7 +31,8 @@ fun Application.configureRouting(
 }
 
 /**
- * The production upstream wiring: readings come from the live MeteoSwiss service.
+ * The production upstream wiring: readings come from the live MeteoSwiss service, cached per
+ * station for [MeasurementService.CACHE_TTL].
  *
  * There is no offline alternative to reach for here — the only other `PollenService` is the fake in
  * the test source set, and tests install their own [MeasurementService] rather than switching a
@@ -48,7 +50,11 @@ private fun Application.meteoSwissMeasurementService(
         }
     }
     monitor.subscribe(ApplicationStopped) { client.close() }
-    return MeasurementService(MeteoSwissPollenService(client), thresholds)
+    return MeasurementService(
+        pollenService = MeteoSwissPollenService(client),
+        thresholds = thresholds,
+        cache = TtlCache(MeasurementService.CACHE_TTL),
+    )
 }
 
 private const val UPSTREAM_TIMEOUT_MILLIS = 15_000L

@@ -3,7 +3,9 @@ package ch.stenzel.tim.polleninfo.server.pollen
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.CacheResult
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.NoUsableRowException
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.SpeciesMeasurement
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.StationMeasurement
 import ch.stenzel.tim.polleninfo.server.pollen.model.SpeciesDto
@@ -12,6 +14,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.model.StationDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.StationMeasurementDto
 import ch.stenzel.tim.polleninfo.server.pollen.model.ThresholdsDto
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.log
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -41,18 +44,27 @@ fun Route.pollenRoutes(
          * A station's latest reading, classified. Nested under the station because it is a property
          * of one.
          *
-         * A station whose published file holds no usable row is a 404 for the same reason an
-         * unknown abbreviation is: the client asked for a reading that does not exist. An empty
-         * body with seven blank rows would be indistinguishable from a calm day.
+         * A reading kept from an earlier fetch is a 200 like a fresh one: its `measuredAt` says how
+         * old it is, and saying so is the client's job. With nothing kept, a station whose
+         * published file holds no usable row is a 404 for the same reason an unknown abbreviation
+         * is — the client asked for a reading that does not exist, and seven blank rows would be
+         * indistinguishable from a calm day. A file that could not be obtained is a 502.
          */
         get("/stations/{abbr}/measurements") {
             val abbr = call.parameters["abbr"]
                 ?: return@get call.respond(HttpStatusCode.BadRequest)
             val station = PollenStation.fromAbbr(abbr)
                 ?: return@get call.respond(HttpStatusCode.NotFound)
-            val measurement = measurementService.measurementFor(station)
-                ?: return@get call.respond(HttpStatusCode.NotFound)
-            call.respond(measurement.toDto())
+            when (val result = measurementService.measurementFor(station)) {
+                is CacheResult.Fresh -> call.respond(result.value.toDto())
+                is CacheResult.Stale -> call.respond(result.value.toDto())
+                is CacheResult.Failed -> if (result.cause is NoUsableRowException) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.application.log.warn("Upstream fetch for ${station.abbr} failed", result.cause)
+                    call.respond(HttpStatusCode.BadGateway)
+                }
+            }
         }
 
         get("/species") {

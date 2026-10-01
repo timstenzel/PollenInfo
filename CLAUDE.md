@@ -8,17 +8,27 @@ plus a Ktor backend that owns all contact with the MeteoSwiss public API.
 ```
 ┌─────────────────────┐        REST         ┌──────────────┐  on-demand CSV fetch  ┌───────────────────┐
 │ composeApp          │ ──────────────────> │  server      │ ────────────────────> │ MeteoSwiss OGD    │
-│ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │                       │ pollen (public)   │
+│ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │   30-min TTL cache    │ pollen (public)   │
 └─────────────────────┘   JSON              └──────────────┘                       └───────────────────┘
          ▲                                        │
          └──────────── push (FCM / APNS) ─────────┘
 ```
 
 **Fetching is on demand, not scheduled.** A request for a station's measurements fetches that
-station's current-day CSV; nothing is polled on a timer. This means no scheduler lifecycle, no
-cold-start "the first poll failed" state, and no traffic for the fourteen stations nobody is
-looking at. A scheduled poll becomes the right shape once push notifications need severities for
-stations nobody has open.
+station's current-day CSV only if the server has no reading for it younger than **30 minutes**
+(`MeasurementService.CACHE_TTL`); nothing is polled on a timer. The upstream file gains a row
+roughly hourly, so a new row is picked up within half an hour of publication, and any number of
+people looking at one station cost one upstream request per period. Simultaneous first requests for
+a station share a single fetch.
+
+When a fetch fails, the station's last good reading is served with its **original** `measuredAt` —
+never re-stamped — and the app's stale-age warning makes its age visible. With no earlier reading
+the request fails (`502`). No maximum age is applied to a retained reading; that is presentation
+policy and lives in the app's warning, so the two must stay together.
+
+This means no scheduler lifecycle, no cold-start "the first poll failed" state, and no traffic for
+the fourteen stations nobody is looking at. **A scheduled poll becomes the right shape once push
+notifications need severities for stations nobody has open** — the cache is the seam it would fill.
 
 **The apps never call the MeteoSwiss API directly.** All upstream fetching, parsing and severity
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
@@ -511,13 +521,25 @@ independently of the domain.
 
 | Case | Status |
 | --- | --- |
-| Success | `200` |
+| Success, fresh or a retained earlier reading | `200` |
 | Unknown abbr | `404` |
-| Published file holds no usable row | `404` |
+| Published file holds no usable row, nothing retained | `404` |
+| Upstream fetch failed, nothing retained | `502` |
 
 The pipeline behind it lives in `server/.../pollen/`: `upstream/PollenService` (where the bytes come
-from), `upstream/PollenCsvParser` (decode, parse, pick the row) and
-`measurement/MeasurementService` (compose the two and classify against `PollenThresholds`).
+from), `upstream/PollenCsvParser` (decode, parse, pick the row), `measurement/TtlCache` (expiry,
+per-key deduplication, stale retention) and `measurement/MeasurementService` (compose them and
+classify against `PollenThresholds`).
+
+`TtlCache<K, V>` is generic on purpose and knows nothing about pollen; its `get` returns a
+`CacheResult` — `Fresh`, `Stale` (load failed, previous value kept with its original age) or
+`Failed(cause)`. The lock is per key, so a slow fetch for one station never delays another, and
+callers queued behind a failed load share its outcome instead of retrying one after another.
+Failures are not cached. It takes a `java.time.Clock`, and `MutableClock` in `server/src/test`
+drives every time-dependent test — none of them sleeps. What is cached is the *parsed* reading, so
+a threshold change applies without waiting for expiry. A file with no usable row counts as a failed
+load, so an earlier reading still covers it; `Failed.cause` is then a `NoUsableRowException`, which
+the route maps to `404` rather than `502`.
 
 `PollenService` has exactly one production implementation, **`MeteoSwissPollenService`** — it
 fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` over HTTP, takes its `HttpClient` and base
