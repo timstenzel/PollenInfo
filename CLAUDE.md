@@ -250,8 +250,17 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `PollenSeverity`. Consequence: the example screen cannot load data at runtime and will land in its
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
-For a real feature that talks to our own backend, mirror `feature/onboarding` instead — it is the
-same layering pointed at `:server` through `apiBaseUrl`.
+For a real feature that talks to our own backend, mirror one of the two real slices instead — both
+are the same layering pointed at `:server` through `apiBaseUrl`:
+
+- **`feature/onboarding`** — a form: one list fetched once, a user choice persisted through
+  `core/preferences`, and completion delivered as a one-shot event.
+- **`feature/home`** — a dashboard over a reading: a ViewModel that *observes* a stored selection
+  and reloads on change, derived rules (worst severity, ordering) kept in a use case so they are
+  tested without Compose, the full `Loading` / `Content(isRefreshing)` / `Error` cycle with
+  pull-to-refresh and retry, and a time-dependent label classified at render time
+  (`ReadingAge`). `HomeViewModelTest` is the model for holding a load in flight
+  (`FakeStationMeasurementRepository.gate`) to observe the intermediate state.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`).
 
@@ -420,6 +429,11 @@ Completing onboarding navigates to `Screen.Home` with `popUpTo<Screen.Onboarding
 true }`, so the back gesture from Home leaves the app instead of reopening a setup screen whose
 purpose is already fulfilled. `feature/home` is the app's dashboard: `HomeViewModel` observes the
 stored selection and loads that station's reading from `/pollen/stations/{abbr}/measurements`.
+Pulling down refreshes it with the current readings kept on screen (`Content.isRefreshing`), and
+`Error` offers a retry. Within the backend's 30-minute cache period a refresh legitimately returns
+the same reading and its age does not move — the backend never re-contacts MeteoSwiss on demand,
+and there is deliberately no client-controllable cache bypass. A missing selection (unreachable
+past the startup gate) resolves to `Error` with a message, never an endless spinner.
 
 It **observes** the selection rather than taking its first value, unlike the startup gate below —
 see that section for why the two differ. There is deliberately no way to change the station from

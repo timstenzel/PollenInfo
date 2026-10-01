@@ -26,6 +26,9 @@ sealed interface HomeUiState {
      * [measuredAt] is carried as the raw instant rather than as a `ReadingAge`: whether a reading
      * is fresh depends on when the screen is looked at, not on when the state was built, so the
      * screen classifies it against the current time when it renders.
+     *
+     * [isRefreshing] is set while a pull-to-refresh runs, so the readings stay on screen until the
+     * new ones replace them.
      */
     data class Content(
         override val stationName: String,
@@ -34,6 +37,7 @@ sealed interface HomeUiState {
         val drivenBy: String?,
         val unit: String,
         val species: List<SpeciesReading>,
+        val isRefreshing: Boolean = false,
     ) : HomeUiState
 
     data class Error(

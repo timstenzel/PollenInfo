@@ -6,10 +6,10 @@ import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.home.domain.usecase.GetStationMeasurementUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -21,6 +21,16 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading(stationName = ""))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    /** The latest stored selection — what [refresh] and [retry] reload. */
+    private var selected: SelectedStation? = null
+
+    /**
+     * Every load goes through this one job and starts by cancelling it, so a response for an
+     * earlier request — the old station, or a refresh overtaken by another — can never overwrite a
+     * newer one.
+     */
+    private var loadJob: Job? = null
+
     init {
         viewModelScope.launch {
             // Observed, not read once. `StartupViewModel` takes only the first value because
@@ -28,40 +38,68 @@ class HomeViewModel(
             // they just triggered; that reason does not transfer here, where a station change is
             // exactly what should reload the readings. Nothing can change the selection today, so
             // the two behave identically — this one stays correct when the settings screen lands.
-            //
-            // `collectLatest` cancels a load still in flight when the selection changes, so a
-            // response for the old station can never overwrite the new one's.
             selectedStationRepository.selectedStation
                 .distinctUntilChanged()
-                .collectLatest(::load)
+                .collect { station ->
+                    selected = station
+                    // A different station's readings must not stay on screen under the new name,
+                    // so a change of station is a fresh load, never a refresh.
+                    load(keepReadings = false)
+                }
         }
     }
 
-    private suspend fun load(selected: SelectedStation?) {
-        // Unreachable by design: the startup gate only routes here once a station is stored. It
-        // resolves to an error with a message in the refresh-and-recovery slice, which is where the
-        // retry that message needs also arrives.
-        if (selected == null) return
+    /**
+     * Pull-to-refresh. The readings already on screen stay there, flagged as refreshing, until the
+     * new ones replace them.
+     *
+     * Within the backend's cache period this legitimately returns the same reading, and its age
+     * does not move: the backend does not re-contact MeteoSwiss on demand, by design.
+     */
+    fun refresh() = load(keepReadings = true)
 
-        _uiState.value = HomeUiState.Loading(selected.name)
-        _uiState.value = when (val result = getStationMeasurement(selected.abbr)) {
-            is Result.Success -> HomeUiState.Content(
-                stationName = selected.name,
-                measuredAt = result.data.measuredAt,
-                overallSeverity = result.data.overallSeverity,
-                drivenBy = result.data.drivenBy?.name,
-                unit = result.data.unit,
-                species = result.data.species,
-            )
+    /** Leaves the error state by loading again from scratch. */
+    fun retry() = load(keepReadings = false)
 
-            is Result.Failure -> HomeUiState.Error(
-                stationName = selected.name,
-                message = result.exception.message ?: DEFAULT_ERROR_MESSAGE,
-            )
+    private fun load(keepReadings: Boolean) {
+        loadJob?.cancel()
+
+        // Unreachable by design: the startup gate only routes here once a station is stored. It is
+        // still an error with a message rather than an endless spinner, so a future change that
+        // made it reachable would be diagnosable.
+        val station = selected ?: run {
+            _uiState.value = HomeUiState.Error(stationName = "", message = NO_STATION_MESSAGE)
+            return
+        }
+
+        val current = _uiState.value
+        _uiState.value = if (keepReadings && current is HomeUiState.Content) {
+            current.copy(isRefreshing = true)
+        } else {
+            HomeUiState.Loading(station.name)
+        }
+
+        loadJob = viewModelScope.launch {
+            _uiState.value = when (val result = getStationMeasurement(station.abbr)) {
+                is Result.Success -> HomeUiState.Content(
+                    stationName = station.name,
+                    measuredAt = result.data.measuredAt,
+                    overallSeverity = result.data.overallSeverity,
+                    drivenBy = result.data.drivenBy?.name,
+                    unit = result.data.unit,
+                    species = result.data.species,
+                )
+
+                is Result.Failure -> HomeUiState.Error(
+                    stationName = station.name,
+                    message = result.exception.message ?: DEFAULT_ERROR_MESSAGE,
+                )
+            }
         }
     }
 
     private companion object {
         const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
+        const val NO_STATION_MESSAGE = "No measuring station is selected."
     }
 }

@@ -546,33 +546,33 @@ is not inert — it re-queries the backend and picks up a new reading as soon as
 
 ### Implementation steps
 
-- [ ] Add pull-to-refresh to the home screen, flagging the refresh in the content state so existing
+- [x] Add pull-to-refresh to the home screen, flagging the refresh in the content state so existing
       readings stay visible while it runs.
-- [ ] Add a retry action to the error state.
-- [ ] Resolve a missing station selection to the error state with a message.
-- [ ] Complete the project documentation by presenting the home feature as a second reference
+- [x] Add a retry action to the error state.
+- [x] Resolve a missing station selection to the error state with a message.
+- [x] Complete the project documentation by presenting the home feature as a second reference
       example of the feature layering alongside onboarding.
 
 ### Acceptance criteria
 
-- [ ] Pulling down triggers a reload; the previously loaded readings remain visible for its whole
+- [x] Pulling down triggers a reload; the previously loaded readings remain visible for its whole
       duration and are replaced only when the new ones arrive.
-- [ ] Retrying from the error state loads the readings and replaces the error.
-- [ ] Arriving at the screen with no station stored produces the error state with a message, not a
+- [x] Retrying from the error state loads the readings and replaces the error.
+- [x] Arriving at the screen with no station stored produces the error state with a message, not a
       spinner that never resolves.
-- [ ] Refreshing within the backend's cache period succeeds and leaves the displayed reading and its
+- [x] Refreshing within the backend's cache period succeeds and leaves the displayed reading and its
       stated age unchanged, without producing an error.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] The refresh gesture is exercised on a running device: a refresh indicator appears, and the
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
+- [x] The refresh gesture is exercised on a running device: a refresh indicator appears, and the
       display is observed not to blank during the reload.
-- [ ] Every command in the project documentation's command table still runs as written; the backend
+- [x] Every command in the project documentation's command table still runs as written; the backend
       run command starts and answers a health check.
-- [ ] No description of the home screen as a placeholder remains in the project documentation or in
+- [x] No description of the home screen as a placeholder remains in the project documentation or in
       the feature's source comments.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
 

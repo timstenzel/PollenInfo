@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,12 +51,20 @@ import org.koin.compose.viewmodel.koinViewModel
 fun HomeScreen(viewModel: HomeViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    HomeContent(uiState = uiState)
+    HomeContent(
+        uiState = uiState,
+        onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeContent(uiState: HomeUiState) {
+private fun HomeContent(
+    uiState: HomeUiState,
+    onRefresh: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Scaffold(
         topBar = {
             // Outside the `when`: the station name is on every state, so the bar never goes blank
@@ -62,23 +72,33 @@ private fun HomeContent(uiState: HomeUiState) {
             TopAppBar(title = { StationTitle(uiState.stationName) })
         },
     ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)
+        val modifier = Modifier.fillMaxSize().padding(padding)
         when (uiState) {
             is HomeUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
-            is HomeUiState.Content -> ReadingView(uiState, modifier)
-            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message) }
+
+            // The readings stay composed while a refresh runs; only the indicator is added.
+            is HomeUiState.Content -> PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = onRefresh,
+                modifier = modifier,
+            ) {
+                ReadingView(uiState, Modifier.fillMaxSize())
+            }
+
+            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
         }
     }
 }
 
 @Composable
 private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) { content() }
+    Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable
 private fun ReadingView(content: HomeUiState.Content, modifier: Modifier) {
-    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+    // Scrollable even when it fits, so the pull gesture has something to drag.
+    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
         // Classified against the clock at composition, deliberately not remembered: the age is a
         // fact about now, so a later recomposition must be free to escalate it to stale.
         ReadingAgeView(readingAgeOf(content.measuredAt, Clock.System.now()))
@@ -220,7 +240,7 @@ private fun SpeciesRow(reading: SpeciesReading) {
 }
 
 @Composable
-private fun ErrorView(message: String) {
+private fun ErrorView(message: String, onRetry: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -237,6 +257,8 @@ private fun ErrorView(message: String) {
             color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
 

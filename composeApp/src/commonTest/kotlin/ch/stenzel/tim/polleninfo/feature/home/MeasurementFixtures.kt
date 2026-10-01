@@ -5,17 +5,25 @@ import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.StationMeasurement
 import ch.stenzel.tim.polleninfo.feature.home.domain.repository.StationMeasurementRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.datetime.Instant
 
-/** Records the abbreviations it was asked for and replays a scripted result. */
+/**
+ * Records the abbreviations it was asked for and replays a scripted result.
+ *
+ * While [gate] is set, every call suspends until it is completed — how a test holds a load in
+ * flight to observe the state the screen shows meanwhile. [result] is read after the gate opens.
+ */
 class FakeStationMeasurementRepository(
     var result: Result<StationMeasurement> = Result.Success(measurement()),
+    var gate: CompletableDeferred<Unit>? = null,
 ) : StationMeasurementRepository {
 
     val requested = mutableListOf<String>()
 
     override suspend fun getMeasurement(stationAbbr: String): Result<StationMeasurement> {
         requested += stationAbbr
+        gate?.await()
         return result
     }
 }
