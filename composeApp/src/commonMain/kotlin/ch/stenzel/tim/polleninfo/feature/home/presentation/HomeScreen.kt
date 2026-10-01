@@ -101,7 +101,14 @@ private fun ReadingView(content: HomeUiState.Content, modifier: Modifier) {
     Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
         // Classified against the clock at composition, deliberately not remembered: the age is a
         // fact about now, so a later recomposition must be free to escalate it to stale.
-        ReadingAgeView(readingAgeOf(content.measuredAt, Clock.System.now()))
+        val now = Clock.System.now()
+        ReadingAgeView(readingAgeOf(content.measuredAt, now))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = refreshedLabel(content.refreshedAt, now),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(24.dp))
         OverallSeverityView(content.overallSeverity, content.drivenBy)
         HorizontalDivider(Modifier.padding(vertical = 24.dp))

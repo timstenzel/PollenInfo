@@ -27,6 +27,10 @@ sealed interface HomeUiState {
      * is fresh depends on when the screen is looked at, not on when the state was built, so the
      * screen classifies it against the current time when it renders.
      *
+     * [refreshedAt] is when the app last received this reading from the backend, a different fact
+     * from [measuredAt]: within the backend's cache period a refresh moves [refreshedAt] while
+     * [measuredAt] stays put, and showing both is what tells the user the refresh did happen.
+     *
      * [isRefreshing] is set while a pull-to-refresh runs, so the readings stay on screen until the
      * new ones replace them.
      */
@@ -37,6 +41,7 @@ sealed interface HomeUiState {
         val drivenBy: String?,
         val unit: String,
         val species: List<SpeciesReading>,
+        val refreshedAt: Instant,
         val isRefreshing: Boolean = false,
     ) : HomeUiState
 

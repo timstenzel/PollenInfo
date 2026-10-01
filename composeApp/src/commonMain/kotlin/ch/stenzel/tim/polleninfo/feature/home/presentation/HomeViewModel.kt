@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 import kotlin.time.Duration.Companion.milliseconds
 
 class HomeViewModel(
     selectedStationRepository: SelectedStationRepository,
     private val getStationMeasurement: GetStationMeasurementUseCase,
+    private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading(stationName = ""))
@@ -99,6 +101,7 @@ class HomeViewModel(
                     drivenBy = result.data.drivenBy?.name,
                     unit = result.data.unit,
                     species = result.data.species,
+                    refreshedAt = clock.now(),
                 )
 
                 is Result.Failure -> HomeUiState.Error(

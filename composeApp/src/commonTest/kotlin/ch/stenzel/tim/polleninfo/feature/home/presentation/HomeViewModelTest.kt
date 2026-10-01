@@ -19,6 +19,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -27,6 +29,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -36,6 +39,12 @@ class HomeViewModelTest {
 
     private var selectedStationRepository = FakeSelectedStationRepository(initial = zurich)
     private val measurementRepository = FakeStationMeasurementRepository()
+
+    /** Wall-clock time the ViewModel stamps on each received reading; moved by hand, never ticks. */
+    private val clock = object : Clock {
+        var now = Instant.parse("2026-08-01T09:12:00Z")
+        override fun now() = now
+    }
 
     @BeforeTest
     fun setUp() {
@@ -50,6 +59,7 @@ class HomeViewModelTest {
     private fun viewModel() = HomeViewModel(
         selectedStationRepository,
         GetStationMeasurementUseCase(measurementRepository),
+        clock,
     )
 
     @Test
@@ -210,16 +220,27 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `Content is stamped with the time the reading was received`() = runTest {
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(clock.now, assertIs<HomeUiState.Content>(viewModel.uiState.value).refreshedAt)
+    }
+
+    @Test
     fun `refreshing inside the cache period leaves the reading and its age unchanged`() = runTest {
         val viewModel = viewModel()
         advanceUntilIdle()
         val before = assertIs<HomeUiState.Content>(viewModel.uiState.value)
 
-        // The backend answers a refresh inside its cache period with the very same reading.
+        // The backend answers a refresh inside its cache period with the very same reading; only
+        // the refresh time moves, which is how the user can tell the refresh happened at all.
+        clock.now += 5.minutes
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertEquals(before, viewModel.uiState.value)
+        assertEquals(before.copy(refreshedAt = clock.now), viewModel.uiState.value)
         assertEquals(MEASURED_AT, assertIs<HomeUiState.Content>(viewModel.uiState.value).measuredAt)
     }
 

@@ -208,7 +208,7 @@ the wire to `HomeUiState.Content` as an `Instant`, and the screen classifies it 
 the boundary and the UTC → local conversion are tested without a ViewModel or a composable.
 
 - **Less than 3 hours old** (`STALE_AFTER`) → `ReadingAge.Fresh(localTime)`, a quiet caption:
-  "Updated 09:00".
+  "Data from 09:00".
 - **3 hours or older** → `ReadingAge.Stale`, a warning in the `errorContainer` colours with an
   icon: "Data from 29 July — These readings are not current." If the reading is from the same
   local calendar day it is `Stale.Today(localTime)` and names the time instead ("Data from 06:00
@@ -218,6 +218,12 @@ the boundary and the UTC → local conversion are tested without a ViewModel or 
 Both are in the **device's** time zone, not the source's UTC. The stale warning is the counterpart
 of the backend serving its last known reading through an upstream outage with no maximum age: if the
 warning were ever removed, a stale reading would pass for current. Keep the two together.
+
+Below it sits a second caption, "Refreshed 10:42" (`refreshedLabel` in `ReadingAgeLabel.kt`; it
+adds the date once it is no longer today). That is `Content.refreshedAt`, the time the app last
+*received* a reading, stamped by `HomeViewModel` from an injected `kotlinx.datetime.Clock`. It is
+a different fact from `measuredAt`: within the backend's cache period a refresh moves it while the
+data time stays put, which is how the user can tell the refresh happened. It is never a warning.
 
 This is what `kotlinx-datetime` is in `commonMain` for. It is pinned to **0.6.x**: 0.7 moves
 `Instant` and `Clock` into `kotlin.time`, which is still experimental on our Kotlin 2.1 and would
