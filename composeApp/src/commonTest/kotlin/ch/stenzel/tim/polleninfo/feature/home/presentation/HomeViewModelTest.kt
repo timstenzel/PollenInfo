@@ -13,8 +13,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -24,6 +26,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -218,6 +221,24 @@ class HomeViewModelTest {
 
         assertEquals(before, viewModel.uiState.value)
         assertEquals(MEASURED_AT, assertIs<HomeUiState.Content>(viewModel.uiState.value).measuredAt)
+    }
+
+    @Test
+    fun `an instant refresh stays flagged for the minimum indicator time`() = runTest {
+        // Regression: a cached response landed before the next frame, so the screen never saw
+        // `isRefreshing` become true and PullToRefreshBox never retracted its indicator.
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val before = assertIs<HomeUiState.Content>(viewModel.uiState.value)
+
+        viewModel.refresh()
+        advanceTimeBy(HomeViewModel.MIN_REFRESH_INDICATOR - 1.milliseconds)
+        runCurrent()
+        assertTrue(assertIs<HomeUiState.Content>(viewModel.uiState.value).isRefreshing)
+
+        advanceTimeBy(1.milliseconds)
+        runCurrent()
+        assertEquals(before, viewModel.uiState.value)
     }
 
     @Test

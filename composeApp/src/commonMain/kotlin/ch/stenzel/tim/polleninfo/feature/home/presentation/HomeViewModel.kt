@@ -7,11 +7,13 @@ import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.feature.home.domain.usecase.GetStationMeasurementUseCase
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class HomeViewModel(
     selectedStationRepository: SelectedStationRepository,
@@ -73,14 +75,23 @@ class HomeViewModel(
         }
 
         val current = _uiState.value
-        _uiState.value = if (keepReadings && current is HomeUiState.Content) {
-            current.copy(isRefreshing = true)
+        val refreshing = keepReadings && current is HomeUiState.Content
+        _uiState.value = if (refreshing) {
+            (current as HomeUiState.Content).copy(isRefreshing = true)
         } else {
             HomeUiState.Loading(station.name)
         }
 
         loadJob = viewModelScope.launch {
-            _uiState.value = when (val result = getStationMeasurement(station.abbr)) {
+            // A refresh served from the backend's cache answers within milliseconds — before the
+            // next frame — and usually with an equal reading, so `isRefreshing` would go true and
+            // back to false without composition ever reading `true`. `PullToRefreshBox` only
+            // retracts its indicator when it sees `isRefreshing` change, so the spinner would stay
+            // stuck. Holding the flag for a minimum time guarantees the change is observed.
+            val minimumIndicator = if (refreshing) launch { delay(MIN_REFRESH_INDICATOR) } else null
+            val result = getStationMeasurement(station.abbr)
+            minimumIndicator?.join()
+            _uiState.value = when (result) {
                 is Result.Success -> HomeUiState.Content(
                     stationName = station.name,
                     measuredAt = result.data.measuredAt,
@@ -98,8 +109,11 @@ class HomeViewModel(
         }
     }
 
-    private companion object {
-        const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
-        const val NO_STATION_MESSAGE = "No measuring station is selected."
+    companion object {
+        /** The shortest time a refresh shows its indicator; see [load] for why one is needed. */
+        val MIN_REFRESH_INDICATOR = 500.milliseconds
+
+        private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
+        private const val NO_STATION_MESSAGE = "No measuring station is selected."
     }
 }
