@@ -69,6 +69,27 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `Content carries the ordered taxa the unit and the responsible taxon`() = runTest {
+        measurementRepository.result = Result.Success(
+            measurement(
+                species = listOf(
+                    reading("Ash"),
+                    reading("Birch", 42, PollenSeverity.MODERATE),
+                    reading("Grasses", 20, PollenSeverity.HIGH),
+                ),
+            ),
+        )
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
+        assertEquals(listOf("Grasses", "Birch", "Ash"), state.species.map { it.name })
+        assertEquals("Grasses", state.drivenBy)
+        assertEquals("grains/m3", state.unit)
+    }
+
+    @Test
     fun `requests the readings for the stored station`() = runTest {
         viewModel()
 

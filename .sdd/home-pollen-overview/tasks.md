@@ -253,36 +253,66 @@ Still no bars and no colour; the severity is a word. Those arrive next.
 
 ### Implementation steps
 
-- [ ] Extend the use case to order pollen types by severity descending, placing types with no
+- [x] Extend the use case to order pollen types by severity descending, placing types with no
       reading last, with alphabetical ordering by display name as the tie-break within each group.
-- [ ] Carry the ordered list and the name of the type responsible for the overall severity in the
+      *(`GetStationMeasurementUseCase.DISPLAY_ORDER`. The driver is the first measured entry of the
+      ordered list, and the overall severity is read off it, so the two cannot disagree.)*
+- [x] Carry the ordered list and the name of the type responsible for the overall severity in the
       screen's content state.
-- [ ] Render each type as a two-line row: its name, then its severity word and concentration.
-- [ ] Render a type with no reading as "No data" with a dash in place of the number.
-- [ ] State the unit once as a heading above the list rather than on every row.
-- [ ] Name the responsible pollen type beneath the overall severity.
+      *(`HomeUiState.Content` gains `species`, `unit` and `drivenBy: String?` — null only when
+      nothing was measured, which the endpoint answers with 404.)*
+- [x] Render each type as a two-line row: its name, then its severity word and concentration.
+- [x] Render a type with no reading as "No data" with a dash in place of the number.
+- [x] State the unit once as a heading above the list rather than on every row.
+- [x] Name the responsible pollen type beneath the overall severity.
 
 ### Acceptance criteria
 
-- [ ] All seven pollen types measured by the network appear in the list.
-- [ ] The list is ordered by severity descending; two types of equal severity appear alphabetically;
+- [x] All seven pollen types measured by the network appear in the list.
+      *(`GetStationMeasurementUseCaseTest`: "orders all seven taxa of a full reading". Emulator:
+      seven rows against live PZH and against the stub.)*
+- [x] The list is ordered by severity descending; two types of equal severity appear alphabetically;
       types with no reading appear last and alphabetically among themselves.
-- [ ] A type with no reading shows "No data" and a dash rather than a severity word and a number.
-- [ ] The overall severity is unaffected by types that have no reading.
-- [ ] The unit of measurement appears exactly once, as a heading above the list.
-- [ ] The text beneath the overall severity names the type holding the highest severity.
+      *(`GetStationMeasurementUseCaseTest`: "orders the taxa worst first" (Grasses High, Birch
+      Moderate, Alder None — UAT 7), "taxa of equal severity are ordered alphabetically" (Ash before
+      Oak — UAT 8), "taxa with no reading come last and alphabetically among themselves".
+      `HomeViewModelTest`: "Content carries the ordered taxa the unit and the responsible taxon".)*
+- [x] A type with no reading shows "No data" and a dash rather than a severity word and a number.
+      *(Emulator against a stub serving the fixture body with Ash null: last row "Ash / No data / –".
+      No live station had a missing taxon on 2026-10-01 — all 15 checked — hence the stub.)*
+- [x] The overall severity is unaffected by types that have no reading.
+      *(`GetStationMeasurementUseCaseTest`: "a taxon with no reading does not affect the overall
+      severity", "an unmeasured taxon beside nothing but calm readings still reads as none" (UAT 10),
+      "a taxon with no reading is never named as responsible".)*
+- [x] The unit of measurement appears exactly once, as a heading above the list.
+      *(Emulator: "concentration in grains/m3" once beside "All species"; rows show bare numbers.)*
+- [x] The text beneath the overall severity names the type holding the highest severity.
+      *(`GetStationMeasurementUseCaseTest`: "names the taxon responsible for the overall severity",
+      "when several taxa share the worst severity the alphabetically first is named". Emulator:
+      "Driven by Grasses" under "Moderate" on live PZH (grasses 6); "Driven by Oak" under "Very
+      high" on the stub.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` and
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+      *(BUILD SUCCESSFUL — composeApp 152 tests, server 83 tests, 0 failures, 0 errors.)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` and
       `./gradlew :composeApp:assembleDebug` succeed.
-- [ ] Ordering and aggregation are covered by tests that exercise them without instantiating any UI
+- [x] Ordering and aggregation are covered by tests that exercise them without instantiating any UI
       component.
-- [ ] The list is observed on a running device: seven rows present, the unit heading appearing once,
+      *(`GetStationMeasurementUseCaseTest` drives the use case over `FakeStationMeasurementRepository`
+      — no ViewModel, no composable.)*
+- [x] The list is observed on a running device: seven rows present, the unit heading appearing once,
       and the unmeasured type rendering as "No data" with a dash.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+      *(Medium_Phone_API_36.1, debug build. Live backend: seven rows, Grasses first, the six NONE
+      taxa alphabetical. Stub on :8080 with Ash null: Oak, Grasses, Birch, Beech, Alder, Hazel, then
+      Ash "No data" "–".)*
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
+      *(`--rerun-tasks` over `:composeApp:compileDebugKotlinAndroid`,
+      `:composeApp:compileDebugUnitTestKotlinAndroid`, `:composeApp:compileTestKotlinIosSimulatorArm64`:
+      only the pre-existing opt-in warning in `OnboardingViewModelTest.kt` and KLIB-resolver
+      dependency notices. `:server` is untouched.)*
 
 ---
 

@@ -6,13 +6,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -52,15 +57,29 @@ private fun HomeContent(uiState: HomeUiState) {
             TopAppBar(title = { StationTitle(uiState.stationName) })
         },
     ) { padding ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            when (uiState) {
-                is HomeUiState.Loading -> CircularProgressIndicator()
-                is HomeUiState.Content -> OverallSeverityView(uiState.overallSeverity)
-                is HomeUiState.Error -> ErrorView(uiState.message)
-            }
+        val modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)
+        when (uiState) {
+            is HomeUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
+            is HomeUiState.Content -> ReadingView(uiState, modifier)
+            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message) }
+        }
+    }
+}
+
+@Composable
+private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) { content() }
+}
+
+@Composable
+private fun ReadingView(content: HomeUiState.Content, modifier: Modifier) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        OverallSeverityView(content.overallSeverity, content.drivenBy)
+        HorizontalDivider(Modifier.padding(vertical = 24.dp))
+        SpeciesListHeading(content.unit)
+        content.species.forEach { reading ->
+            Spacer(Modifier.height(16.dp))
+            SpeciesRow(reading)
         }
     }
 }
@@ -80,8 +99,68 @@ private fun StationTitle(stationName: String) {
 }
 
 @Composable
-private fun OverallSeverityView(severity: PollenSeverity) {
-    Text(text = severity.label(), style = MaterialTheme.typography.displaySmall)
+private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text = severity.label(), style = MaterialTheme.typography.displaySmall)
+        // The overall severity is an aggregate with no concentration of its own; without naming
+        // its source, the user would have to scan the list to learn what is high.
+        if (drivenBy != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Driven by $drivenBy",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The unit is stated once here, so the numbers on the rows can stay bare and scannable. */
+@Composable
+private fun SpeciesListHeading(unit: String) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = "All species",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "concentration in $unit",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Two lines: the name, then the severity word and the concentration.
+ *
+ * A taxon the station does not report says "No data" with a dash, never "None" with a 0 — those
+ * are a measurement of clean air, and a user who reacts to this taxon must not mistake one for the
+ * other.
+ */
+@Composable
+private fun SpeciesRow(reading: SpeciesReading) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(text = reading.name, style = MaterialTheme.typography.bodyLarge)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = reading.severity?.label() ?: "No data",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            // Right-aligned so the numbers form a column down the list.
+            Text(
+                text = reading.concentration?.toString() ?: "–",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.End,
+            )
+        }
+    }
 }
 
 @Composable

@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.feature.home.domain.usecase
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.map
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.StationMeasurement
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.StationPollenOverview
 import ch.stenzel.tim.polleninfo.feature.home.domain.repository.StationMeasurementRepository
@@ -20,11 +21,18 @@ class GetStationMeasurementUseCase(
     suspend operator fun invoke(stationAbbr: String): Result<StationPollenOverview> =
         repository.getMeasurement(stationAbbr).map { it.toOverview() }
 
-    private fun StationMeasurement.toOverview() = StationPollenOverview(
-        unit = unit,
-        overallSeverity = overallSeverityOf(this),
-        species = species,
-    )
+    private fun StationMeasurement.toOverview(): StationPollenOverview {
+        val ordered = species.sortedWith(DISPLAY_ORDER)
+        // The display order already puts the worst measured taxon first, so the driver and the
+        // overall severity are read off the same list rather than computed a second way.
+        val drivenBy = ordered.firstOrNull { it.severity != null }
+        return StationPollenOverview(
+            unit = unit,
+            overallSeverity = overallSeverityOf(drivenBy),
+            drivenBy = drivenBy,
+            species = ordered,
+        )
+    }
 
     /**
      * The worst severity among the taxa that **have** a reading.
@@ -38,6 +46,18 @@ class GetStationMeasurementUseCase(
      * for that case, so it does not arise in practice; it is spelled out rather than forced because
      * a crash is a worse answer than a calm one.
      */
-    private fun overallSeverityOf(measurement: StationMeasurement): PollenSeverity =
-        measurement.species.mapNotNull { it.severity }.maxOrNull() ?: PollenSeverity.NONE
+    private fun overallSeverityOf(drivenBy: SpeciesReading?): PollenSeverity =
+        drivenBy?.severity ?: PollenSeverity.NONE
+
+    private companion object {
+        /**
+         * Worst first, so what matters is at the top. Taxa with no reading sink to the bottom
+         * rather than being hidden — someone who reacts to ash needs to see that ash is unmeasured
+         * here. The alphabetical tie-break, applied within the unmeasured group too, keeps the list
+         * from reshuffling between visits.
+         */
+        val DISPLAY_ORDER: Comparator<SpeciesReading> =
+            compareBy<SpeciesReading, PollenSeverity?>(nullsLast(reverseOrder())) { it.severity }
+                .thenBy { it.name }
+    }
 }

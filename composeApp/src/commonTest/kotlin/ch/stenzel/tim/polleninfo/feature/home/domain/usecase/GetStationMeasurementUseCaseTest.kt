@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class GetStationMeasurementUseCaseTest {
 
@@ -79,13 +80,115 @@ class GetStationMeasurementUseCaseTest {
     }
 
     @Test
-    fun `carries the unit and the taxa through`() = runTest {
+    fun `carries the unit and every taxon through`() = runTest {
         val species = listOf(reading("Birch", 42, PollenSeverity.MODERATE), reading("Ash"))
 
         val overview = overviewOf(species)
 
         assertEquals("grains/m3", overview.unit)
-        assertEquals(species, overview.species)
+        assertEquals(species.toSet(), overview.species.toSet())
+    }
+
+    @Test
+    fun `orders the taxa worst first`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Alder", 0, PollenSeverity.NONE),
+                reading("Birch", 42, PollenSeverity.MODERATE),
+                reading("Grasses", 20, PollenSeverity.HIGH),
+            ),
+        )
+
+        assertEquals(listOf("Grasses", "Birch", "Alder"), overview.species.map { it.name })
+    }
+
+    @Test
+    fun `taxa of equal severity are ordered alphabetically`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Oak", 30, PollenSeverity.MODERATE),
+                reading("Ash", 50, PollenSeverity.MODERATE),
+            ),
+        )
+
+        // Alphabetical, not by concentration: Ash comes first even though Oak was listed first and
+        // reads lower — the tie-break is what keeps the list from reshuffling between visits.
+        assertEquals(listOf("Ash", "Oak"), overview.species.map { it.name })
+    }
+
+    @Test
+    fun `taxa with no reading come last and alphabetically among themselves`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Oak"),
+                reading("Alder", 0, PollenSeverity.NONE),
+                reading("Birch"),
+                reading("Grasses", 20, PollenSeverity.HIGH),
+            ),
+        )
+
+        // Below NONE, not hidden: an unmeasured taxon must still be findable in the list.
+        assertEquals(listOf("Grasses", "Alder", "Birch", "Oak"), overview.species.map { it.name })
+    }
+
+    @Test
+    fun `orders all seven taxa of a full reading`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Alder", 0, PollenSeverity.NONE),
+                reading("Birch", 42, PollenSeverity.MODERATE),
+                reading("Hazel", 0, PollenSeverity.NONE),
+                reading("Beech", 3, PollenSeverity.LOW),
+                reading("Ash"),
+                reading("Oak", 1500, PollenSeverity.VERY_HIGH),
+                reading("Grasses", 20, PollenSeverity.HIGH),
+            ),
+        )
+
+        assertEquals(
+            listOf("Oak", "Grasses", "Birch", "Beech", "Alder", "Hazel", "Ash"),
+            overview.species.map { it.name },
+        )
+    }
+
+    @Test
+    fun `names the taxon responsible for the overall severity`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Birch", 42, PollenSeverity.MODERATE),
+                reading("Grasses", 20, PollenSeverity.HIGH),
+                reading("Alder", 0, PollenSeverity.NONE),
+            ),
+        )
+
+        assertEquals("Grasses", overview.drivenBy?.name)
+    }
+
+    @Test
+    fun `when several taxa share the worst severity the alphabetically first is named`() = runTest {
+        val overview = overviewOf(
+            listOf(
+                reading("Oak", 100, PollenSeverity.HIGH),
+                reading("Grasses", 20, PollenSeverity.HIGH),
+            ),
+        )
+
+        assertEquals("Grasses", overview.drivenBy?.name)
+    }
+
+    @Test
+    fun `a taxon with no reading is never named as responsible`() = runTest {
+        // Ash sorts first alphabetically, so this fails if the driver ignores the severity.
+        val overview = overviewOf(listOf(reading("Ash"), reading("Birch", 0, PollenSeverity.NONE)))
+
+        assertEquals("Birch", overview.drivenBy?.name)
+    }
+
+    @Test
+    fun `no taxon is named when nothing was measured`() = runTest {
+        val overview = overviewOf(listOf(reading("Ash"), reading("Oak")))
+
+        assertNull(overview.drivenBy)
     }
 
     @Test

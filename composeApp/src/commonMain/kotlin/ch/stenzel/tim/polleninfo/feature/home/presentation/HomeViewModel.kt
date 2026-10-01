@@ -48,6 +48,9 @@ class HomeViewModel(
             is Result.Success -> HomeUiState.Content(
                 stationName = selected.name,
                 overallSeverity = result.data.overallSeverity,
+                drivenBy = result.data.drivenBy?.name,
+                unit = result.data.unit,
+                species = result.data.species,
             )
 
             is Result.Failure -> HomeUiState.Error(

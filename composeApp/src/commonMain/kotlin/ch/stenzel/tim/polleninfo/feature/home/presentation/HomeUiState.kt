@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
 
 /**
  * What the home screen shows.
@@ -16,9 +17,17 @@ sealed interface HomeUiState {
 
     data class Loading(override val stationName: String) : HomeUiState
 
+    /**
+     * [species] arrives already ordered by `GetStationMeasurementUseCase`; the screen renders it as
+     * is. [drivenBy] names the taxon behind [overallSeverity] and is `null` only when nothing was
+     * measured at all.
+     */
     data class Content(
         override val stationName: String,
         val overallSeverity: PollenSeverity,
+        val drivenBy: String?,
+        val unit: String,
+        val species: List<SpeciesReading>,
     ) : HomeUiState
 
     data class Error(
