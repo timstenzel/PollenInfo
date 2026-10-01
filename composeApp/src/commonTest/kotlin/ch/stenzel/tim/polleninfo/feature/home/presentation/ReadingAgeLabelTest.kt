@@ -15,8 +15,13 @@ class ReadingAgeLabelTest {
     }
 
     @Test
-    fun `a stale reading names its date rather than a time`() {
-        assertEquals("Data from 29 July", ReadingAge.Stale(LocalDate(2026, 7, 29)).label())
-        assertEquals("Data from 1 August", ReadingAge.Stale(LocalDate(2026, 8, 1)).label())
+    fun `a stale reading from an earlier day names its date rather than a time`() {
+        assertEquals("Data from 29 July", ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label())
+        assertEquals("Data from 1 August", ReadingAge.Stale.Earlier(LocalDate(2026, 8, 1)).label())
+    }
+
+    @Test
+    fun `a stale reading from today names its time rather than today's date`() {
+        assertEquals("Data from 06:00 today", ReadingAge.Stale.Today(LocalTime(6, 0)).label())
     }
 }

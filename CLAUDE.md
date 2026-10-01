@@ -209,8 +209,11 @@ the boundary and the UTC → local conversion are tested without a ViewModel or 
 
 - **Less than 3 hours old** (`STALE_AFTER`) → `ReadingAge.Fresh(localTime)`, a quiet caption:
   "Updated 09:00".
-- **3 hours or older** → `ReadingAge.Stale(localDate)`, a warning in the `errorContainer` colours
-  with an icon: "Data from 29 July — These readings are not current."
+- **3 hours or older** → `ReadingAge.Stale`, a warning in the `errorContainer` colours with an
+  icon: "Data from 29 July — These readings are not current." If the reading is from the same
+  local calendar day it is `Stale.Today(localTime)` and names the time instead ("Data from 06:00
+  today"), since a warning naming today's date reads as a contradiction; otherwise
+  `Stale.Earlier(localDate)`.
 
 Both are in the **device's** time zone, not the source's UTC. The stale warning is the counterpart
 of the backend serving its last known reading through an upstream outage with no maximum age: if the

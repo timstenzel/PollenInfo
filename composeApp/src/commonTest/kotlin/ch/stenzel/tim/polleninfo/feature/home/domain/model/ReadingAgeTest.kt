@@ -25,14 +25,39 @@ class ReadingAgeTest {
     fun `a reading exactly three hours old is stale`() {
         val age = readingAgeOf(measuredAt, now = measuredAt + 3.hours, TimeZone.UTC)
 
-        assertEquals(ReadingAge.Stale(LocalDate(2026, 8, 1)), age)
+        assertEquals(ReadingAge.Stale.Today(LocalTime(7, 0)), age)
     }
 
     @Test
     fun `a reading just over three hours old is stale`() {
         val age = readingAgeOf(measuredAt, now = measuredAt + 3.hours + 1.nanoseconds, TimeZone.UTC)
 
-        assertEquals(ReadingAge.Stale(LocalDate(2026, 8, 1)), age)
+        assertEquals(ReadingAge.Stale.Today(LocalTime(7, 0)), age)
+    }
+
+    @Test
+    fun `a stale reading from today is named by its time rather than today's date`() {
+        val age = readingAgeOf(measuredAt, now = Instant.parse("2026-08-01T23:59:59Z"), TimeZone.UTC)
+
+        assertEquals(ReadingAge.Stale.Today(LocalTime(7, 0)), age)
+    }
+
+    @Test
+    fun `a stale reading from yesterday is named by its date`() {
+        val age = readingAgeOf(measuredAt, now = Instant.parse("2026-08-02T00:00:00Z"), TimeZone.UTC)
+
+        assertEquals(ReadingAge.Stale.Earlier(LocalDate(2026, 8, 1)), age)
+    }
+
+    @Test
+    fun `whether a stale reading is from today is decided in the device's zone`() {
+        // 21:30 UTC on 31 July is 23:30 in Zürich; 01:30 UTC on 1 August is 03:30 there — four
+        // hours later and across local midnight, so the reading is from yesterday.
+        val lateEvening = Instant.parse("2026-07-31T21:30:00Z")
+
+        val age = readingAgeOf(lateEvening, now = lateEvening + 4.hours, ZURICH)
+
+        assertEquals(ReadingAge.Stale.Earlier(LocalDate(2026, 7, 31)), age)
     }
 
     @Test
@@ -69,7 +94,7 @@ class ReadingAgeTest {
 
         val age = readingAgeOf(lateEvening, now = lateEvening + 48.hours, ZURICH)
 
-        assertEquals(ReadingAge.Stale(LocalDate(2026, 8, 1)), age)
+        assertEquals(ReadingAge.Stale.Earlier(LocalDate(2026, 8, 1)), age)
     }
 
     private companion object {

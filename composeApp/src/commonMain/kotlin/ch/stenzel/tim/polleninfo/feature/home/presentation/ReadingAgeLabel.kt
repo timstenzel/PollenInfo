@@ -8,8 +8,8 @@ import kotlinx.datetime.format.Padding
 import kotlinx.datetime.format.char
 
 /**
- * The words for a [ReadingAge]: "Updated 09:00" for a fresh reading, "Data from 29 July" for a
- * stale one.
+ * The words for a [ReadingAge]: "Updated 09:00" for a fresh reading; for a stale one "Data from
+ * 06:00 today" if it is from today, otherwise "Data from 29 July".
  *
  * Kept apart from the composable so the wording can be tested without UI. Formatted with
  * kotlinx-datetime's own format builders, since `String.format` and `java.time` do not exist in
@@ -17,7 +17,8 @@ import kotlinx.datetime.format.char
  */
 fun ReadingAge.label(): String = when (this) {
     is ReadingAge.Fresh -> "Updated ${TIME_FORMAT.format(localTime)}"
-    is ReadingAge.Stale -> "Data from ${DATE_FORMAT.format(localDate)}"
+    is ReadingAge.Stale.Today -> "Data from ${TIME_FORMAT.format(localTime)} today"
+    is ReadingAge.Stale.Earlier -> "Data from ${DATE_FORMAT.format(localDate)}"
 }
 
 private val TIME_FORMAT = LocalTime.Format {
