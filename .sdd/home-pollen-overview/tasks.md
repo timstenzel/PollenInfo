@@ -340,38 +340,66 @@ fills a fifth of the track.
 
 ### Implementation steps
 
-- [ ] Add severity colour values to the shared theme module with explicit light and dark variants —
+- [x] Add severity colour values to the shared theme module with explicit light and dark variants —
       these sit outside the Material scheme, so no dark equivalents are generated for them — and
       record each value's computed contrast ratio against its scheme's surface alongside it.
-- [ ] Add the severity-to-colour mapping in the home feature, not the theme module, since the theme
+      *(`theme/.../SeverityPalette.kt`, the AD-15 values; ratios recomputed with the WCAG 2.1
+      relative-luminance formula and matching the annex.)*
+- [x] Add the severity-to-colour mapping in the home feature, not the theme module, since the theme
       module cannot depend on the app and therefore cannot see the severity type.
-- [ ] Add a bar component taking a severity and rendering the fixed fill and single colour, with a
+      *(`SeverityColors.kt`: pure `severityColor(severity, darkTheme)` plus a composable that reads
+      dark from the applied surface's luminance, so it follows dynamic schemes and overrides.)*
+- [x] Add a bar component taking a severity and rendering the fixed fill and single colour, with a
       distinct muted empty rendering for "no reading".
-- [ ] Use the bar at a large size for the overall severity and compactly in each list row.
-- [ ] Document the theme module's severity palette in the project documentation.
+      *(`SeverityBar.kt`; the fill is the pure `severityFillFraction`, so it is unit-tested without
+      Compose. No reading = `outlineVariant` at 40 % alpha and no fill.)*
+- [x] Use the bar at a large size for the overall severity and compactly in each list row.
+- [x] Document the theme module's severity palette in the project documentation.
+      *(`CLAUDE.md` → "Severity palette and bars", including that Android 12+ dynamic colour means
+      the on-device surface is not exactly the one the ratios were computed against.)*
 
 ### Acceptance criteria
 
-- [ ] Each severity fills the bar to its fixed proportion — one fifth for "none" rising to full for
+- [x] Each severity fills the bar to its fixed proportion — one fifth for "none" rising to full for
       "very high" — and a type with no reading renders an empty, visibly muted track.
-- [ ] The entire filled portion of a bar is a single colour corresponding to the current severity;
+      *(`SeverityBarTest`: 0.2/0.4/0.6/0.8/1.0 and 0 for no reading. Emulator, stub serving every
+      severity plus Ash null: Oak full, Grasses ⅘, Birch ⅗, Beech ⅖, Alder/Hazel ⅕, Ash an empty
+      track visibly fainter than the others, in both themes.)*
+- [x] The entire filled portion of a bar is a single colour corresponding to the current severity;
       no bar shows more than one colour.
-- [ ] The colour mapping is the one tabulated above: grey, green, amber, orange, red.
-- [ ] Distinct values exist for all five severities in both light and dark themes.
-- [ ] Every bar is accompanied by its severity word, so severity is never conveyed by colour alone.
+      *(One `background(severity.color())` per fill. Emulator, light and dark: every fill uniform.)*
+- [x] The colour mapping is the one tabulated above: grey, green, amber, orange, red.
+      *(`SeverityColorsTest`: both themes' full lists pinned by hex. Emulator confirms visually.)*
+- [x] Distinct values exist for all five severities in both light and dark themes.
+      *(`SeverityColorsTest`: "every severity has its own colour in each theme", "no severity reuses
+      its light colour in the dark theme".)*
+- [x] Every bar is accompanied by its severity word, so severity is never conveyed by colour alone.
+      *(Emulator: the overall bar sits under its word, and each row's bar beside its word or
+      "No data".)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` and
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+      *(composeApp 159 tests, server 83 tests, 0 failures, 0 errors.)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` and
       `./gradlew :composeApp:assembleDebug` succeed.
-- [ ] Every one of the ten colour values has a computed contrast ratio of at least 3:1 against its
+- [x] Every one of the ten colour values has a computed contrast ratio of at least 3:1 against its
       scheme's surface colour, recorded next to the value.
-- [ ] No file in the theme module references the severity type.
-- [ ] The screen is observed on a running device in both light and dark theme and every bar reads
+      *(Light 5.14 / 4.89 / 3.38 / 4.89 / 6.24; dark 6.68 / 10.59 / 9.94 / 6.97 / 5.48 — each as a
+      trailing comment in `SeverityPalette.kt`.)*
+- [x] No file in the theme module references the severity type.
+      *(`grep -rn "PollenSeverity" theme/src` → nothing. The one hit for `feature/home` is a comment
+      saying where the mapping lives.)*
+- [x] The screen is observed on a running device in both light and dark theme and every bar reads
       clearly against its background.
-- [ ] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
+      *(Medium_Phone_API_36.1, cold start in each mode. Every fill is clear in both; the no-reading
+      track is faint by design, most of all in dark. Switching mode while the app is open crashes —
+      a separate bug, see report.)*
+- [x] Compiling the touched modules from clean emits no Kotlin compiler warnings originating in
       files this task adds or changes.
+      *(`--rerun-tasks` over `:theme` (Android, iOS) and `:composeApp` (Android main and unit test,
+      iOS test): only the pre-existing `OnboardingViewModelTest.kt` opt-in warning and KLIB-resolver
+      notices.)*
 
 ---
 

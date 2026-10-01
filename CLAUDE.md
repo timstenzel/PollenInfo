@@ -159,6 +159,37 @@ today; inventing our own hourly bands would replace a documented approximation w
 guesswork. `PollenThresholds.DEFAULTS` stays the one place to change, so an authoritative hourly
 table can be adopted later without touching anything else.
 
+### Severity palette and bars
+
+The app shows a severity as a word and a bar. The bar colours live in `:theme` as
+`SeverityPalette.kt` — `severityNoneLight` … `severityVeryHighDark`, running grey → green → amber →
+orange → red. They sit outside the Material 3 scheme, so nothing generates dark equivalents: each
+has an **explicit light and dark value**, and the WCAG contrast ratio against `surfaceLight` /
+`surfaceDark` is recorded next to each value (all ≥ 3:1, SC 1.4.11; Moderate-light is the tightest
+at 3.38).
+
+| Severity  | Light        | Dark         | Fill  |
+| --------- | ------------ | ------------ | ----- |
+| NONE      | `0xFF6B6B60` | `0xFF9C9C90` | 20 %  |
+| LOW       | `0xFF2E7D32` | `0xFF7DD87F` | 40 %  |
+| MODERATE  | `0xFFB08000` | `0xFFF0B429` | 60 %  |
+| HIGH      | `0xFFB4500F` | `0xFFF08135` | 80 %  |
+| VERY_HIGH | `0xFFB3261E` | `0xFFF2564B` | 100 % |
+| no reading | —           | —            | 0 %, muted track |
+
+`:theme` cannot depend on the app, so it never sees `PollenSeverity`. **The mapping from severity to
+colour lives in `feature/home/presentation/SeverityColors.kt`**, and it picks light or dark from the
+luminance of the applied `colorScheme.surface` rather than `isSystemInDarkTheme()`, so it follows a
+`darkTheme` override and Android's dynamic schemes. Note that on Android 12+ `PollenInfoTheme` uses
+dynamic colour, so the surface on device is not exactly the `surfaceLight` / `surfaceDark` the
+ratios were computed against.
+
+`SeverityBar` fills to fixed stops (`severityFillFraction`) and does **not** track the
+concentration: the bands are so unequal in width that an interpolated bar would contradict its own
+label. NONE fills a fifth because an empty bar means "no reading". The whole fill is one colour — a
+gradient would leave the left end green during Very high. Colour never carries meaning alone; every
+bar sits beside its severity word.
+
 ## Conventions
 
 ### Feature package layout (`:composeApp`)

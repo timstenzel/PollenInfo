@@ -105,6 +105,8 @@ private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = severity.label(), style = MaterialTheme.typography.displaySmall)
+        Spacer(Modifier.height(12.dp))
+        SeverityBar(severity, SeverityBarSize.Large, Modifier.fillMaxWidth())
         // The overall severity is an aggregate with no concentration of its own; without naming
         // its source, the user would have to scan the list to learn what is high.
         if (drivenBy != null) {
@@ -136,7 +138,7 @@ private fun SpeciesListHeading(unit: String) {
 }
 
 /**
- * Two lines: the name, then the severity word and the concentration.
+ * Two lines: the name, then the bar, the severity word and the concentration.
  *
  * A taxon the station does not report says "No data" with a dash, never "None" with a 0 — those
  * are a measurement of clean air, and a user who reacts to this taxon must not mistake one for the
@@ -146,18 +148,23 @@ private fun SpeciesListHeading(unit: String) {
 private fun SpeciesRow(reading: SpeciesReading) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(text = reading.name, style = MaterialTheme.typography.bodyLarge)
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(4.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SeverityBar(reading.severity, SeverityBarSize.Compact, Modifier.weight(1f))
+            Spacer(Modifier.width(16.dp))
+            // Fixed widths, so the bars all end at the same x and the words and numbers each form
+            // a column down the list.
             Text(
                 text = reading.severity?.label() ?: "No data",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(SEVERITY_WORD_WIDTH),
             )
-            // Right-aligned so the numbers form a column down the list.
             Text(
                 text = reading.concentration?.toString() ?: "–",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.End,
+                modifier = Modifier.width(CONCENTRATION_WIDTH),
             )
         }
     }
@@ -183,6 +190,9 @@ private fun ErrorView(message: String) {
         )
     }
 }
+
+private val SEVERITY_WORD_WIDTH = 88.dp
+private val CONCENTRATION_WIDTH = 56.dp
 
 /**
  * The single home of the severity wording. Every severity is spelled out as a word — the screen
