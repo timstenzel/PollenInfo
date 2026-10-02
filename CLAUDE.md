@@ -548,9 +548,19 @@ scrolls. It is drawn on a plain canvas — no map service, tiles, key or network
   each with an explicit light and dark value (a lake is blue whatever the dynamic scheme is), picked
   by the same surface-luminance rule as `PollenSeverity.color()`. The edge carries the shape and
   clears 3:1 against the surface; keep the lakes quieter than the severity colours.
+- **Tapping** the map selects the station whose dot is **nearest** to the tap, if it is within
+  24 dp (`TAP_RADIUS` in `SwissMap.kt`, converted to px there); a tap farther from every dot does
+  nothing. The rule is `map/StationHitTest.kt`'s `nearestStation(tap, dots, radiusPx)` — pure
+  Kotlin over already-projected points, tested in `commonTest`; an exact tie goes to the
+  alphabetically first abbreviation. Nearest rather than first-within-radius is what keeps Locarno
+  and Lugano (closer together on screen than two radii) unambiguous: each owns its side of the
+  midpoint. The dots are projected at tap time through the same `project` they are drawn with, and a
+  hit goes to the map's single `onStationClick` — wired to `AllStationsViewModel.onStationClicked`,
+  the rows' entry point — so a dot tap behaves exactly like a row tap, deselect included.
 - **Accessibility.** The map is one node (`clearAndSetSemantics`) announced as "Map of 15 pollen
   stations. Select a station in the list below." — the count comes from the list. There is no focus
-  stop per dot: the dots repeat the list, and the list is where a station is operated.
+  stop per dot: the dots repeat the list, and the list is where a station is operated. Tapping a dot
+  is a pointer shortcut only.
 
 **Selection.** Tapping a row calls `AllStationsViewModel.onStationClicked(abbr)`: it selects that
 station, a second tap on it deselects, and tapping another replaces it — at most one is selected

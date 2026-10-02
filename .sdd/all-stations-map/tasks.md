@@ -180,20 +180,20 @@ stations such as Locarno and Lugano unambiguous.
 
 ### Implementation steps
 
-- [ ] Add a pure nearest-station hit test over projected dot positions and a radius, with a deterministic tie-break by abbreviation.
-- [ ] Wire taps on the map through the hit test (radius converted from dp) into the same station-click handling the list uses.
-- [ ] Update CLAUDE.md with the hit-test rule.
+- [x] Add a pure nearest-station hit test over projected dot positions and a radius, with a deterministic tie-break by abbreviation.
+- [x] Wire taps on the map through the hit test (radius converted from dp) into the same station-click handling the list uses.
+- [x] Update CLAUDE.md with the hit-test rule.
 
 ### Acceptance criteria
 
-- [ ] Hit-test tests show: a tap exactly on a dot selects it; a tap at exactly the radius selects it; a tap just beyond the radius returns nothing; between two close dots the nearer one wins, checked from both sides; an exact tie resolves by abbreviation; no dots returns nothing.
-- [ ] On an Android emulator, tapping the Zürich dot circles it, expands the Zürich row and scrolls to it; tapping it again collapses the row and removes the ring.
-- [ ] On the emulator, tapping empty map area far from any dot changes nothing.
-- [ ] On the emulator, tapping just on Lugano's side of the Locarno–Lugano midpoint selects Lugano, and just on Locarno's side selects Locarno.
+- [x] Hit-test tests show: a tap exactly on a dot selects it; a tap at exactly the radius selects it; a tap just beyond the radius returns nothing; between two close dots the nearer one wins, checked from both sides; an exact tie resolves by abbreviation; no dots returns nothing. *(`StationHitTestTest`, 8 tests, 0 failures: on the dot, at exactly the radius on two axes, radius + 0.01 on two axes → null, 0.5 px either side of a close pair's midpoint, exact tie → `PLO` in both declaration orders, far tap → null, no dots → null)*
+- [x] On an Android emulator, tapping the Zürich dot circles it, expands the Zürich row and scrolls to it; tapping it again collapses the row and removes the ring. *(Medium_Phone_API_36.1, 1080×2400 @ 420 dpi, map at [42,252]–[1038,891]; dot positions computed with the same projection maths; tap at (612,402): ring around the Zürich dot, Zürich row expanded ("Data from 20:00", all species) and scrolled to the top of the list; second tap: row collapsed (no "Data from"/"All species" left in the UI dump), ring gone — screenshots checked)*
+- [x] On the emulator, tapping empty map area far from any dot changes nothing. *(taps at (950,800), 245 px from the nearest dot, and (480,650) inside the country, ~150 px from Bern, with the radius 63 px: uiautomator dumps before and after are identical)*
+- [x] On the emulator, tapping just on Lugano's side of the Locarno–Lugano midpoint selects Lugano, and just on Locarno's side selects Locarno. *(the dots are 61.5 px apart, so the midpoint is within the 63 px radius of both; (678,791) — 26.3 px from Lugano, 35.3 from Locarno — selected Lugano, ring on the Lugano dot; (673,784) — 26.7 px from Locarno, 34.9 from Lugano — selected Locarno / Monti, ring moved to it)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] The hit-test source file contains no `androidx.compose` import (grep).
-- [ ] The map composable exposes a single station-click callback, wired to the same ViewModel entry point as the rows (code review).
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes. *(BUILD SUCCESSFUL, 257 tests, 0 failures)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds. *(BUILD SUCCESSFUL)*
+- [x] The hit-test source file contains no `androidx.compose` import (grep). *(`grep -c androidx.compose StationHitTest.kt` → 0)*
+- [x] The map composable exposes a single station-click callback, wired to the same ViewModel entry point as the rows (code review). *(`SwissMap(onStationClick)` is its only callback; `ContentView` passes it the same `onStationClick` the rows get, which `AllStationsScreen` binds to `viewModel::onStationClicked`)*

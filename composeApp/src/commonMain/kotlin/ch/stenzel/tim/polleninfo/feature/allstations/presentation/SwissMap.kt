@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -17,6 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
@@ -25,9 +29,11 @@ import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.ui.severity.color
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
 import ch.stenzel.tim.polleninfo.feature.allstations.map.GeoPoint
+import ch.stenzel.tim.polleninfo.feature.allstations.map.MapPoint
 import ch.stenzel.tim.polleninfo.feature.allstations.map.SWISS_BORDER
 import ch.stenzel.tim.polleninfo.feature.allstations.map.SWISS_LAKES
 import ch.stenzel.tim.polleninfo.feature.allstations.map.SwissMapProjection
+import ch.stenzel.tim.polleninfo.feature.allstations.map.nearestStation
 import ch.stenzel.tim.polleninfo.theme.mapWaterDark
 import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeDark
 import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeLight
@@ -40,6 +46,10 @@ import ch.stenzel.tim.polleninfo.theme.mapWaterLight
  * Fits the available width at the map's own aspect ratio, and never grows taller than [maxHeight] —
  * when capped it is narrower and centred, never cropped.
  *
+ * A tap selects the station whose dot is nearest, within [TAP_RADIUS] ([nearestStation]), through
+ * [onStationClick] — the same entry point as the list rows, so a dot tap and a row tap behave alike,
+ * including deselecting on a second tap. A tap farther from every dot does nothing.
+ *
  * To a screen reader it is one element: the dots repeat what the list says, and selecting happens in
  * the list, so fifteen focus stops here would only be in the way.
  */
@@ -48,6 +58,7 @@ fun SwissMap(
     stations: List<StationReading>,
     selectedAbbr: String?,
     maxHeight: Dp,
+    onStationClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Read in composition: color() follows the applied scheme, which a draw block cannot ask.
@@ -61,6 +72,8 @@ fun SwissMap(
     val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val lakeFill = if (darkTheme) mapWaterDark else mapWaterLight
     val lakeStroke = if (darkTheme) mapWaterEdgeDark else mapWaterEdgeLight
+    val positions = stations.associate { it.station.abbr to it.station.position }
+    val currentOnStationClick by rememberUpdatedState(onStationClick)
     val description = "Map of ${stations.size} pollen stations. Select a station in the list below."
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -71,6 +84,19 @@ fun SwissMap(
                 .heightIn(max = maxHeight)
                 .aspectRatio(SwissMapProjection.aspectRatio)
                 .clearAndSetSemantics { contentDescription = description }
+                .pointerInput(positions) {
+                    val radius = TAP_RADIUS.toPx()
+                    detectTapGestures { tap ->
+                        // Projected at tap time into the current size, through the same projection
+                        // the dots are drawn with, so what is hit is exactly what is seen.
+                        val width = size.width.toFloat()
+                        val height = size.height.toFloat()
+                        val dots = positions.mapValues { (_, position) ->
+                            SwissMapProjection.project(position, width, height)
+                        }
+                        nearestStation(MapPoint(tap.x, tap.y), dots, radius)?.let(currentOnStationClick)
+                    }
+                }
                 .drawWithCache {
                     val border = ringPath(SWISS_BORDER, size)
                     val lakes = SWISS_LAKES.map { ringPath(it.outline, size) }
@@ -147,6 +173,9 @@ private val Station.position: GeoPoint
     get() = GeoPoint(latitude, longitude)
 
 private val DOT_RADIUS = 5.dp
+
+/** How far from a dot a tap still selects it — a fingertip, much larger than the dot itself. */
+private val TAP_RADIUS = 24.dp
 private val HOLLOW_DOT_STROKE_WIDTH = 1.5.dp
 private val RING_STROKE_WIDTH = 2.dp
 private val RING_GAP = 3.dp

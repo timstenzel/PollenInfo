@@ -176,6 +176,7 @@ private fun ContentView(
                 stations = content.stations,
                 selectedAbbr = content.selectedAbbr,
                 maxHeight = mapMaxHeight,
+                onStationClick = onStationClick,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
             // Moves on every completed round even when the backend's cache returns the same readings —
