@@ -43,29 +43,29 @@ fills the screen below the top bar. The back gesture returns to Home.
 
 ### Implementation steps
 
-- [ ] Rename the second tab's route and destination entry to All stations (content description and screen title "All stations"), keeping the pin icon for now; wire its destination to the new screen and update the tab tests.
-- [ ] Add the per-station outcome type (pending / available with overview / unavailable) and a use case that, given the station list, starts every station's reading at once and emits the full alphabetical list after each station resolves, starting all pending; per-station failures become unavailable.
-- [ ] Add the All stations ViewModel with loading / content (stations, selected station, refreshed-at, refreshing flag) / error states and the initial load: loading → content with every station pending → rows replaced as the use case emits.
-- [ ] Build the screen: top bar, list of rows using the shared severity bar and wording, muted placeholder for pending rows, "No reading" for unavailable rows, warning icon for stale readings judged at render time.
-- [ ] Register the use case and ViewModel in DI.
-- [ ] Document the feature in CLAUDE.md: the feature slice, the client-side fan-out rationale, and the bottom-navigation section (FEATURE_2 becomes ALL_STATIONS).
+- [x] Rename the second tab's route and destination entry to All stations (content description and screen title "All stations"), keeping the pin icon for now; wire its destination to the new screen and update the tab tests.
+- [x] Add the per-station outcome type (pending / available with overview / unavailable) and a use case that, given the station list, starts every station's reading at once and emits the full alphabetical list after each station resolves, starting all pending; per-station failures become unavailable.
+- [x] Add the All stations ViewModel with loading / content (stations, selected station, refreshed-at, refreshing flag) / error states and the initial load: loading → content with every station pending → rows replaced as the use case emits.
+- [x] Build the screen: top bar, list of rows using the shared severity bar and wording, muted placeholder for pending rows, "No reading" for unavailable rows, warning icon for stale readings judged at render time.
+- [x] Register the use case and ViewModel in DI.
+- [x] Document the feature in CLAUDE.md: the feature slice, the client-side fan-out rationale, and the bottom-navigation section (FEATURE_2 becomes ALL_STATIONS).
 
 ### Acceptance criteria
 
-- [ ] Use-case tests show: the first emission lists every station as pending in alphabetical order; a station whose fake fails ends unavailable while others end available; with one station held by a gate, the others resolve while it stays pending; the order never changes between emissions; the final emission has every station resolved; an available station's overall severity is its worst measured taxon.
-- [ ] ViewModel tests show: loading then content; with all readings held by a gate the state is content with every station pending; partial failure gives content with unavailable entries.
-- [ ] Tab tests assert the second tab is named "All stations" and resolves for the All stations route, with the other tabs unchanged.
-- [ ] On an Android emulator against the local backend, the second tab shows the title "All stations" and fifteen alphabetical rows each with name on one line and bar plus severity word on the next; TalkBack announces the tab as "All stations".
-- [ ] On the emulator, a station whose reading the backend cannot serve (e.g. a backend run with one station's upstream failing) shows an empty muted bar with "No reading" while the other rows display normally.
-- [ ] On the emulator, a station whose reading is three or more hours old shows a warning icon next to its severity word that TalkBack announces as "Reading not current".
-- [ ] On the emulator, the back gesture from All stations returns to Home.
+- [x] Use-case tests show: the first emission lists every station as pending in alphabetical order; a station whose fake fails ends unavailable while others end available; with one station held by a gate, the others resolve while it stays pending; the order never changes between emissions; the final emission has every station resolved; an available station's overall severity is its worst measured taxon.
+- [x] ViewModel tests show: loading then content; with all readings held by a gate the state is content with every station pending; partial failure gives content with unavailable entries.
+- [x] Tab tests assert the second tab is named "All stations" and resolves for the All stations route, with the other tabs unchanged.
+- [ ] ~~On an Android emulator against the local backend, the second tab shows the title "All stations" and fifteen alphabetical rows each with name on one line and bar plus severity word on the next; TalkBack announces the tab as "All stations".~~ *(skipped in part: title, the fifteen alphabetical rows and their two-line layout verified by screenshot and uiautomator dump; the tab's accessibility node carries content-desc "All stations", but TalkBack's spoken output could not be captured when driven over adb — needs a manual listen)*
+- [x] On the emulator, a station whose reading the backend cannot serve (e.g. a backend run with one station's upstream failing) shows an empty muted bar with "No reading" while the other rows display normally. *(verified through a local proxy that returned 502 for PLU, on a one-off build pointed at it; the source change was reverted)*
+- [ ] ~~On the emulator, a station whose reading is three or more hours old shows a warning icon next to its severity word that TalkBack announces as "Reading not current".~~ *(skipped in part: the icon is verified by screenshot next to the word on Genève (proxy-aged), Neuchâtel and Payerne (genuinely 3+ hours old), and its accessibility node carries content-desc "Reading not current"; TalkBack's spoken output could not be captured over adb — needs a manual listen)*
+- [x] On the emulator, the back gesture from All stations returns to Home.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds (no JVM-only APIs, no commas in test names).
-- [ ] `./gradlew :composeApp:assembleDebug` warning lines match those before this task.
-- [ ] Our `Result` type is explicitly imported wherever it is used; no `runCatching`.
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds (no JVM-only APIs, no commas in test names).
+- [x] `./gradlew :composeApp:assembleDebug` warning lines match those before this task.
+- [x] Our `Result` type is explicitly imported wherever it is used; no `runCatching`.
 
 ## Task [03-refresh-and-full-screen-errors]
 

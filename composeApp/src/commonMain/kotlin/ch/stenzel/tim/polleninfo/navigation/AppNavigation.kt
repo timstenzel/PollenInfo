@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsScreen
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
@@ -89,10 +90,11 @@ private fun AppNavHost(
             HomeScreen()
         }
 
-        // Placeholder tabs. The title is the tab's accessibility name, so the two cannot disagree.
-        composable<Screen.Feature2> {
-            ComingSoonScreen(TopLevelDestination.FEATURE_2.contentDescription)
+        composable<Screen.AllStations> {
+            AllStationsScreen()
         }
+
+        // Placeholder tabs. The title is the tab's accessibility name, so the two cannot disagree.
         composable<Screen.Feature3> {
             ComingSoonScreen(TopLevelDestination.FEATURE_3.contentDescription)
         }

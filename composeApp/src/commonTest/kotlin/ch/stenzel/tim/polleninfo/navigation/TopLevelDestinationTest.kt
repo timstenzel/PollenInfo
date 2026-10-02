@@ -24,11 +24,11 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `there are five tabs with home first and the placeholders in order`() {
+    fun `there are five tabs with home and all stations first and the placeholders in order`() {
         assertEquals(
             listOf(
                 TopLevelDestination.HOME,
-                TopLevelDestination.FEATURE_2,
+                TopLevelDestination.ALL_STATIONS,
                 TopLevelDestination.FEATURE_3,
                 TopLevelDestination.FEATURE_4,
                 TopLevelDestination.FEATURE_5,
@@ -38,9 +38,9 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `the placeholder tabs are announced as Feature 2 to Feature 5`() {
+    fun `the tabs are announced as Home then All stations then Feature 3 to Feature 5`() {
         assertEquals(
-            listOf("Home", "Feature 2", "Feature 3", "Feature 4", "Feature 5"),
+            listOf("Home", "All stations", "Feature 3", "Feature 4", "Feature 5"),
             TopLevelDestination.entries.map { it.contentDescription },
         )
     }
@@ -67,8 +67,21 @@ class TopLevelDestinationTest {
     }
 
     @Test
+    fun `all stations is the second tab and is announced as All stations`() {
+        val second = TopLevelDestination.entries[1]
+
+        assertEquals(TopLevelDestination.ALL_STATIONS, second)
+        assertEquals(Screen.AllStations, second.screen)
+        assertEquals("All stations", second.contentDescription)
+    }
+
+    @Test
+    fun `the bar is shown on all stations with that tab selected`() {
+        assertEquals(TopLevelDestination.ALL_STATIONS, currentTabOn(Screen.AllStations))
+    }
+
+    @Test
     fun `the bar is shown on each placeholder screen`() {
-        assertEquals(TopLevelDestination.FEATURE_2, currentTabOn(Screen.Feature2))
         assertEquals(TopLevelDestination.FEATURE_3, currentTabOn(Screen.Feature3))
         assertEquals(TopLevelDestination.FEATURE_4, currentTabOn(Screen.Feature4))
         assertEquals(TopLevelDestination.FEATURE_5, currentTabOn(Screen.Feature5))

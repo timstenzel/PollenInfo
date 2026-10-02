@@ -15,12 +15,13 @@ sealed interface Screen {
     @Serializable
     data object Home : Screen
 
-    // Tabs 2–5 are reserved for features not yet defined and show `ComingSoonScreen` until then.
+    /** Every station's current reading side by side. The second bottom-bar tab. */
+    @Serializable
+    data object AllStations : Screen
+
+    // Tabs 3–5 are reserved for features not yet defined and show `ComingSoonScreen` until then.
     // Separate objects rather than one parameterised route, so each tab keeps its own saved state
     // and one can be renamed to a real feature without touching the others.
-
-    @Serializable
-    data object Feature2 : Screen
 
     @Serializable
     data object Feature3 : Screen

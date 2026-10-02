@@ -259,8 +259,8 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `PollenSeverity`. Consequence: the example screen cannot load data at runtime and will land in its
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
-For a real feature that talks to our own backend, mirror one of the two real slices instead — both
-are the same layering pointed at `:server` through `apiBaseUrl`. Neither owns its data layer any
+For a real feature that talks to our own backend, mirror one of the real slices instead — all
+are the same layering pointed at `:server` through `apiBaseUrl`. None owns its data layer any
 more: the station list and the reading pipeline they consume live in `core/` (below), so the slices
 themselves are mostly `presentation/`.
 
@@ -273,6 +273,12 @@ themselves are mostly `presentation/`.
   pull-to-refresh and retry, and a time-dependent label classified at render time
   (`ReadingAge`). `HomeViewModelTest` is the model for holding a load in flight
   (`FakeStationMeasurementRepository.gate`) to observe the intermediate state.
+- **`feature/allstations`** — many readings at once: a use case that fans out one request per
+  station and emits a growing list (`Flow<List<StationReading>>`), so rows fill in independently.
+  It has no `data/` package at all — only `domain/` (the per-station outcome and the fan-out use
+  case) and `presentation/`. `PerStationMeasurementRepository` in its `commonTest` is the fake for
+  scripting a failure or a gate **per station**, which the single-result
+  `FakeStationMeasurementRepository` cannot.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
 imports another feature, and nothing in `core/` imports a feature except the DI module that wires
@@ -465,15 +471,43 @@ see that section for why the two differ. There is deliberately no way to change 
 Home; the pin in its top bar is decorative, and station changes belong to the planned settings
 feature.
 
+#### All stations
+
+The second tab, `feature/allstations`: every station's current reading, one row per station,
+alphabetical by name and never reordered. Each row is the station name over a compact
+`SeverityBar` filled to its overall (worst) severity, with the severity word beside it — the same
+`GetStationMeasurementUseCase` derivation Home uses, so the two screens cannot disagree.
+
+**Readings are fetched client-side, one `GET /pollen/stations/{abbr}/measurements` per station, all
+fifteen in parallel** (`GetAllStationReadingsUseCase`). There is no batch endpoint and adding one
+was out of scope. This costs the backend nothing extra upstream — its 30-minute cache means at most
+one MeteoSwiss request per station per period however many users open the screen — and isolates
+failures: a 404, 502 or transport error becomes `StationReading.Unavailable` for that station only
+("No reading", empty muted bar), never an error for the screen. A batch endpoint could later
+replace the fan-out behind the same use-case signature without touching the presentation layer.
+
+The use case emits the whole list first with every station `Pending`, then again after each
+station resolves, and completes when all have. `AllStationsViewModel` shows its full-screen spinner
+only until the station list arrives; from the first emission on it is `Content`, and a pending row
+shows a faint placeholder bar and "Loading…", deliberately fainter than the "no reading" track so
+loading is not mistaken for failure. A failing station list is `Error`.
+
+A row whose reading is `Stale` per `readingAgeOf` (judged at render time, as on Home) shows a
+warning icon announced as "Reading not current" beside its word — the collapsed-row counterpart of
+Home's stale warning, and like it, the partner of the backend serving old readings through an
+outage. Its slot is reserved on every row so the bars all end at the same x.
+
+Browsing here never changes the station stored during onboarding; Home keeps showing that one.
+
 #### Bottom navigation bar
 
 `AppNavigation` wraps the `NavHost` in an outer `Scaffold` whose `bottomBar` is a Material 3
 `NavigationBar`. **`navigation/TopLevelDestination` is the tab list** — an enum in display order,
 each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
-`Screen.Home`, then `FEATURE_2` … `FEATURE_5` → `Screen.Feature2` … `Screen.Feature5`, placeholders
-for features not yet defined. All five use `Icons.Default.LocationOn` for now, at the product
-owner's request. The tabs are icon-only, so `contentDescription` ("Home", "Feature 2" … "Feature 5")
-is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
+`Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), then `FEATURE_3` …
+`FEATURE_5` → `Screen.Feature3` … `Screen.Feature5`, placeholders for features not yet defined. All
+five use `Icons.Default.LocationOn` for now, at the product owner's request. The tabs are icon-only,
+so `contentDescription` ("Home", "All stations", "Feature 3" … "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
 label.
 
 Each placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`

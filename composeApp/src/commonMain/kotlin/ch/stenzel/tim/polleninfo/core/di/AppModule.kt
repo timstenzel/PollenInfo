@@ -12,6 +12,8 @@ import ch.stenzel.tim.polleninfo.core.startup.StartupViewModel
 import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.core.station.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
+import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsViewModel
 import ch.stenzel.tim.polleninfo.feature.example.data.remote.ExampleApiService
 import ch.stenzel.tim.polleninfo.feature.example.data.repository.ExampleRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleRepository
@@ -47,6 +49,7 @@ val domainModule = module {
     factory { GetPollenSnapshotUseCase(get()) }
     factory { FindNearestStationUseCase() }
     factory { GetStationMeasurementUseCase(get()) }
+    factory { GetAllStationReadingsUseCase(get()) }
 }
 
 val presentationModule = module {
@@ -55,6 +58,7 @@ val presentationModule = module {
     // CoarseLocationProvider comes from platformModule; the ViewModel only knows the interface.
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get()) }
+    viewModel { AllStationsViewModel(get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)
