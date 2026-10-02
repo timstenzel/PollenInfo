@@ -552,6 +552,26 @@ scrolls. It is drawn on a plain canvas — no map service, tiles, key or network
   stations. Select a station in the list below." — the count comes from the list. There is no focus
   stop per dot: the dots repeat the list, and the list is where a station is operated.
 
+**Selection.** Tapping a row calls `AllStationsViewModel.onStationClicked(abbr)`: it selects that
+station, a second tap on it deselects, and tapping another replaces it — at most one is selected
+(`Content.selectedAbbr`, `null` on first open). The selected row expands beneath its header
+(`AnimatedVisibility`) into exactly Home's detail: `ReadingAgeView`, `SpeciesListHeading` and
+`SpeciesRow`s in `overview.species` order; an `Unavailable` station says "No reading available for
+this station right now." The map circles the selected dot in `primary` with a gap, so the dot's
+severity colour stays visible. The selection survives a refresh (rows are replaced, `selectedAbbr`
+is kept) and a tab switch, is never persisted, and never touches the stored home station.
+
+**The scroll is an event, not state.** Selecting sends `AllStationsEvent.ScrollToStation(abbr)` on a
+buffered `Channel` (deselecting sends nothing); `AllStationsScreen` collects it and calls
+`revealExpandedItem`, which waits for the expansion to settle (`EXPAND_DURATION_MILLIS`, shared with
+the animation) and then scrolls as little as needed for the whole row to be visible — top-aligned
+when the row is taller than the list, so its header is what shows. As state, the scroll would re-fire
+on recomposition and on returning to the tab with the selection still in place.
+
+**Accessibility of rows.** The header (name, bar, word, stale icon) is one clickable focus stop with
+a `stateDescription` of "Expanded" / "Collapsed". The expanded detail sits outside that node, so a
+screen reader does not read seven taxa as part of the row's name.
+
 Browsing here never changes the station stored during onboarding; Home keeps showing that one.
 
 #### Bottom navigation bar

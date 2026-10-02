@@ -44,9 +44,16 @@ import ch.stenzel.tim.polleninfo.theme.mapWaterLight
  * the list, so fifteen focus stops here would only be in the way.
  */
 @Composable
-fun SwissMap(stations: List<StationReading>, maxHeight: Dp, modifier: Modifier = Modifier) {
+fun SwissMap(
+    stations: List<StationReading>,
+    selectedAbbr: String?,
+    maxHeight: Dp,
+    modifier: Modifier = Modifier,
+) {
     // Read in composition: color() follows the applied scheme, which a draw block cannot ask.
     val dots = stations.map { reading -> MapDot(reading.station.position, dotStyleOf(reading)) }
+    val selected = stations.firstOrNull { it.station.abbr == selectedAbbr }?.station?.position
+    val ringColor = MaterialTheme.colorScheme.primary
     val borderFill = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = BORDER_FILL_ALPHA)
     val borderStroke = MaterialTheme.colorScheme.outline
     // Dark is read off the applied surface, the same rule as PollenSeverity.color(), so the lakes
@@ -71,6 +78,8 @@ fun SwissMap(stations: List<StationReading>, maxHeight: Dp, modifier: Modifier =
                     val borderStrokeStyle = Stroke(width = BORDER_STROKE_WIDTH.toPx(), join = StrokeJoin.Round)
                     val dotRadius = DOT_RADIUS.toPx()
                     val hollowStroke = Stroke(width = HOLLOW_DOT_STROKE_WIDTH.toPx())
+                    val ringStroke = Stroke(width = RING_STROKE_WIDTH.toPx())
+                    val ringRadius = (DOT_RADIUS + RING_GAP).toPx() + ringStroke.width / 2
                     onDrawBehind {
                         drawPath(border, borderFill)
                         // Landmarks only, beneath the border line and the dots.
@@ -91,6 +100,11 @@ fun SwissMap(stations: List<StationReading>, maxHeight: Dp, modifier: Modifier =
                                     style = hollowStroke,
                                 )
                             }
+                        }
+                        // Around the dot with a gap, never over it, so its severity colour still shows.
+                        selected?.let { position ->
+                            val p = SwissMapProjection.project(position, size.width, size.height)
+                            drawCircle(ringColor, ringRadius, Offset(p.x, p.y), style = ringStroke)
                         }
                     }
                 },
@@ -134,6 +148,8 @@ private val Station.position: GeoPoint
 
 private val DOT_RADIUS = 5.dp
 private val HOLLOW_DOT_STROKE_WIDTH = 1.5.dp
+private val RING_STROKE_WIDTH = 2.dp
+private val RING_GAP = 3.dp
 private val BORDER_STROKE_WIDTH = 1.dp
 private const val BORDER_FILL_ALPHA = 0.5f
 private val LAKE_STROKE_WIDTH = 0.75.dp

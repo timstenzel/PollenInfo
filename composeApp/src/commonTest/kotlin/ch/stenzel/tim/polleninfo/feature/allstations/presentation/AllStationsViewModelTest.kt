@@ -21,7 +21,11 @@ import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -62,6 +66,13 @@ class AllStationsViewModelTest {
     private fun failEveryStation() = measurementRepository.failFor(*allStations.map { it.abbr }.toTypedArray())
 
     private fun AllStationsViewModel.content() = assertIs<AllStationsUiState.Content>(uiState.value)
+
+    /** Every event [viewModel] sends from now on, collected for the rest of the test. */
+    private fun TestScope.collectEvents(viewModel: AllStationsViewModel): MutableList<AllStationsEvent> {
+        val events = mutableListOf<AllStationsEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.toList(events) }
+        return events
+    }
 
     @Test
     fun `starts in Loading before the station list arrives`() {
@@ -325,5 +336,116 @@ class AllStationsViewModelTest {
         advanceTimeBy(1.milliseconds)
         runCurrent()
         assertFalse(viewModel.content().isRefreshing)
+    }
+
+    @Test
+    fun `clicking a station selects it and asks once to scroll to it`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+
+        viewModel.onStationClicked("PBS")
+        advanceUntilIdle()
+
+        assertEquals("PBS", viewModel.content().selectedAbbr)
+        assertEquals(listOf<AllStationsEvent>(AllStationsEvent.ScrollToStation("PBS")), events)
+    }
+
+    @Test
+    fun `clicking the selected station again deselects it without a scroll`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+        viewModel.onStationClicked("PZH")
+        advanceUntilIdle()
+        events.clear()
+
+        viewModel.onStationClicked("PZH")
+        advanceUntilIdle()
+
+        assertNull(viewModel.content().selectedAbbr)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `clicking another station replaces the selection and scrolls to the new one`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+        viewModel.onStationClicked("PZH")
+        advanceUntilIdle()
+
+        viewModel.onStationClicked("PBE")
+        advanceUntilIdle()
+
+        assertEquals("PBE", viewModel.content().selectedAbbr)
+        assertEquals(
+            listOf<AllStationsEvent>(AllStationsEvent.ScrollToStation("PZH"), AllStationsEvent.ScrollToStation("PBE")),
+            events,
+        )
+    }
+
+    @Test
+    fun `a station can be selected while readings are still pending`() = runTest {
+        measurementRepository.gateAll = CompletableDeferred()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onStationClicked("PLU")
+
+        assertEquals("PLU", viewModel.content().selectedAbbr)
+    }
+
+    @Test
+    fun `the selection survives the rows filling in`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        measurementRepository.gates["PZH"] = gate
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onStationClicked("PZH")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals("PZH", viewModel.content().selectedAbbr)
+        assertTrue(viewModel.content().stations.all { it is StationReading.Available })
+    }
+
+    @Test
+    fun `the selection is unchanged during and after a refresh and the refresh scrolls nowhere`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+        viewModel.onStationClicked("PBS")
+        advanceUntilIdle()
+        events.clear()
+
+        val gate = CompletableDeferred<Unit>()
+        measurementRepository.gateAll = gate
+        viewModel.refresh()
+        advanceUntilIdle()
+        assertEquals("PBS", viewModel.content().selectedAbbr)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().isRefreshing)
+        assertEquals("PBS", viewModel.content().selectedAbbr)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `clicking a station outside Content does nothing`() = runTest {
+        stationRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+        val error = viewModel.uiState.value
+
+        viewModel.onStationClicked("PZH")
+        advanceUntilIdle()
+
+        assertEquals(error, viewModel.uiState.value)
+        assertTrue(events.isEmpty())
     }
 }

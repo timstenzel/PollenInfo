@@ -9,11 +9,14 @@ import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -26,6 +29,10 @@ class AllStationsViewModel(
 
     private val _uiState = MutableStateFlow<AllStationsUiState>(AllStationsUiState.Loading)
     val uiState: StateFlow<AllStationsUiState> = _uiState.asStateFlow()
+
+    /** One-shot events — see [AllStationsEvent] for why the scroll is not a field of the UI state. */
+    private val _events = Channel<AllStationsEvent>(Channel.BUFFERED)
+    val events: Flow<AllStationsEvent> = _events.receiveAsFlow()
 
     /** The station list once it has loaded — what [refresh] reads again without re-fetching it. */
     private var stations: List<Station>? = null
@@ -59,6 +66,21 @@ class AllStationsViewModel(
             minimumIndicator.join()
             completeRound(readings)
         }
+    }
+
+    /**
+     * A tap on a station's row (or its dot): selects it, or deselects it if it already was. Only one
+     * station is selected at a time, so selecting another replaces it.
+     *
+     * Selecting asks the screen to scroll the expanded row into view; deselecting does not — the
+     * user is already looking at the row they collapsed. The selection lives only here: it survives
+     * a refresh and a tab switch, but is never persisted and never touches the home station.
+     */
+    fun onStationClicked(abbr: String) {
+        val current = _uiState.value as? AllStationsUiState.Content ?: return
+        val selected = abbr.takeUnless { it == current.selectedAbbr }
+        _uiState.value = current.copy(selectedAbbr = selected)
+        if (selected != null) _events.trySend(AllStationsEvent.ScrollToStation(selected))
     }
 
     /** Leaves the error state by loading again from scratch, station list included. */

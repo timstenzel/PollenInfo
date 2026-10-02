@@ -149,27 +149,27 @@ home station. Rows announce expanded/collapsed to screen readers.
 
 ### Implementation steps
 
-- [ ] Add station-click handling to the ViewModel: select, re-click deselects, another station replaces; selecting sends a one-shot scroll-to-station event on a buffered channel, deselecting sends none; refresh keeps the selection.
-- [ ] Render the expanded row with the shared reading-age view, species heading and species rows; render the unavailable variant.
-- [ ] Draw the selection ring around the selected dot on the map.
-- [ ] Collect the scroll event in the screen and animate the list so the expanded row is fully visible, header first when taller than the viewport.
-- [ ] Make each row one focus stop with an expanded/collapsed state description.
-- [ ] Update CLAUDE.md with the selection model and the scroll-as-event decision.
+- [x] Add station-click handling to the ViewModel: select, re-click deselects, another station replaces; selecting sends a one-shot scroll-to-station event on a buffered channel, deselecting sends none; refresh keeps the selection.
+- [x] Render the expanded row with the shared reading-age view, species heading and species rows; render the unavailable variant.
+- [x] Draw the selection ring around the selected dot on the map.
+- [x] Collect the scroll event in the screen and animate the list so the expanded row is fully visible, header first when taller than the viewport.
+- [x] Make each row one focus stop with an expanded/collapsed state description.
+- [x] Update CLAUDE.md with the selection model and the scroll-as-event decision.
 
 ### Acceptance criteria
 
-- [ ] ViewModel tests show: clicking a station selects it and emits exactly one scroll event for it; clicking it again deselects and emits no event; clicking another station replaces the selection; the selection is unchanged after a refresh completes.
-- [ ] On an Android emulator, tapping the Basel row circles the Basel dot, expands the row with the unit stated once and all seven taxa ordered worst first, unmeasured taxa last as "No data" with a dash, and scrolls so the whole row is visible.
-- [ ] On the emulator, an expanded fresh reading shows a caption like "Data from 09:00", an expanded stale reading shows the highlighted "These readings are not current" warning with its time or date, and an expanded unavailable station shows "No reading available for this station right now."
-- [ ] On the emulator, tapping a different row collapses the previous one and moves the ring; tapping the selected row again collapses it and removes the ring; the ring is clearly visible in light and dark mode.
-- [ ] On the emulator, with a station selected, pulling to refresh leaves it selected and expanded; switching to Home and back shows the same selection without a reload, and Home still shows the onboarding station.
-- [ ] With TalkBack, each row is one focus stop announcing the name, severity and expanded or collapsed.
+- [x] ViewModel tests show: clicking a station selects it and emits exactly one scroll event for it; clicking it again deselects and emits no event; clicking another station replaces the selection; the selection is unchanged after a refresh completes. *(`AllStationsViewModelTest`, 27 tests, 0 failures — 7 new: select + one event, re-click deselects with no event, switch replaces, select while pending, survives rows filling in, unchanged during and after a refresh with no event, ignored outside Content)*
+- [x] On an Android emulator, tapping the Basel row circles the Basel dot, expands the row with the unit stated once and all seven taxa ordered worst first, unmeasured taxa last as "No data" with a dash, and scrolls so the whole row is visible. *(via a local proxy rewriting PBS to Birch 120 High, Beech 20 Moderate, Alder 3 / Grasses 4 Low, Oak 0, Ash and Hazel unmeasured, on a one-off build pointed at it; source change reverted: ring around the Basel dot, order Birch, Beech, Alder, Grasses, Oak, then Ash and Hazel "No data –", "concentration in grains/m3" once; the row is taller than the list, so its header is aligned to the list top. Lugano near the bottom edge scrolled just enough for its whole row to show)*
+- [x] On the emulator, an expanded fresh reading shows a caption like "Data from 09:00", an expanded stale reading shows the highlighted "These readings are not current" warning with its time or date, and an expanded unavailable station shows "No reading available for this station right now." *(Basel "Data from 19:00"; Bern "Data from 18:00 today" and Genève (proxied 29 Sept) "Data from 29 September", both in the errorContainer warning with "These readings are not current."; Lugano (proxied 502) shows the unavailable text)*
+- [x] On the emulator, tapping a different row collapses the previous one and moves the ring; tapping the selected row again collapses it and removes the ring; the ring is clearly visible in light and dark mode. *(Basel → Bern: Basel collapsed, ring moved to Bern; Bern again: collapsed, no ring; screenshots in light and in `cmd uimode night yes`, the ring stays clear in both, and the theme change kept the selection without a scroll jump)*
+- [x] On the emulator, with a station selected, pulling to refresh leaves it selected and expanded; switching to Home and back shows the same selection without a reload, and Home still shows the onboarding station. *(Genève selected: pull-to-refresh moved "Refreshed" 21:26 → 21:28 and Genève stayed expanded and circled; Home → All stations: same selection and scroll position, proxy log 32 requests before and after (no reload); Home showed Bern, the onboarding station)*
+- [ ] ~~With TalkBack, each row is one focus stop announcing the name, severity and expanded or collapsed.~~ *(skipped in part: uiautomator shows each row header as one clickable, focusable node with non-focusable name and severity children, and the expanded detail outside it; uiautomator does not expose `stateDescription` and TalkBack's spoken output could not be captured over adb — needs a manual listen)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] The scroll request is not represented as a field of the UI state (code review).
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
+- [x] The scroll request is not represented as a field of the UI state (code review).
 
 ## Task [06-tap-map-dot-selects-station]
 
