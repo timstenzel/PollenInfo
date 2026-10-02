@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 
 sealed interface OnboardingUiState {
     data object Loading : OnboardingUiState

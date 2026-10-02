@@ -12,7 +12,7 @@ import io.ktor.client.request.parameter
  * a Ktor service is shaped and tested.
  *
  * A real feature talks to our own backend instead: see
- * [StationApiService][ch.stenzel.tim.polleninfo.feature.onboarding.data.remote.StationApiService],
+ * [StationApiService][ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService],
  * which takes its base URL as a constructor parameter and is handed
  * [apiBaseUrl][ch.stenzel.tim.polleninfo.core.network.apiBaseUrl] by Koin.
  */

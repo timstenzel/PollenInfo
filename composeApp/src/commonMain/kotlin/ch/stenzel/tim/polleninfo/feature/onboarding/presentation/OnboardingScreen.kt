@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.location.rememberCoarseLocationPermissionRequester
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable

@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase
 
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.cos

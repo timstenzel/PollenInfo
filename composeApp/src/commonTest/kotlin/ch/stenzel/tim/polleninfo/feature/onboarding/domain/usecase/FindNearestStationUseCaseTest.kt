@@ -1,7 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase
 
-import ch.stenzel.tim.polleninfo.feature.onboarding.allStations
-import ch.stenzel.tim.polleninfo.feature.onboarding.station
+import ch.stenzel.tim.polleninfo.core.station.allStations
+import ch.stenzel.tim.polleninfo.core.station.station
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

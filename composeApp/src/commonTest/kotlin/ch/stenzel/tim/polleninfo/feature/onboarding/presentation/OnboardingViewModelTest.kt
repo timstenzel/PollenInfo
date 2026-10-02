@@ -6,10 +6,18 @@ import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
-import ch.stenzel.tim.polleninfo.feature.onboarding.FakeStationRepository
-import ch.stenzel.tim.polleninfo.feature.onboarding.expectedStationNamesAlphabetical
-import ch.stenzel.tim.polleninfo.feature.onboarding.station
+import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
+import ch.stenzel.tim.polleninfo.core.station.expectedStationNamesAlphabetical
+import ch.stenzel.tim.polleninfo.core.station.station
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -21,14 +29,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {

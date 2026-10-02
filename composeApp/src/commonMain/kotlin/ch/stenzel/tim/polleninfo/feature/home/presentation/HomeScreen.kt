@@ -2,8 +2,8 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,15 +14,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -33,10 +31,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.ReadingAge
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.readingAgeOf
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
+import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
+import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
+import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
+import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesListHeading
+import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesRow
+import ch.stenzel.tim.polleninfo.core.ui.severity.label
+import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import kotlinx.datetime.Clock
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -134,46 +137,6 @@ private fun StationTitle(stationName: String) {
     }
 }
 
-/**
- * A fresh reading gets an unobtrusive caption. A stale one gets a warning in the error container
- * colours with an icon, so it differs in weight and shape rather than only in wording — the backend
- * keeps serving its last reading through an upstream outage, and this is what stops that reading
- * passing for today's.
- */
-@Composable
-private fun ReadingAgeView(age: ReadingAge) {
-    when (age) {
-        is ReadingAge.Fresh -> Text(
-            text = age.label(),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        is ReadingAge.Stale -> Surface(
-            color = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Decorative: the text beside it carries the whole message.
-                Icon(imageVector = Icons.Default.Warning, contentDescription = null)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(text = age.label(), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        text = "These readings are not current.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
     Column(
@@ -191,56 +154,6 @@ private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
                 text = "Driven by $drivenBy",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** The unit is stated once here, so the numbers on the rows can stay bare and scannable. */
-@Composable
-private fun SpeciesListHeading(unit: String) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Text(
-            text = "All species",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "concentration in $unit",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * Two lines: the name, then the bar, the severity word and the concentration.
- *
- * A taxon the station does not report says "No data" with a dash, never "None" with a 0 — those
- * are a measurement of clean air, and a user who reacts to this taxon must not mistake one for the
- * other.
- */
-@Composable
-private fun SpeciesRow(reading: SpeciesReading) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = reading.name, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(4.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SeverityBar(reading.severity, SeverityBarSize.Compact, Modifier.weight(1f))
-            Spacer(Modifier.width(16.dp))
-            // Fixed widths, so the bars all end at the same x and the words and numbers each form
-            // a column down the list.
-            Text(
-                text = reading.severity?.label() ?: "No data",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(SEVERITY_WORD_WIDTH),
-            )
-            Text(
-                text = reading.concentration?.toString() ?: "–",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.End,
-                modifier = Modifier.width(CONCENTRATION_WIDTH),
             )
         }
     }
@@ -267,19 +180,4 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) { Text("Retry") }
     }
-}
-
-private val SEVERITY_WORD_WIDTH = 88.dp
-private val CONCENTRATION_WIDTH = 56.dp
-
-/**
- * The single home of the severity wording. Every severity is spelled out as a word — the screen
- * must stay fully readable to someone who cannot tell its colours apart.
- */
-private fun PollenSeverity.label(): String = when (this) {
-    PollenSeverity.NONE -> "None"
-    PollenSeverity.LOW -> "Low"
-    PollenSeverity.MODERATE -> "Moderate"
-    PollenSeverity.HIGH -> "High"
-    PollenSeverity.VERY_HIGH -> "Very high"
 }

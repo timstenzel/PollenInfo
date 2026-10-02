@@ -8,8 +8,8 @@ import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.model.Station
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel

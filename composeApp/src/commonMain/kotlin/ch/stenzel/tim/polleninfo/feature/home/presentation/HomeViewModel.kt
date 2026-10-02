@@ -2,10 +2,11 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
-import ch.stenzel.tim.polleninfo.feature.home.domain.usecase.GetStationMeasurementUseCase
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
-import kotlin.time.Duration.Companion.milliseconds
 
 class HomeViewModel(
     selectedStationRepository: SelectedStationRepository,

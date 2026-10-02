@@ -8,27 +8,27 @@ new location. It is the enabling slice for every later task.
 
 ### Implementation steps
 
-- [ ] Before changing anything, take emulator screenshots of Home (light and dark, one fresh and one stale reading) as the comparison baseline, and record the warning lines of `./gradlew :composeApp:assembleDebug` on the current state.
-- [ ] Move the station model, repository (interface + implementation), API service, DTO and mapper from the onboarding feature into a shared `core/station` area; keep the nearest-station use case in onboarding.
-- [ ] Move the reading model (measurement, species reading, severity, overview, reading age and its stale threshold), repository (interface + implementation), API service, DTO, mapper and the get-station-measurement use case from the home feature into a shared `core/measurement` area.
-- [ ] Move the severity bar, severity colours, reading-age and "refreshed" labels into a shared `core/ui/severity` area; extract Home's private species row, species list heading, severity wording and reading-age view into it as reusable composables, and have Home call the shared versions.
-- [ ] Move the matching tests and fixtures (station fixtures, fake station repository, measurement fixtures with the gated fake measurement repository) alongside their subjects in `commonTest`.
-- [ ] Update DI and navigation imports (no binding changes) and KDoc links that point at the old packages (e.g. in the example API service).
-- [ ] Update CLAUDE.md wherever it names the old locations (severity colours, reading age, the feature slice descriptions, "cross-feature code lives in core").
+- [x] Before changing anything, take emulator screenshots of Home (light and dark, one fresh and one stale reading) as the comparison baseline, and record the warning lines of `./gradlew :composeApp:assembleDebug` on the current state.
+- [x] Move the station model, repository (interface + implementation), API service, DTO and mapper from the onboarding feature into a shared `core/station` area; keep the nearest-station use case in onboarding.
+- [x] Move the reading model (measurement, species reading, severity, overview, reading age and its stale threshold), repository (interface + implementation), API service, DTO, mapper and the get-station-measurement use case from the home feature into a shared `core/measurement` area.
+- [x] Move the severity bar, severity colours, reading-age and "refreshed" labels into a shared `core/ui/severity` area; extract Home's private species row, species list heading, severity wording and reading-age view into it as reusable composables, and have Home call the shared versions.
+- [x] Move the matching tests and fixtures (station fixtures, fake station repository, measurement fixtures with the gated fake measurement repository) alongside their subjects in `commonTest`.
+- [x] Update DI and navigation imports (no binding changes) and KDoc links that point at the old packages (e.g. in the example API service).
+- [x] Update CLAUDE.md wherever it names the old locations (severity colours, reading age, the feature slice descriptions, "cross-feature code lives in core").
 
 ### Acceptance criteria
 
-- [ ] No file under `feature/home` or `feature/onboarding` defines the station, measurement, severity, reading-age, severity-bar, severity-colour or species-row code any more; each exists exactly once under `core/`.
-- [ ] A grep over `composeApp/src` shows `feature.home` / `feature.onboarding` imported only by files inside that feature plus the DI module and the navigation host; no file under `core/` imports any `feature.*` package; no KDoc link points at a moved class's old package.
-- [ ] Every test that existed before the move still exists with unchanged assertions, and `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] Emulator screenshots of Home after the move (light and dark, one fresh and one stale reading) are identical to the baseline apart from clock times.
-- [ ] Onboarding on an Android emulator still lists stations alphabetically and completes to Home.
+- [x] No file under `feature/home` or `feature/onboarding` defines the station, measurement, severity, reading-age, severity-bar, severity-colour or species-row code any more; each exists exactly once under `core/`.
+- [x] A grep over `composeApp/src` shows `feature.home` / `feature.onboarding` imported only by files inside that feature plus the DI module and the navigation host; no file under `core/` imports any `feature.*` package; no KDoc link points at a moved class's old package.
+- [x] Every test that existed before the move still exists with unchanged assertions, and `./gradlew :composeApp:testDebugUnitTest` passes.
+- [x] Emulator screenshots of Home after the move (light and dark, one fresh and one stale reading) are identical to the baseline apart from clock times.
+- [x] Onboarding on an Android emulator still lists stations alphabetically and completes to Home.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] `./gradlew :composeApp:assembleDebug` succeeds and its warning lines match the recorded baseline.
-- [ ] `git diff -M --stat` reports each moved file as a rename; non-rename hunks touch only `package`/`import` lines, visibility modifiers, KDoc links and the extracted composables.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
+- [x] `./gradlew :composeApp:assembleDebug` succeeds and its warning lines match the recorded baseline.
+- [ ] `git diff -M --stat` reports each moved file as a rename; non-rename hunks touch only `package`/`import` lines, visibility modifiers, KDoc links and the extracted composables. *(failed in the letter: at the default 50 % threshold two 16–17-line files — `StationRepositoryImpl`, `StationMeasurementRepositoryImpl` — show as delete + add, at 46 % / 49 % similarity, because most of their lines are the rewritten package/imports; `git diff -M30%` reports both as renames and their whole diff is `package`/`import` lines. All other moved files are renames at the default threshold, and every non-rename hunk is a `package`/`import` line, one of two KDoc links, or the extracted composables.)*
 
 ## Task [02-all-stations-tab-lists-every-station]
 

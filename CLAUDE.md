@@ -188,7 +188,7 @@ at 3.38).
 | no reading | —           | —            | 0 %, muted track |
 
 `:theme` cannot depend on the app, so it never sees `PollenSeverity`. **The mapping from severity to
-colour lives in `feature/home/presentation/SeverityColors.kt`**, and it picks light or dark from the
+colour lives in `core/ui/severity/SeverityColors.kt`**, and it picks light or dark from the
 luminance of the applied `colorScheme.surface` rather than `isSystemInDarkTheme()`, so it follows a
 `darkTheme` override and Android's dynamic schemes. Note that on Android 12+ `PollenInfoTheme` uses
 dynamic colour, so the surface on device is not exactly the `surfaceLight` / `surfaceDark` the
@@ -204,7 +204,7 @@ bar sits beside its severity word.
 
 Above the overall bar, the home screen says how current its reading is. `measuredAt` travels from
 the wire to `HomeUiState.Content` as an `Instant`, and the screen classifies it at render time with
-`readingAgeOf(measuredAt, now)` in `feature/home/domain/model/ReadingAge.kt` — a pure function, so
+`readingAgeOf(measuredAt, now)` in `core/measurement/domain/model/ReadingAge.kt` — a pure function, so
 the boundary and the UTC → local conversion are tested without a ViewModel or a composable.
 
 - **Less than 3 hours old** (`STALE_AFTER`) → `ReadingAge.Fresh(localTime)`, a quiet caption:
@@ -219,7 +219,7 @@ Both are in the **device's** time zone, not the source's UTC. The stale warning 
 of the backend serving its last known reading through an upstream outage with no maximum age: if the
 warning were ever removed, a stale reading would pass for current. Keep the two together.
 
-Below it sits a second caption, "Refreshed 10:42" (`refreshedLabel` in `ReadingAgeLabel.kt`; it
+Below it sits a second caption, "Refreshed 10:42" (`refreshedLabel` in `core/ui/severity/ReadingAgeLabel.kt`; it
 adds the date once it is no longer today). That is `Content.refreshedAt`, the time the app last
 *received* a reading, stamped by `HomeViewModel` from an injected `kotlinx.datetime.Clock`. It is
 a different fact from `measuredAt`: within the backend's cache period a refresh moves it while the
@@ -260,10 +260,13 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
 For a real feature that talks to our own backend, mirror one of the two real slices instead — both
-are the same layering pointed at `:server` through `apiBaseUrl`:
+are the same layering pointed at `:server` through `apiBaseUrl`. Neither owns its data layer any
+more: the station list and the reading pipeline they consume live in `core/` (below), so the slices
+themselves are mostly `presentation/`.
 
 - **`feature/onboarding`** — a form: one list fetched once, a user choice persisted through
-  `core/preferences`, and completion delivered as a one-shot event.
+  `core/preferences`, and completion delivered as a one-shot event. Its own domain code is
+  `FindNearestStationUseCase`, which has no other consumer.
 - **`feature/home`** — a dashboard over a reading: a ViewModel that *observes* a stored selection
   and reloads on change, derived rules (worst severity, ordering) kept in a use case so they are
   tested without Compose, the full `Loading` / `Content(isRefreshing)` / `Error` cycle with
@@ -271,7 +274,20 @@ are the same layering pointed at `:server` through `apiBaseUrl`:
   (`ReadingAge`). `HomeViewModelTest` is the model for holding a load in flight
   (`FakeStationMeasurementRepository.gate`) to observe the intermediate state.
 
-Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`).
+Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
+imports another feature, and nothing in `core/` imports a feature except the DI module that wires
+them. Code moves to `core/` once a second feature needs it, keeping the same
+`data/` / `domain/` layering inside:
+
+| Package | Contains |
+| --- | --- |
+| `core/station` | `Station`, `StationRepository`(+`Impl`), `StationApiService`, `StationDto`, `StationMapper` — `GET /pollen/stations`, sorted alphabetically by name |
+| `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
+| `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
+
+Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
+`FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
+`FakeStationMeasurementRepository`).
 
 ### Talking to our own backend
 

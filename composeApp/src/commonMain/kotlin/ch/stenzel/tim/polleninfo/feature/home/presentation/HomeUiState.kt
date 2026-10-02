@@ -1,7 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.home.presentation
 
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.PollenSeverity
-import ch.stenzel.tim.polleninfo.feature.home.domain.model.SpeciesReading
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import kotlinx.datetime.Instant
 
 /**
