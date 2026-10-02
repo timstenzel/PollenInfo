@@ -77,24 +77,24 @@ a Retry button that reloads. Returning to the tab shows the saved state without 
 
 ### Implementation steps
 
-- [ ] Add refresh to the ViewModel: only from content, sets the refreshing flag, keeps the current rows (no reset to pending), replaces them with the new round's final result, does not re-fetch the station list, stamps refreshed-at from an injected clock (defaulted parameter, as on Home).
-- [ ] Add the error rules: station-list failure → error; every reading unavailable (initial load or refresh) → error; retry restarts the full load.
-- [ ] Add the refreshed caption, pull-to-refresh around the list, and the full-screen error view with Retry to the screen.
-- [ ] Update CLAUDE.md with the refresh and error rules.
+- [x] Add refresh to the ViewModel: only from content, sets the refreshing flag, keeps the current rows (no reset to pending), replaces them with the new round's final result, does not re-fetch the station list, stamps refreshed-at from an injected clock (defaulted parameter, as on Home).
+- [x] Add the error rules: station-list failure → error; every reading unavailable (initial load or refresh) → error; retry restarts the full load.
+- [x] Add the refreshed caption, pull-to-refresh around the list, and the full-screen error view with Retry to the screen.
+- [x] Update CLAUDE.md with the refresh and error rules.
 
 ### Acceptance criteria
 
-- [ ] ViewModel tests show: station-list failure gives error and retry recovers; all readings failing gives error and retry after the readings recover gives content; refreshed-at is absent until the first round completes and then equals the injected clock.
-- [ ] ViewModel tests show: during a gated refresh the refreshing flag is true and the previous readings are still in the state; the station list is fetched only once across a refresh; all readings failing on refresh gives error.
-- [ ] On an Android emulator, pulling down on the list shows a refresh indicator while the rows stay visible, and afterwards the "Refreshed" caption shows the new time.
-- [ ] On the emulator, with the backend stopped, opening the tab shows the full-screen error with Retry; after restarting the backend, tapping Retry shows the fifteen rows.
-- [ ] On the emulator, switching to Home and back to All stations shows the same rows with no loading indicator and an unchanged "Refreshed" caption.
+- [x] ViewModel tests show: station-list failure gives error and retry recovers; all readings failing gives error and retry after the readings recover gives content; refreshed-at is absent until the first round completes and then equals the injected clock.
+- [x] ViewModel tests show: during a gated refresh the refreshing flag is true and the previous readings are still in the state; the station list is fetched only once across a refresh; all readings failing on refresh gives error.
+- [x] On an Android emulator, pulling down on the list shows a refresh indicator while the rows stay visible, and afterwards the "Refreshed" caption shows the new time.
+- [x] On the emulator, with the backend stopped, opening the tab shows the full-screen error with Retry; after restarting the backend, tapping Retry shows the fifteen rows.
+- [x] On the emulator, switching to Home and back to All stations shows the same rows with no loading indicator and an unchanged "Refreshed" caption.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] `./gradlew :composeApp:assembleDebug` warning lines match those before this task.
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
+- [x] `./gradlew :composeApp:assembleDebug` warning lines match those before this task.
 
 ## Task [04-swiss-map-shows-station-dots]
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,6 +40,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
+import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -52,12 +55,20 @@ import org.koin.compose.viewmodel.koinViewModel
 fun AllStationsScreen(viewModel: AllStationsViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    AllStationsContent(uiState)
+    AllStationsContent(
+        uiState = uiState,
+        onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AllStationsContent(uiState: AllStationsUiState) {
+private fun AllStationsContent(
+    uiState: AllStationsUiState,
+    onRefresh: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Scaffold(
         // The title matches the tab's accessibility name, so what is announced and what is shown
         // cannot disagree.
@@ -68,9 +79,9 @@ private fun AllStationsContent(uiState: AllStationsUiState) {
             // Only until the station list is known; readings never hold the screen up.
             is AllStationsUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
 
-            is AllStationsUiState.Content -> StationList(uiState.stations, modifier)
+            is AllStationsUiState.Content -> ContentView(uiState, onRefresh, modifier)
 
-            is AllStationsUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message) }
+            is AllStationsUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
         }
     }
 }
@@ -80,11 +91,36 @@ private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
     Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StationList(stations: List<StationReading>, modifier: Modifier) {
+private fun ContentView(content: AllStationsUiState.Content, onRefresh: () -> Unit, modifier: Modifier) {
     // Sampled at composition and deliberately not remembered, as on Home: staleness is a fact
     // about now, so a later recomposition must be free to escalate a row to stale.
     val now = Clock.System.now()
+    Column(modifier) {
+        // Moves on every completed round even when the backend's cache returns the same readings —
+        // that is how the user sees that a refresh happened. Absent until the first round is in.
+        content.refreshedAt?.let { refreshedAt ->
+            Text(
+                text = refreshedLabel(refreshedAt, now),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+        }
+        // Only the list is inside pull-to-refresh; the rows stay composed while it runs.
+        PullToRefreshBox(
+            isRefreshing = content.isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        ) {
+            StationList(content.stations, now, Modifier.fillMaxSize())
+        }
+    }
+}
+
+@Composable
+private fun StationList(stations: List<StationReading>, now: Instant, modifier: Modifier) {
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(vertical = 8.dp)) {
         items(stations, key = { it.station.abbr }) { reading ->
             StationRow(reading, now)
@@ -171,7 +207,7 @@ private fun StaleIcon() {
 }
 
 @Composable
-private fun ErrorView(message: String) {
+private fun ErrorView(message: String, onRetry: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = "The stations could not be loaded.",
@@ -185,6 +221,8 @@ private fun ErrorView(message: String) {
             color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
 

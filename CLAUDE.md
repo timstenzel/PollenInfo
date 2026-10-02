@@ -490,7 +490,23 @@ The use case emits the whole list first with every station `Pending`, then again
 station resolves, and completes when all have. `AllStationsViewModel` shows its full-screen spinner
 only until the station list arrives; from the first emission on it is `Content`, and a pending row
 shows a faint placeholder bar and "Loading…", deliberately fainter than the "no reading" track so
-loading is not mistaken for failure. A failing station list is `Error`.
+loading is not mistaken for failure.
+
+**Errors.** The screen is `Error` — full screen, with Retry — in exactly two cases: the station list
+fails, or a round completes with **every** station `Unavailable` (on the initial load or on a
+refresh). Fifteen "No reading" rows would hide an unreachable backend behind fourteen
+per-station-looking failures; a single answered station keeps the list. `retry()` restarts the full
+load; the station list is re-fetched only if it never arrived.
+
+**Refresh.** A "Refreshed 10:42" caption (`refreshedLabel`) sits above the list and is absent until
+the first round completes — `Content.refreshedAt` is stamped from an injected
+`kotlinx.datetime.Clock` (a defaulted constructor parameter, as on `HomeViewModel`) when a round
+completes, not when rows fill in. Pull-to-refresh wraps only the list and works from `Content`
+only: it sets `isRefreshing`, keeps the current rows exactly as they are (no reset to `Pending`),
+does **not** re-fetch the station list, and replaces all rows at once with the new round's *final*
+result — intermediate emissions are skipped, so a refresh never shows a mix of rounds. It holds the
+flag for `MIN_REFRESH_INDICATOR` for the same reason Home does. There is no reload on returning to
+the tab: the ViewModel survives through `navigateToTab`'s saved state, caption included.
 
 A row whose reading is `Stale` per `readingAgeOf` (judged at render time, as on Home) shows a
 warning icon announced as "Reading not current" beside its word — the collapsed-row counterpart of
