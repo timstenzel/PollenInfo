@@ -453,9 +453,17 @@ feature.
 
 `AppNavigation` wraps the `NavHost` in an outer `Scaffold` whose `bottomBar` is a Material 3
 `NavigationBar`. **`navigation/TopLevelDestination` is the tab list** — an enum in display order,
-each entry carrying its `Screen`, icon and `contentDescription`. Today it holds only `HOME` →
-`Screen.Home`. The tabs are icon-only, so `contentDescription` is the only name a screen reader has
-to tell them apart; it is set on the `Icon`, and the item has no label.
+each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
+`Screen.Home`, then `FEATURE_2` … `FEATURE_5` → `Screen.Feature2` … `Screen.Feature5`, placeholders
+for features not yet defined. All five use `Icons.Default.LocationOn` for now, at the product
+owner's request. The tabs are icon-only, so `contentDescription` ("Home", "Feature 2" … "Feature 5")
+is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
+label.
+
+Each placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`
+with a `TopAppBar` naming the tab (its `contentDescription`, so the title and the spoken name cannot
+disagree), a pin and "Coming soon". The placeholder routes are separate `data object`s rather than
+one parameterised route, so each tab keeps its own saved state.
 
 **The bar is shown exactly when the current back-stack destination is a tab** — never on
 `Onboarding` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
@@ -471,6 +479,27 @@ own. The `NavHost` gets `Modifier.padding(innerPadding).consumeWindowInsets(inne
 consume is what stops Home's inner `Scaffold` re-applying the bottom inset as a double gap above the
 bar. Off a tab the bar is absent, `innerPadding` is zero and the screen lays out as if there were no
 outer `Scaffold`.
+
+**Switching tabs** goes through `navigateToTab` in `AppNavigation.kt`:
+`popUpTo<Screen.Home> { saveState = true }`, `launchSingleTop = true`, `restoreState = true`. So:
+
+- **At most one tab sits above Home** on the back stack — switching never builds up history.
+- **Back from any placeholder returns to Home; back from Home leaves the app**, on both launch paths.
+  No `BackHandler` is involved.
+- **Each tab keeps its state.** The tab being left is saved and the one entered is restored, so
+  Home's `HomeViewModel` survives a round trip and its readings reappear without a reload.
+- **Reselecting the current tab does nothing** — the click is skipped, not a refresh.
+
+It pops up to `Screen.Home`, deliberately **not** `graph.findStartDestination()` as in the usual
+Compose sample: after a fresh install the graph's start destination is `Onboarding`, which has
+already been popped, and a `popUpTo` on a destination not in the back stack is silently ignored —
+history would then pile up with every tab switch.
+
+**Replacing a placeholder with a real feature:** rename the `Screen.FeatureN` object (and its
+`TopLevelDestination` entry, with a real icon and `contentDescription`), and point its
+`composable<Screen.X>` in `AppNavigation` at the feature's screen instead of `ComingSoonScreen`.
+Nothing else knows about the tab. Update the order and name assertions in
+`TopLevelDestinationTest`.
 
 ### The startup gate
 

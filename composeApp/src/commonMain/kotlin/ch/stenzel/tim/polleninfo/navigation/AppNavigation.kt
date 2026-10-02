@@ -46,9 +46,8 @@ fun AppNavigation(startDestination: Screen) {
                     TopLevelDestination.entries.forEach { tab ->
                         NavigationBarItem(
                             selected = tab == currentTab,
-                            // Home is the only tab and is always the selected one, so there is
-                            // nowhere to navigate to yet.
-                            onClick = {},
+                            // Reselecting the current tab is a no-op, not a reload.
+                            onClick = { if (tab != currentTab) navController.navigateToTab(tab) },
                             icon = { Icon(tab.icon, contentDescription = tab.contentDescription) },
                             alwaysShowLabel = false,
                         )
@@ -90,10 +89,41 @@ private fun AppNavHost(
             HomeScreen()
         }
 
+        // Placeholder tabs. The title is the tab's accessibility name, so the two cannot disagree.
+        composable<Screen.Feature2> {
+            ComingSoonScreen(TopLevelDestination.FEATURE_2.contentDescription)
+        }
+        composable<Screen.Feature3> {
+            ComingSoonScreen(TopLevelDestination.FEATURE_3.contentDescription)
+        }
+        composable<Screen.Feature4> {
+            ComingSoonScreen(TopLevelDestination.FEATURE_4.contentDescription)
+        }
+        composable<Screen.Feature5> {
+            ComingSoonScreen(TopLevelDestination.FEATURE_5.contentDescription)
+        }
+
         // The reference feature stays registered and unchanged; it is simply no longer the start
         // destination now that the app has a real first screen.
         composable<Screen.Example> {
             ExampleScreen()
         }
+    }
+}
+
+/**
+ * Switches to [tab] keeping exactly one tab above Home on the back stack, so back from any tab
+ * lands on Home and back from Home leaves the app. The tab being left saves its state and the one
+ * being entered restores it, so Home's readings survive a round trip without reloading.
+ *
+ * Pops up to [Screen.Home] rather than `graph.findStartDestination()`: after a fresh install the
+ * start destination is Onboarding, which is already off the back stack, and a `popUpTo` on a
+ * destination that is not there is ignored — history would grow with every switch.
+ */
+private fun NavHostController.navigateToTab(tab: TopLevelDestination) {
+    navigate(tab.screen) {
+        popUpTo<Screen.Home> { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }

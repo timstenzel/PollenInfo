@@ -24,6 +24,57 @@ class TopLevelDestinationTest {
     }
 
     @Test
+    fun `there are five tabs with home first and the placeholders in order`() {
+        assertEquals(
+            listOf(
+                TopLevelDestination.HOME,
+                TopLevelDestination.FEATURE_2,
+                TopLevelDestination.FEATURE_3,
+                TopLevelDestination.FEATURE_4,
+                TopLevelDestination.FEATURE_5,
+            ),
+            TopLevelDestination.entries,
+        )
+    }
+
+    @Test
+    fun `the placeholder tabs are announced as Feature 2 to Feature 5`() {
+        assertEquals(
+            listOf("Home", "Feature 2", "Feature 3", "Feature 4", "Feature 5"),
+            TopLevelDestination.entries.map { it.contentDescription },
+        )
+    }
+
+    @Test
+    fun `every tab has its own content description`() {
+        val descriptions = TopLevelDestination.entries.map { it.contentDescription }
+
+        assertEquals(descriptions.size, descriptions.toSet().size)
+    }
+
+    @Test
+    fun `every tab has its own screen`() {
+        val screens = TopLevelDestination.entries.map { it.screen }
+
+        assertEquals(screens.size, screens.toSet().size)
+    }
+
+    @Test
+    fun `the bar is shown on every tab with that tab selected`() {
+        TopLevelDestination.entries.forEach { tab ->
+            assertEquals(tab, currentTabOn(tab.screen))
+        }
+    }
+
+    @Test
+    fun `the bar is shown on each placeholder screen`() {
+        assertEquals(TopLevelDestination.FEATURE_2, currentTabOn(Screen.Feature2))
+        assertEquals(TopLevelDestination.FEATURE_3, currentTabOn(Screen.Feature3))
+        assertEquals(TopLevelDestination.FEATURE_4, currentTabOn(Screen.Feature4))
+        assertEquals(TopLevelDestination.FEATURE_5, currentTabOn(Screen.Feature5))
+    }
+
+    @Test
     fun `the bar is hidden during onboarding`() {
         assertNull(currentTabOn(Screen.Onboarding))
     }

@@ -73,30 +73,30 @@ does nothing — on both the fresh-install and the returning-user launch path.
 
 ### Implementation steps
 
-- [ ] Add `@Serializable data object Feature2 … Feature5 : Screen`
-- [ ] Add the stateless `ComingSoonScreen(title)` composable (`Scaffold` + `TopAppBar(title)`,
+- [x] Add `@Serializable data object Feature2 … Feature5 : Screen`
+- [x] Add the stateless `ComingSoonScreen(title)` composable (`Scaffold` + `TopAppBar(title)`,
       centred pin icon and "Coming soon"), not re-applying the bottom inset
-- [ ] Extend `TopLevelDestination` with `FEATURE_2 … FEATURE_5` ("Feature 2" … "Feature 5")
-- [ ] Register `composable<Screen.FeatureN>` for all four, each rendering `ComingSoonScreen`
-- [ ] Navigate on tab click with `popUpTo<Screen.Home> { saveState = true }`,
+- [x] Extend `TopLevelDestination` with `FEATURE_2 … FEATURE_5` ("Feature 2" … "Feature 5")
+- [x] Register `composable<Screen.FeatureN>` for all four, each rendering `ComingSoonScreen`
+- [x] Navigate on tab click with `popUpTo<Screen.Home> { saveState = true }`,
       `launchSingleTop = true`, `restoreState = true`; skip navigation when the tab is already selected
-- [ ] Extend `TopLevelDestinationTest`
-- [ ] Update the `CLAUDE.md` Navigation section: the five tabs, per-tab state, back behaviour and
+- [x] Extend `TopLevelDestinationTest`
+- [x] Update the `CLAUDE.md` Navigation section: the five tabs, per-tab state, back behaviour and
       how to replace a placeholder with a real feature
 
 ### Acceptance criteria
 
-- [ ] Automated test: exactly five entries in the order `HOME`, `FEATURE_2` … `FEATURE_5`, with pairwise distinct content descriptions and pairwise distinct screens, and the visibility rule is true for all five screens (and still false for `Screen.Onboarding` and `Screen.Example`)
-- [ ] Runtime: after completing setup on a fresh install, Home shows a bar of five tabs, each a location pin icon with no text label; tapping tabs 2–5 opens a screen titled "Feature N" showing the pin and "Coming soon", with that tab highlighted, and the bar sits directly above the system navigation area with no gap or overlap
-- [ ] Runtime: with Home's readings loaded, switching Home → Feature 2 → Home shows the readings immediately with no loading indicator
-- [ ] Runtime, on both a fresh install (after setup) and a returning-user launch: Home → Feature 2 → Feature 3 → Feature 4, then back once shows Home; back again leaves the app
-- [ ] Runtime: tapping the already-selected tab changes nothing, both on Home and on a placeholder tab
-- [ ] Runtime: TalkBack announces the tabs as "Home", "Feature 2", "Feature 3", "Feature 4", "Feature 5"
-- [ ] `CLAUDE.md` Navigation section describes per-tab state, back behaviour and how to replace a placeholder with a real feature
+- [x] Automated test: exactly five entries in the order `HOME`, `FEATURE_2` … `FEATURE_5`, with pairwise distinct content descriptions and pairwise distinct screens, and the visibility rule is true for all five screens (and still false for `Screen.Onboarding` and `Screen.Example`)
+- [x] Runtime: after completing setup on a fresh install, Home shows a bar of five tabs, each a location pin icon with no text label; tapping tabs 2–5 opens a screen titled "Feature N" showing the pin and "Coming soon", with that tab highlighted, and the bar sits directly above the system navigation area with no gap or overlap
+- [x] Runtime: with Home's readings loaded, switching Home → Feature 2 → Home shows the readings immediately with no loading indicator
+- [x] Runtime, on both a fresh install (after setup) and a returning-user launch: Home → Feature 2 → Feature 3 → Feature 4, then back once shows Home; back again leaves the app
+- [x] Runtime: tapping the already-selected tab changes nothing, both on Home and on a placeholder tab
+- [ ] ~~Runtime: TalkBack announces the tabs as "Home", "Feature 2", "Feature 3", "Feature 4", "Feature 5"~~ *(skipped: the accessibility tree shows the five tab icons described as "Home", "Feature 2" … "Feature 5" in order, but TalkBack's spoken output could not be captured — the emulator runs without audio and TalkBack writes no speech log)*
+- [x] `CLAUDE.md` Navigation section describes per-tab state, back behaviour and how to replace a placeholder with a real feature
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes, including all previously existing tests
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] The build output contains no `w:` lines referencing files touched by this task
-- [ ] New test names are backtick sentences containing no commas
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes, including all previously existing tests
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] The build output contains no `w:` lines referencing files touched by this task
+- [x] New test names are backtick sentences containing no commas

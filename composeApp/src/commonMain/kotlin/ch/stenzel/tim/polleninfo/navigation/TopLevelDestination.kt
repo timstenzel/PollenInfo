@@ -17,6 +17,12 @@ enum class TopLevelDestination(
     val contentDescription: String,
 ) {
     HOME(Screen.Home, Icons.Default.LocationOn, "Home"),
+
+    // Placeholders: all share the pin until each feature gets its own icon.
+    FEATURE_2(Screen.Feature2, Icons.Default.LocationOn, "Feature 2"),
+    FEATURE_3(Screen.Feature3, Icons.Default.LocationOn, "Feature 3"),
+    FEATURE_4(Screen.Feature4, Icons.Default.LocationOn, "Feature 4"),
+    FEATURE_5(Screen.Feature5, Icons.Default.LocationOn, "Feature 5"),
     ;
 
     companion object {
