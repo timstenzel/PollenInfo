@@ -164,7 +164,7 @@ such, both in the collapsed entry and in the expanded detail.
 
 - Any change to the backend, including a batch endpoint for all stations' readings.
 - Panning, zooming or any interactive map gesture other than tapping a dot.
-- A basemap with lakes, cantons, terrain, cities or text labels on the map.
+- A basemap with cantons, terrain, cities or text labels on the map. *(The big lakes were brought into scope after task 04, at the user's request, as landmarks that make the stations easier to place; they are not drawn in the tab icon. The Bodensee and Lago Maggiore are deliberately not drawn.)*
 - Making the selected station on this screen the user's home station, or any other way to change the stored station (that belongs to the planned settings feature).
 - Persisting the selection across app restarts.
 - Automatic periodic refresh, or reload when the tab is reopened.

@@ -110,31 +110,31 @@ outline built from the same border data.
 
 ### Implementation steps
 
-- [ ] Add a fixture of all fifteen stations with abbreviation, name and WGS84 coordinates (copied from the server's station enum) next to the existing station fixtures in `commonTest`.
-- [ ] Embed a simplified Natural Earth (public domain) outer border ring of Switzerland as WGS84 points (roughly 150–300 points), with source and simplification noted.
-- [ ] Add a pure projection (equirectangular with longitude scaled by cos 46.8°, fitted inside a given canvas size and centred, with a small margin) exposing the map's aspect ratio.
-- [ ] Draw the map composable: border, dots filled with the existing composable severity colour (`PollenSeverity.color()`, not a new function — a deliberate deviation from the annex), neutral pending dots, hollow unavailable dots, size and height cap; one accessibility node whose description is derived from the station count.
-- [ ] Place the map above the refreshed caption and list so only the list scrolls and only the list is inside pull-to-refresh.
-- [ ] Build the Swiss outline tab icon from the border data through the same projection, stroke only so it tints like a Material icon; assign it to the All stations tab.
-- [ ] Update CLAUDE.md: the map's projection and border data source, the dot colour rule (shared with the bars), and the bottom-navigation icon sentence.
+- [x] Add a fixture of all fifteen stations with abbreviation, name and WGS84 coordinates (copied from the server's station enum) next to the existing station fixtures in `commonTest`. *(already present since task 02: `stationDtosInServerOrder` / `allStations` in `core/station/StationFixtures.kt`, identical to `PollenStation`; the map tests reuse it)*
+- [x] Embed a simplified Natural Earth (public domain) outer border ring of Switzerland as WGS84 points (roughly 150–300 points), with source and simplification noted.
+- [x] Add a pure projection (equirectangular with longitude scaled by cos 46.8°, fitted inside a given canvas size and centred, with a small margin) exposing the map's aspect ratio.
+- [x] Draw the map composable: border, dots filled with the existing composable severity colour (`PollenSeverity.color()`, not a new function — a deliberate deviation from the annex), neutral pending dots, hollow unavailable dots, size and height cap; one accessibility node whose description is derived from the station count.
+- [x] Place the map above the refreshed caption and list so only the list scrolls and only the list is inside pull-to-refresh.
+- [x] Build the Swiss outline tab icon from the border data through the same projection, stroke only so it tints like a Material icon; assign it to the All stations tab.
+- [x] Update CLAUDE.md: the map's projection and border data source, the dot colour rule (shared with the bars), and the bottom-navigation icon sentence.
 
 ### Acceptance criteria
 
-- [ ] Projection tests show: the border's bounding box maps to the canvas edges within the margin; for canvases wider and taller than the map the result stays inside the canvas and is centred; all fifteen stations project inside the canvas; Genève lies west of Zürich and Lugano south of Luzern; the aspect ratio lies between 1.4 and 1.7.
-- [ ] Border tests show the ring is closed (or treated as closed), has between 150 and 300 points, and contains every one of the fifteen stations.
-- [ ] On an Android emulator the map shows the full outline with fifteen dots; Genève is the left-most dot, Münsterlingen the top-right-most, Lugano and Locarno the two bottom-most; each dot's colour matches its row's bar in light and in dark mode; scrolling the list leaves the map in place.
-- [ ] On the emulator, while readings are held (slow backend) the dots are neutral, and an unavailable station's dot is hollow and muted.
-- [ ] In landscape and on a small-screen emulator profile the full outline is visible, the map height is at most about 40 % of the screen, and at least one full row is visible below it.
-- [ ] TalkBack announces the map as one element, "Map of 15 pollen stations. Select a station in the list below.", with no focus stop per dot.
-- [ ] The second tab shows a Switzerland outline while tabs 3–5 still show the pin.
+- [x] Projection tests show: the border's bounding box maps to the canvas edges within the margin; for canvases wider and taller than the map the result stays inside the canvas and is centred; all fifteen stations project inside the canvas; Genève lies west of Zürich and Lugano south of Luzern; the aspect ratio lies between 1.4 and 1.7. *(`SwissMapProjectionTest`, 7 tests, 0 failures)*
+- [x] Border tests show the ring is closed (or treated as closed), has between 150 and 300 points, and contains every one of the fifteen stations. *(`SwissBorderTest`, 4 tests, 0 failures; 203 points)*
+- [x] On an Android emulator the map shows the full outline with fifteen dots; Genève is the left-most dot, Münsterlingen the top-right-most, Lugano and Locarno the two bottom-most; each dot's colour matches its row's bar in light and in dark mode; scrolling the list leaves the map in place. *(screenshots; pixel samples: Payerne (High) dot and bar both `#B4500F` light / `#F08135` dark, a None dot and the None bar sliver both `#6B6B60` light / `#9C9C90` dark; map unmoved after two list swipes)*
+- [x] On the emulator, while readings are held (slow backend) the dots are neutral, and an unavailable station's dot is hollow and muted. *(via a local proxy delaying every reading 6 s and returning 502 for PLU, on a one-off build pointed at it; source change reverted: all dots `#B0B1BC` while held, Lugano hollow `outline` ring after the round)*
+- [x] In landscape and on a small-screen emulator profile the full outline is visible, the map height is at most about 40 % of the screen, and at least one full row is visible below it. *(landscape 2400×1080: map 230 px = 21 %, Basel row fully visible; `wm size 480x854` + density 240 (320×569 dp): map 226 px = 26 %, two full rows visible)*
+- [ ] ~~TalkBack announces the map as one element, "Map of 15 pollen stations. Select a station in the list below.", with no focus stop per dot.~~ *(skipped in part: uiautomator shows the map as a single leaf node with exactly that content-desc and no child nodes; TalkBack's spoken output could not be captured over adb — needs a manual listen)*
+- [x] The second tab shows a Switzerland outline while tabs 3–5 still show the pin. *(screenshots of the bar, selected and unselected — the outline takes both tints)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
-- [ ] The border and projection source files contain no `androidx.compose` import (grep).
-- [ ] Dot fill and the severity bar both call `PollenSeverity.color()` (code review).
-- [ ] `git diff -- '*.gradle.kts' gradle/libs.versions.toml` adds no dependency.
+- [x] `./gradlew :composeApp:testDebugUnitTest` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` succeeds.
+- [x] The border and projection source files contain no `androidx.compose` import (grep).
+- [x] Dot fill and the severity bar both call `PollenSeverity.color()` (code review).
+- [x] `git diff -- '*.gradle.kts' gradle/libs.versions.toml` adds no dependency.
 
 ## Task [05-select-station-from-list-expands-detail]
 

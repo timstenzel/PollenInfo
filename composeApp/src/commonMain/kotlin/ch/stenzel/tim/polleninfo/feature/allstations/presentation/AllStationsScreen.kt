@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -97,24 +98,35 @@ private fun ContentView(content: AllStationsUiState.Content, onRefresh: () -> Un
     // Sampled at composition and deliberately not remembered, as on Home: staleness is a fact
     // about now, so a later recomposition must be free to escalate a row to stale.
     val now = Clock.System.now()
-    Column(modifier) {
-        // Moves on every completed round even when the backend's cache returns the same readings —
-        // that is how the user sees that a refresh happened. Absent until the first round is in.
-        content.refreshedAt?.let { refreshedAt ->
-            Text(
-                text = refreshedLabel(refreshedAt, now),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+    BoxWithConstraints(modifier) {
+        // The column's height, i.e. the screen between the top bar and the bottom bar — so the cap
+        // is a share of what this screen actually has, in portrait, landscape and on small devices.
+        val mapMaxHeight = maxHeight * MAP_MAX_HEIGHT_FRACTION
+        Column(Modifier.fillMaxSize()) {
+            // Outside the list and outside pull-to-refresh: the map stays put while the list scrolls.
+            SwissMap(
+                stations = content.stations,
+                maxHeight = mapMaxHeight,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-        }
-        // Only the list is inside pull-to-refresh; the rows stay composed while it runs.
-        PullToRefreshBox(
-            isRefreshing = content.isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        ) {
-            StationList(content.stations, now, Modifier.fillMaxSize())
+            // Moves on every completed round even when the backend's cache returns the same readings —
+            // that is how the user sees that a refresh happened. Absent until the first round is in.
+            content.refreshedAt?.let { refreshedAt ->
+                Text(
+                    text = refreshedLabel(refreshedAt, now),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+            }
+            // Only the list is inside pull-to-refresh; the rows stay composed while it runs.
+            PullToRefreshBox(
+                isRefreshing = content.isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) {
+                StationList(content.stations, now, Modifier.fillMaxSize())
+            }
         }
     }
 }
@@ -230,5 +242,8 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
 private val SEVERITY_WORD_WIDTH = 88.dp
 
 private val STALE_ICON_SIZE = 20.dp
+
+/** The map's share of the screen's content height at most, so the list keeps room below it. */
+private const val MAP_MAX_HEIGHT_FRACTION = 0.4f
 
 private const val PENDING_TRACK_ALPHA = 0.2f

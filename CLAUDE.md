@@ -171,6 +171,9 @@ table can be adopted later without touching anything else.
 
 ### Severity palette and bars
 
+(The only other colours outside the Material scheme are the map's lakes, `MapPalette.kt` — see
+"All stations".)
+
 The app shows a severity as a word and a bar. The bar colours live in `:theme` as
 `SeverityPalette.kt` — `severityNoneLight` … `severityVeryHighDark`, running grey → green → amber →
 orange → red. They sit outside the Material 3 scheme, so nothing generates dark equivalents: each
@@ -276,7 +279,7 @@ themselves are mostly `presentation/`.
 - **`feature/allstations`** — many readings at once: a use case that fans out one request per
   station and emits a growing list (`Flow<List<StationReading>>`), so rows fill in independently.
   It has no `data/` package at all — only `domain/` (the per-station outcome and the fan-out use
-  case) and `presentation/`. `PerStationMeasurementRepository` in its `commonTest` is the fake for
+  case), `map/` (pure map geometry, see "All stations" below) and `presentation/`. `PerStationMeasurementRepository` in its `commonTest` is the fake for
   scripting a failure or a gate **per station**, which the single-result
   `FakeStationMeasurementRepository` cannot.
 
@@ -513,6 +516,42 @@ warning icon announced as "Reading not current" beside its word — the collapse
 Home's stale warning, and like it, the partner of the backend serving old readings through an
 outage. Its slot is reserved on every row so the bars all end at the same x.
 
+**Map.** Above the caption and the list sits `SwissMap`: Switzerland's outline and its big lakes,
+with one dot per station. It is outside the `LazyColumn` and outside pull-to-refresh, so it stays put while the list
+scrolls. It is drawn on a plain canvas — no map service, tiles, key or network request.
+
+- **Border data** is `map/SwissBorder.kt` (`SWISS_BORDER`): one closed ring of WGS84 points from
+  Natural Earth admin-0 1:10m (public domain), simplified with Douglas–Peucker at 0.01° to 203
+  points. Enclaves are ignored. The KDoc records the source and tolerance so it can be re-derived.
+- **Lakes** are `map/SwissLakes.kt` (`SWISS_LAKES`): 10 rings from Natural Earth lakes 1:10m and
+  its Europe supplement (public domain), simplified at 0.003° — Léman, Neuchâtel, Biel, Thun,
+  Brienz, Vierwaldstättersee, Zug, Zürich, Walensee, Lugano. The Bodensee and Lago Maggiore are
+  left out at the product owner's request. They
+  are **landmarks only**, there so the dots are easier to place; nothing is identified by them
+  alone. Border lakes are kept whole rather than cut at the border. `SwissLakesTest` pins each
+  lakeshore station (Genève, Lausanne, Neuchâtel, Luzern, Zürich, Lugano) to within 5 km of
+  its lake. The tab icon does **not** draw them — at 24 dp they would be noise.
+- **Projection** is `map/SwissMapProjection`: equirectangular with longitude scaled by cos 46.8°,
+  framed on the border's bounding box plus a 4 % margin, fitted inside any canvas and centred —
+  never cropped. `aspectRatio` (≈ 1.55) sizes the canvas. Border, lakes, dots and the tab icon all go
+  through the same `project`, so they agree by construction. Both files are pure Kotlin (no Compose
+  import) and tested in `commonTest` — `SwissBorderTest` checks every station lies inside the ring,
+  which catches a mirrored or lat/lon-swapped dataset.
+- **Size.** The map fills the width at its aspect ratio, capped at 40 % of the screen's content
+  height (`MAP_MAX_HEIGHT_FRACTION`, measured with `BoxWithConstraints`, so it works on iOS); when
+  capped it is narrower and centred.
+- **Dots** are filled with `PollenSeverity.color()` — the **same function the row's `SeverityBar`
+  uses**, so a dot and its bar cannot disagree, in either scheme. A `Pending` station's dot is
+  neutral `outlineVariant`; an `Unavailable` one is hollow `outline`, the dot form of the empty
+  "no reading" track. There is deliberately no separate dot colour function.
+- **Lake colours** are `mapWater*` in `:theme`'s `MapPalette.kt` — a muted blue fill plus an edge,
+  each with an explicit light and dark value (a lake is blue whatever the dynamic scheme is), picked
+  by the same surface-luminance rule as `PollenSeverity.color()`. The edge carries the shape and
+  clears 3:1 against the surface; keep the lakes quieter than the severity colours.
+- **Accessibility.** The map is one node (`clearAndSetSemantics`) announced as "Map of 15 pollen
+  stations. Select a station in the list below." — the count comes from the list. There is no focus
+  stop per dot: the dots repeat the list, and the list is where a station is operated.
+
 Browsing here never changes the station stored during onboarding; Home keeps showing that one.
 
 #### Bottom navigation bar
@@ -522,7 +561,9 @@ Browsing here never changes the station stored during onboarding; Home keeps sho
 each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
 `Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), then `FEATURE_3` …
 `FEATURE_5` → `Screen.Feature3` … `Screen.Feature5`, placeholders for features not yet defined. All
-five use `Icons.Default.LocationOn` for now, at the product owner's request. The tabs are icon-only,
+stations shows `SwissOutline` (`feature/allstations/map/SwissOutlineIcon.kt`), a stroke-only
+`ImageVector` built from `SWISS_BORDER` through `SwissMapProjection`, so it tints like a Material
+icon; the other four use `Icons.Default.LocationOn` for now, at the product owner's request. The tabs are icon-only,
 so `contentDescription` ("Home", "All stations", "Feature 3" … "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
 label.
 

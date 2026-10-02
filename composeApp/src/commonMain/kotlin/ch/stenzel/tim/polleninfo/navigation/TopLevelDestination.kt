@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.ui.graphics.vector.ImageVector
+import ch.stenzel.tim.polleninfo.feature.allstations.map.SwissOutline
 import kotlin.reflect.KClass
 
 /**
@@ -18,7 +19,7 @@ enum class TopLevelDestination(
 ) {
     HOME(Screen.Home, Icons.Default.LocationOn, "Home"),
 
-    ALL_STATIONS(Screen.AllStations, Icons.Default.LocationOn, "All stations"),
+    ALL_STATIONS(Screen.AllStations, SwissOutline, "All stations"),
 
     // Placeholders: all share the pin until each feature gets its own icon.
     FEATURE_3(Screen.Feature3, Icons.Default.LocationOn, "Feature 3"),
