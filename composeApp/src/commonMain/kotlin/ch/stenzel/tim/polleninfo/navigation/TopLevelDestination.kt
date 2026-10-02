@@ -1,0 +1,34 @@
+package ch.stenzel.tim.polleninfo.navigation
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.ui.graphics.vector.ImageVector
+import kotlin.reflect.KClass
+
+/**
+ * The tabs of the bottom navigation bar, in display order — the single place a tab is defined.
+ *
+ * The tabs are icon-only, so [contentDescription] is the only name a screen reader has to tell
+ * them apart.
+ */
+enum class TopLevelDestination(
+    val screen: Screen,
+    val icon: ImageVector,
+    val contentDescription: String,
+) {
+    HOME(Screen.Home, Icons.Default.LocationOn, "Home"),
+    ;
+
+    companion object {
+        /**
+         * The tab whose route [isOnRoute] matches, or `null` when the destination is not a tab —
+         * which is exactly when the bottom bar is hidden.
+         *
+         * Takes a predicate rather than a [NavDestination][androidx.navigation.NavDestination] so
+         * the rule is testable without a `NavController`; `AppNavigation` asks
+         * `destination.hasRoute(it)`, the tests compare classes directly.
+         */
+        fun current(isOnRoute: (KClass<out Screen>) -> Boolean): TopLevelDestination? =
+            entries.firstOrNull { isOnRoute(it.screen::class) }
+    }
+}

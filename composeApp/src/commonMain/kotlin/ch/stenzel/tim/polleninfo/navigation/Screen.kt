@@ -11,7 +11,7 @@ sealed interface Screen {
     @Serializable
     data object Onboarding : Screen
 
-    /** Placeholder main screen — stands in for the real dashboard. */
+    /** The dashboard: readings for the station chosen during setup. The first bottom-bar tab. */
     @Serializable
     data object Home : Screen
 }

@@ -449,6 +449,29 @@ see that section for why the two differ. There is deliberately no way to change 
 Home; the pin in its top bar is decorative, and station changes belong to the planned settings
 feature.
 
+#### Bottom navigation bar
+
+`AppNavigation` wraps the `NavHost` in an outer `Scaffold` whose `bottomBar` is a Material 3
+`NavigationBar`. **`navigation/TopLevelDestination` is the tab list** — an enum in display order,
+each entry carrying its `Screen`, icon and `contentDescription`. Today it holds only `HOME` →
+`Screen.Home`. The tabs are icon-only, so `contentDescription` is the only name a screen reader has
+to tell them apart; it is set on the `Icon`, and the item has no label.
+
+**The bar is shown exactly when the current back-stack destination is a tab** — never on
+`Onboarding` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
+matching tab (which is also the selected one) or `null` (bar hidden). It takes a
+`(KClass<out Screen>) -> Boolean` predicate rather than a `NavDestination`, so `AppNavigation`
+calls it with `destination.hasRoute(it)` and `TopLevelDestinationTest` with a plain class
+comparison — the tested rule is the shipped rule, not a copy.
+
+Insets: the outer `Scaffold` has `contentWindowInsets = WindowInsets(0)` and applies none itself.
+Each screen's own `Scaffold` handles the top (a system-bars inset here would add a gap above Home's
+`TopAppBar` and pad Onboarding twice), and `NavigationBar` applies the navigation-bar inset on its
+own. The `NavHost` gets `Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)`; the
+consume is what stops Home's inner `Scaffold` re-applying the bottom inset as a double gap above the
+bar. Off a tab the bar is absent, `innerPadding` is zero and the screen lays out as if there were no
+outer `Scaffold`.
+
 ### The startup gate
 
 `App()` does not compose `AppNavigation` until `core/startup/StartupViewModel` has resolved
