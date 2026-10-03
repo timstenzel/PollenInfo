@@ -10,6 +10,12 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!--
+      Pollen alarms. A runtime permission from API 33 on; below that the declaration is ignored and
+      notifications are on unless the user switched them off in system settings.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".PollenInfoApplication"
         android:allowBackup="true"

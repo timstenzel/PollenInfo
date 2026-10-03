@@ -6,12 +6,15 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.repository.StationMeasu
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.network.apiBaseUrl
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
+import ch.stenzel.tim.polleninfo.core.preferences.DataStoreNotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.startup.StartupViewModel
 import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.core.station.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsViewModel
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsViewModel
 import ch.stenzel.tim.polleninfo.feature.example.data.remote.ExampleApiService
@@ -43,6 +46,7 @@ val dataModule = module {
 
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
+    single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
 }
 
 val domainModule = module {
@@ -59,6 +63,7 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
+    viewModel { AlarmsViewModel(get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

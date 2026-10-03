@@ -337,6 +337,8 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | `NSLocationWhenInUseUsageDescription`      | A sentence explaining the station shortcut | `rememberCoarseLocationPermissionRequester` — **mandatory**: without it `CLLocationManager` silently never prompts, so the shortcut fails with no error to debug |
 | `NSLocationDefaultAccuracyReduced`         | `true` | `IosCoarseLocationProvider` — the direct expression of "coarse is enough": iOS then never asks for precise access at all |
 
+The notification permission (`IosNotificationPermissionController`) needs no `Info.plist` key.
+
 ### Error handling
 
 Never let exceptions escape the data layer. Repositories wrap calls in `safeCall { }` and return
@@ -375,7 +377,7 @@ Anything the screen should keep displaying — including error flags such as
 ### Persisted user selections
 
 `core/preferences/` owns everything the user has chosen and the app must remember.
-`SelectedStationRepository` is the only one so far: a `Flow<SelectedStation?>` that emits `null`
+`SelectedStationRepository` is the main one: a `Flow<SelectedStation?>` that emits `null`
 while nothing is stored, plus `suspend fun select(...): Result<Unit>` — a write can fail on IO, and
 the caller must react rather than move on to a screen with nothing to read.
 
@@ -387,6 +389,11 @@ keys and nothing else. It has no unit test: a real one would need a platform fil
 tests may not live in `androidUnitTest`. Every consumer is tested against
 `FakeSelectedStationRepository` in `commonTest` instead. Keep the implementation trivial enough that
 this stays an honest trade; anything worth testing belongs in a caller.
+
+`NotificationPermissionPreferences` is the second one: a single `askedBefore` flag that records
+whether the notification prompt has ever been shown, which Android needs (see "Alarms"). The same
+rules apply: `DataStoreNotificationPermissionPreferences` is logic-free and untested, and consumers
+use `FakeNotificationPermissionPreferences`.
 
 ### Location
 
@@ -589,12 +596,14 @@ Browsing here never changes the station stored during onboarding; Home keeps sho
 `AppNavigation` wraps the `NavHost` in an outer `Scaffold` whose `bottomBar` is a Material 3
 `NavigationBar`. **`navigation/TopLevelDestination` is the tab list** — an enum in display order,
 each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
-`Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), then `FEATURE_3` …
-`FEATURE_5` → `Screen.Feature3` … `Screen.Feature5`, placeholders for features not yet defined. All
+`Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), `FEATURE_3` →
+`Screen.Feature3`, `ALARMS` → `Screen.Alarms` (see "Alarms" below) and `FEATURE_5` →
+`Screen.Feature5`. Tabs 3 and 5 are placeholders for features not yet defined. All
 stations shows `SwissOutline` (`feature/allstations/map/SwissOutlineIcon.kt`), a stroke-only
 `ImageVector` built from `SWISS_BORDER` through `SwissMapProjection`, so it tints like a Material
-icon; the other four use `Icons.Default.LocationOn` for now, at the product owner's request. The tabs are icon-only,
-so `contentDescription` ("Home", "All stations", "Feature 3" … "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
+icon; Alarms shows `Icons.Default.Notifications`; the other three use `Icons.Default.LocationOn` for
+now, at the product owner's request. The tabs are icon-only,
+so `contentDescription` ("Home", "All stations", "Feature 3", "Alarms", "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
 label.
 
 Each placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`
@@ -637,6 +646,44 @@ history would then pile up with every tab switch.
 `composable<Screen.X>` in `AppNavigation` at the feature's screen instead of `ComingSoonScreen`.
 Nothing else knows about the tab. Update the order and name assertions in
 `TopLevelDestinationTest`.
+
+#### Alarms
+
+The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
+far only the permission gate and an empty state exist** — no backend contact, no alarm list, and the
+"Create alarm" button is shown disabled.
+
+**Notifications are checked first.** `AlarmsUiState` is `Loading` (renders nothing; the permission
+has not been read yet) → `PermissionRequired(state)` or `Content` (for now always "No alarms yet").
+`AlarmsViewModel.onPermissionState(state)` maps `ENABLED` to `Content` and the two other
+`NotificationPermissionState`s to `PermissionRequired`, in either direction, so revoking later brings
+the explanation back. The ViewModel never touches a platform API.
+
+`core/notifications/` holds the platform side. `NotificationPermissionState` is `ENABLED`,
+`CAN_REQUEST` (button "Allow notifications", the system prompt) or `MUST_OPEN_SETTINGS` (button
+"Open settings", the app's notification settings). `rememberNotificationPermissionController()` is a
+**`@Composable expect fun`** for the same reason as the location requester: Android's prompt needs
+an activity-scoped launcher. Its `currentStatus(askedBefore)` **suspends**, because iOS only answers
+through a completion handler.
+
+- **Android** — `NotificationManagerCompat.areNotificationsEnabled()` first, so a granted permission
+  with notifications switched off is not enabled. Not enabled below API 33 → `MUST_OPEN_SETTINGS`
+  (there is no prompt). On API 33+, `shouldShowRequestPermissionRationale` is `false` both before
+  the first request and after a permanent denial; the persisted `askedBefore` flag tells them apart
+  (`askedBefore && !rationale` → `MUST_OPEN_SETTINGS`, else `CAN_REQUEST`). Settings is
+  `ACTION_APP_NOTIFICATION_SETTINGS`. The manifest declares `POST_NOTIFICATIONS`.
+- **iOS** — `UNUserNotificationCenter`: `notDetermined` → `CAN_REQUEST`, `authorized` /
+  `provisional` / `ephemeral` → `ENABLED`, anything else → `MUST_OPEN_SETTINGS`; settings is
+  `UIApplicationOpenSettingsURLString`. Compile-verified only.
+
+**`AlarmsScreen` re-reads the state whenever its lifecycle reaches `RESUMED`** (collecting
+`lifecycle.currentStateFlow`), which is what makes returning from system settings update the screen
+on its own. It also re-reads when `askedBefore` changes and when a prompt is answered, since iOS
+prompts with an alert that does not pause the screen. It waits until `AlarmsViewModel.askedBefore`
+(`null` until read) is known, so the wrong button never flashes. Answering the prompt calls
+`onPermissionRequested()`, which sets the flag through `NotificationPermissionPreferences`.
+
+`AlarmsViewModelTest` covers the mapping and the flag. The controllers are checked by hand.
 
 ### The startup gate
 

@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsScreen
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsScreen
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
@@ -98,9 +99,11 @@ private fun AppNavHost(
         composable<Screen.Feature3> {
             ComingSoonScreen(TopLevelDestination.FEATURE_3.contentDescription)
         }
-        composable<Screen.Feature4> {
-            ComingSoonScreen(TopLevelDestination.FEATURE_4.contentDescription)
+
+        composable<Screen.Alarms> {
+            AlarmsScreen()
         }
+
         composable<Screen.Feature5> {
             ComingSoonScreen(TopLevelDestination.FEATURE_5.contentDescription)
         }

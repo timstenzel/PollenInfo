@@ -24,13 +24,13 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `there are five tabs with home and all stations first and the placeholders in order`() {
+    fun `there are five tabs with alarms fourth between the placeholders`() {
         assertEquals(
             listOf(
                 TopLevelDestination.HOME,
                 TopLevelDestination.ALL_STATIONS,
                 TopLevelDestination.FEATURE_3,
-                TopLevelDestination.FEATURE_4,
+                TopLevelDestination.ALARMS,
                 TopLevelDestination.FEATURE_5,
             ),
             TopLevelDestination.entries,
@@ -38,9 +38,9 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `the tabs are announced as Home then All stations then Feature 3 to Feature 5`() {
+    fun `the tabs are announced as Home then All stations then Feature 3 then Alarms then Feature 5`() {
         assertEquals(
-            listOf("Home", "All stations", "Feature 3", "Feature 4", "Feature 5"),
+            listOf("Home", "All stations", "Feature 3", "Alarms", "Feature 5"),
             TopLevelDestination.entries.map { it.contentDescription },
         )
     }
@@ -81,9 +81,22 @@ class TopLevelDestinationTest {
     }
 
     @Test
+    fun `alarms is the fourth tab and is announced as Alarms`() {
+        val fourth = TopLevelDestination.entries[3]
+
+        assertEquals(TopLevelDestination.ALARMS, fourth)
+        assertEquals(Screen.Alarms, fourth.screen)
+        assertEquals("Alarms", fourth.contentDescription)
+    }
+
+    @Test
+    fun `the bar is shown on alarms with that tab selected`() {
+        assertEquals(TopLevelDestination.ALARMS, currentTabOn(Screen.Alarms))
+    }
+
+    @Test
     fun `the bar is shown on each placeholder screen`() {
         assertEquals(TopLevelDestination.FEATURE_3, currentTabOn(Screen.Feature3))
-        assertEquals(TopLevelDestination.FEATURE_4, currentTabOn(Screen.Feature4))
         assertEquals(TopLevelDestination.FEATURE_5, currentTabOn(Screen.Feature5))
     }
 

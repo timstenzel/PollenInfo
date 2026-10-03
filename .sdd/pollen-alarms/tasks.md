@@ -33,31 +33,31 @@ Works on Android and iOS.
 
 ### Implementation steps
 
-- [ ] Rename `Screen.Feature4` → `Screen.Alarms` and `FEATURE_4` → `ALARMS` (bell icon `Icons.Default.Notifications`, "Alarms"); point its `composable` at a new `AlarmsScreen`; update `TopLevelDestinationTest`
-- [ ] Add `POST_NOTIFICATIONS` to the Android manifest
-- [ ] Add a logic-free DataStore preference for "notification permission asked before", with a `commonTest` fake
-- [ ] Add `NotificationPermissionState` (`ENABLED`, `CAN_REQUEST`, `MUST_OPEN_SETTINGS`) and the `@Composable expect fun rememberNotificationPermissionController()`, with two actuals:
+- [x] Rename `Screen.Feature4` → `Screen.Alarms` and `FEATURE_4` → `ALARMS` (bell icon `Icons.Default.Notifications`, "Alarms"); point its `composable` at a new `AlarmsScreen`; update `TopLevelDestinationTest`
+- [x] Add `POST_NOTIFICATIONS` to the Android manifest
+- [x] Add a logic-free DataStore preference for "notification permission asked before", with a `commonTest` fake
+- [x] Add `NotificationPermissionState` (`ENABLED`, `CAN_REQUEST`, `MUST_OPEN_SETTINGS`) and the `@Composable expect fun rememberNotificationPermissionController()`, with two actuals:
   - Android: `areNotificationsEnabled`, rationale plus the asked-before flag, and `ACTION_APP_NOTIFICATION_SETTINGS`
   - iOS: `UNUserNotificationCenter` and the settings URL
-- [ ] Add `AlarmsViewModel` / `AlarmsUiState`: `PermissionRequired(state)` and an empty `Content`, fed by `onPermissionState(...)`. The screen re-reads the state on `ON_RESUME`
-- [ ] Build `AlarmsScreen`: the permission explanation with one button per state, and the empty state
-- [ ] Update CLAUDE.md: the bottom-bar tab list, the permission gate, and the iOS `Info.plist` table if anything new is needed
+- [x] Add `AlarmsViewModel` / `AlarmsUiState`: `PermissionRequired(state)` and an empty `Content`, fed by `onPermissionState(...)`. The screen re-reads the state on `ON_RESUME`
+- [x] Build `AlarmsScreen`: the permission explanation with one button per state, and the empty state
+- [x] Update CLAUDE.md: the bottom-bar tab list, the permission gate, and the iOS `Info.plist` table if anything new is needed
 
 ### Acceptance criteria
 
-- [ ] `TopLevelDestinationTest` asserts the fourth tab is `ALARMS` → `Screen.Alarms` with content description "Alarms", and that the bar is shown on it
-- [ ] `AlarmsViewModelTest`: `CAN_REQUEST` and `MUST_OPEN_SETTINGS` each map to `PermissionRequired` with that state; `ENABLED` maps to `Content`; a later non-enabled state returns to `PermissionRequired`
-- [ ] Manual, Android 13+ emulator, fresh install: the tab shows "Allow notifications"; granting shows the empty state; after two denials the button reads "Open settings" and opens the app's notification settings; enabling notifications there and returning shows the empty state without leaving the tab
-- [ ] Manual: switching to Home and back keeps the Alarms tab's state; back from the Alarms tab returns to Home
-- [ ] Manual (TalkBack): the tab is announced as "Alarms", and the permission button announces its label
+- [x] `TopLevelDestinationTest` asserts the fourth tab is `ALARMS` → `Screen.Alarms` with content description "Alarms", and that the bar is shown on it
+- [x] `AlarmsViewModelTest`: `CAN_REQUEST` and `MUST_OPEN_SETTINGS` each map to `PermissionRequired` with that state; `ENABLED` maps to `Content`; a later non-enabled state returns to `PermissionRequired`
+- [x] Manual, Android 13+ emulator, fresh install: the tab shows "Allow notifications"; granting shows the empty state; after two denials the button reads "Open settings" and opens the app's notification settings; enabling notifications there and returning shows the empty state without leaving the tab
+- [x] Manual: switching to Home and back keeps the Alarms tab's state; back from the Alarms tab returns to Home
+- [ ] ~~Manual (TalkBack): the tab is announced as "Alarms", and the permission button announces its label~~ *(skipped: TalkBack speech cannot be captured from this environment — enabling it on the emulator only raised its own permission dialog and its utterances are not logged. Supporting evidence from the accessibility tree: the tab node has content-desc "Alarms", and the permission button exposes its text "Allow notifications" / "Open settings")*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] The merged release manifest contains `POST_NOTIFICATIONS`
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] The merged release manifest contains `POST_NOTIFICATIONS`
+- [x] No backtick test name contains a comma
 
 ## Task [02-device-registration-and-alarm-list]
 
