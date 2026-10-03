@@ -21,7 +21,6 @@ out/
 /captures
 .externalNativeBuild/
 .cxx/
-google-services.json
 
 # iOS / Xcode
 *.xcworkspace

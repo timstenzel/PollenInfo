@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "851784135431",
+    "project_id": "polleninfo-f54b2",
+    "storage_bucket": "polleninfo-f54b2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:851784135431:android:451545bd506cbada0b0ba2",
+        "android_client_info": {
+          "package_name": "ch.stenzel.tim.polleninfo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjA4XMyOsx7gMmItLeydsScq96bv4BMEk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
