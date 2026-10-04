@@ -291,6 +291,19 @@ class AlarmRoutesTest {
     }
 
     @Test
+    fun `a POST at ten alarms returns 409 with an error message and stores nothing`() = testApplication {
+        installApp()
+        val deviceId = register()
+        repeat(10) { assertEquals(HttpStatusCode.Created, postAlarm(deviceId, validDailyJson).status) }
+
+        val response = postAlarm(deviceId, validDailyJson)
+
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertTrue(Json.parseToJsonElement(response.bodyAsText()).jsonObject.containsKey("error"))
+        assertEquals(10, Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText()).jsonArray.size)
+    }
+
+    @Test
     fun `a device does not see another device's alarms`() = testApplication {
         installApp()
         val mine = register()

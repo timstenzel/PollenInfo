@@ -18,3 +18,13 @@ class InvalidAlarmException(message: String) : Exception(message)
  * list was last loaded.
  */
 class AlarmNotFoundException : Exception("This alarm no longer exists")
+
+/** How many alarms one device may hold; the backend refuses the next with `409`. */
+const val MAX_ALARMS = 10
+
+/**
+ * The device already holds [MAX_ALARMS] alarms (`409`). The list disables "Create alarm" at the
+ * limit, so this means it was reached anyway — from another install sharing the id, or a race.
+ */
+class AlarmLimitReachedException :
+    Exception("You can have at most $MAX_ALARMS alarms. Delete one to create another.")

@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ErrorDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceRequestDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceResponseDto
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import io.ktor.client.HttpClient
@@ -73,9 +74,13 @@ class AlarmApiService(
         return checkedForDevice()
     }
 
-    /** A `400` from an alarm path carries the backend's reason, which becomes [InvalidAlarmException]. */
+    /**
+     * A `400` from an alarm path carries the backend's reason, which becomes [InvalidAlarmException];
+     * a `409` is the alarm limit, [AlarmLimitReachedException].
+     */
     private suspend fun HttpResponse.checkedForDevice(): HttpResponse {
         if (status == HttpStatusCode.NotFound) throw UnknownDeviceException()
+        if (status == HttpStatusCode.Conflict) throw AlarmLimitReachedException()
         if (status == HttpStatusCode.BadRequest) {
             val reason = try {
                 body<ErrorDto>().error

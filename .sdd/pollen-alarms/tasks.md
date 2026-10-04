@@ -346,24 +346,24 @@ install sharing the id, or a race), the editor shows it as its save error.
 
 ### Implementation steps
 
-- [ ] Server: a limit check inside `AlarmStore.create`'s transaction (`LimitReached`) → `409`
-- [ ] App: a typed `AlarmLimitReached` failure from the repository
-- [ ] App: `Content.limitReached` disables the create button and shows the hint; the editor maps `AlarmLimitReached` to its `saveError`
+- [x] Server: a limit check inside `AlarmStore.create`'s transaction (`LimitReached`) → `409`
+- [x] App: a typed `AlarmLimitReached` failure from the repository
+- [x] App: `Content.limitReached` disables the create button and shows the hint; the editor maps `AlarmLimitReached` to its `saveError`
 
 ### Acceptance criteria
 
-- [ ] `ExposedStoresTest`: the 10th alarm is created and the 11th returns `LimitReached`
-- [ ] `AlarmRoutesTest`: a `POST` at 10 alarms → `409`
-- [ ] `AlarmRepositoryImplTest`: `409` maps to `AlarmLimitReached`
-- [ ] `AlarmsViewModelTest`: ten alarms → `limitReached = true`, nine → `false`. `AlarmEditorViewModelTest`: `AlarmLimitReached` on save sets a limit `saveError` and keeps the form
-- [ ] Manual: with ten alarms the create button is disabled, the hint is shown, and TalkBack announces it as disabled
+- [x] `ExposedStoresTest`: the 10th alarm is created and the 11th returns `LimitReached`
+- [x] `AlarmRoutesTest`: a `POST` at 10 alarms → `409`
+- [x] `AlarmRepositoryImplTest`: `409` maps to `AlarmLimitReached`
+- [x] `AlarmsViewModelTest`: ten alarms → `limitReached = true`, nine → `false`. `AlarmEditorViewModelTest`: `AlarmLimitReached` on save sets a limit `saveError` and keeps the form
+- [x] Manual: with ten alarms the create button is disabled, the hint is shown, and TalkBack announces it as disabled *(emulator, API 36: screenshot shows the greyed button and the hint; a tap did not open the editor; the button's accessibility node reports `enabled="false"`, which TalkBack reads as "disabled" — checked through `uiautomator`, not by listening to TalkBack. At nine alarms: enabled, no hint)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No backtick test name contains a comma
 
 ## Task [08-push-token-lifecycle]
 

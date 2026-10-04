@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,8 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,6 +52,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.notifications.rememberNotificationPermissionController
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
 import kotlinx.coroutines.flow.filter
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -132,11 +136,7 @@ private fun AlarmsContent(
         floatingActionButton = {
             // The empty state has its own, more prominent button.
             if (uiState is AlarmsUiState.Content && uiState.alarms.isNotEmpty()) {
-                ExtendedFloatingActionButton(
-                    onClick = onCreateAlarm,
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("Create alarm") },
-                )
+                CreateAlarmButton(enabled = !uiState.limitReached, onClick = onCreateAlarm)
             }
         },
     ) { padding ->
@@ -170,7 +170,13 @@ private fun AlarmsContent(
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
                     )
                 } else {
-                    AlarmList(uiState.alarms, onEditAlarm, onEnabledToggled, Modifier.fillMaxSize())
+                    AlarmList(
+                        alarms = uiState.alarms,
+                        limitReached = uiState.limitReached,
+                        onEditAlarm = onEditAlarm,
+                        onEnabledToggled = onEnabledToggled,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
 
@@ -224,11 +230,62 @@ private fun EmptyAlarmsView(onCreateAlarm: () -> Unit, modifier: Modifier) {
 }
 
 /**
+ * Material's extended FAB has no disabled state, so at the limit it takes the disabled colours of the
+ * Material 3 spec, ignores clicks and is marked disabled for screen readers.
+ */
+@Composable
+private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    ExtendedFloatingActionButton(
+        onClick = { if (enabled) onClick() },
+        icon = { Icon(Icons.Default.Add, contentDescription = null) },
+        text = { Text("Create alarm") },
+        // Composited, because a translucent button floating over the list would show the rows through it.
+        containerColor = if (enabled) {
+            colors.primaryContainer
+        } else {
+            colors.onSurface.copy(alpha = 0.12f).compositeOver(colors.surface)
+        },
+        contentColor = if (enabled) colors.onPrimaryContainer else colors.onSurface.copy(alpha = 0.38f),
+        elevation = if (enabled) {
+            FloatingActionButtonDefaults.elevation()
+        } else {
+            FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
+        },
+        modifier = if (enabled) Modifier else Modifier.semantics { disabled() },
+    )
+}
+
+/**
  * Tapping a row opens it in the editor; its switch pauses or resumes it. The switch is a focus stop
  * of its own, named after the row's station so a screen reader says what it switches.
  */
 @Composable
 private fun AlarmList(
+    alarms: List<AlarmListItem>,
+    limitReached: Boolean,
+    onEditAlarm: (alarmId: String) -> Unit,
+    onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
+    modifier: Modifier,
+) {
+    Column(modifier) {
+        // Fixed above the list rather than its first item: a list reloaded into the limit keeps its
+        // scroll anchored on the first alarm, which would leave a new first item scrolled out of view.
+        if (limitReached) {
+            Text(
+                text = "You have $MAX_ALARMS alarms, the most a device can hold. Delete one to create another.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+            HorizontalDivider()
+        }
+        AlarmRows(alarms, onEditAlarm, onEnabledToggled, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun AlarmRows(
     alarms: List<AlarmListItem>,
     onEditAlarm: (alarmId: String) -> Unit,
     onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,

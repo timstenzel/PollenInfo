@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
 
 /** What the Alarms tab shows. Alarms are only reachable once notifications are allowed. */
 sealed interface AlarmsUiState {
@@ -19,7 +20,10 @@ sealed interface AlarmsUiState {
     data class Content(
         val alarms: List<AlarmListItem>,
         val isRefreshing: Boolean = false,
-    ) : AlarmsUiState
+    ) : AlarmsUiState {
+        /** The device holds [MAX_ALARMS]: "Create alarm" is disabled and a hint says why. */
+        val limitReached: Boolean get() = alarms.size >= MAX_ALARMS
+    }
 
     /**
      * The list could not be loaded. [pushUnavailable] means it never can be on this device, so the

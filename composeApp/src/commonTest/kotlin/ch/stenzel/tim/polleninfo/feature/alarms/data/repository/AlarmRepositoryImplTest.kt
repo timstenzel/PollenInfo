@@ -15,6 +15,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
@@ -333,6 +334,20 @@ class AlarmRepositoryImplTest {
         val failure = assertIs<Result.Failure>(repository.create(draft))
 
         assertEquals("Select at least one day", assertIs<InvalidAlarmException>(failure.exception).message)
+        assertEquals(0, registration.clearCount)
+    }
+
+    @Test
+    fun `a 409 on create fails with AlarmLimitReached without re-registering`() = runTest {
+        registration.store("device-1")
+        val repository = repository {
+            respond("""{"error":"A device can hold at most 10 alarms"}""", HttpStatusCode.Conflict, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.create(draft))
+
+        assertIs<AlarmLimitReachedException>(failure.exception)
+        assertEquals(1, recorded.size)
         assertEquals(0, registration.clearCount)
     }
 

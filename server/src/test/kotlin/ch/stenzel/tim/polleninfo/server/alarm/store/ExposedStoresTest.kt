@@ -166,6 +166,36 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `the tenth alarm is created and the eleventh reaches the limit`() = runTest {
+        val id = devices.register("token-1")
+        repeat(9) { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())) }
+
+        assertIs<CreateResult.Created>(alarms.create(id, dailySpec()))
+        assertEquals(CreateResult.LimitReached, alarms.create(id, dailySpec()))
+
+        assertEquals(10, alarms.list(id)?.size)
+    }
+
+    @Test
+    fun `the limit counts only the device's own alarms`() = runTest {
+        val full = devices.register("token-1")
+        val other = devices.register("token-2")
+        repeat(10) { alarms.create(full, dailySpec()) }
+
+        assertIs<CreateResult.Created>(alarms.create(other, dailySpec()))
+    }
+
+    @Test
+    fun `deleting an alarm at the limit makes room for a new one`() = runTest {
+        val id = devices.register("token-1")
+        val created = (0 until 10).map { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm }
+
+        alarms.delete(id, created.first().id)
+
+        assertIs<CreateResult.Created>(alarms.create(id, dailySpec()))
+    }
+
+    @Test
     fun `an update replaces the settings and keeps the id and the list position`() = runTest {
         val id = devices.register("token-1")
         val first = assertIs<CreateResult.Created>(alarms.create(id, dailySpec(LocalTime.of(6, 0)))).alarm

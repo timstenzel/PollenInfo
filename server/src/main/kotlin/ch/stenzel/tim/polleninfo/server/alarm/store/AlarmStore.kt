@@ -38,7 +38,10 @@ interface AlarmStore {
      */
     suspend fun list(deviceId: DeviceId): List<Alarm>?
 
-    /** Stores [spec] as a new alarm of the device, under a fresh id. */
+    /**
+     * Stores [spec] as a new alarm of the device, under a fresh id — unless the device already holds
+     * [MAX_ALARMS_PER_DEVICE].
+     */
     suspend fun create(deviceId: DeviceId, spec: AlarmSpec): CreateResult
 
     /**
@@ -66,7 +69,13 @@ sealed interface CreateResult {
 
     /** The device is not registered; nothing was stored. */
     data object UnknownDevice : CreateResult
+
+    /** The device already holds [MAX_ALARMS_PER_DEVICE] alarms; nothing was stored. */
+    data object LimitReached : CreateResult
 }
+
+/** How many alarms one device may hold. */
+const val MAX_ALARMS_PER_DEVICE = 10
 
 class ExposedAlarmStore(
     private val database: Database,
@@ -88,6 +97,10 @@ class ExposedAlarmStore(
         val alarm = spec.toAlarm(AlarmId(UUID.randomUUID().toString()), deviceId)
         transaction(database) {
             if (!deviceExists(deviceId)) return@transaction CreateResult.UnknownDevice
+            // Counted in the same transaction as the insert, so two concurrent creates at nine
+            // cannot both get through.
+            val held = AlarmsTable.selectAll().where { AlarmsTable.deviceId eq deviceId.value }.count()
+            if (held >= MAX_ALARMS_PER_DEVICE) return@transaction CreateResult.LimitReached
             AlarmsTable.insert {
                 it.setAlarm(alarm)
                 it[createdAt] = nextCreatedAt(deviceId)

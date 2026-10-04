@@ -334,6 +334,35 @@ class AlarmsViewModelTest {
         assertEquals(1, species.callCount)
     }
 
+    // --- Limit ---
+
+    private fun alarmsNumbered(count: Int) = (1..count).map { dailyAlarm(id = "daily-$it") }
+
+    @Test
+    fun `ten alarms reach the limit`() = runTest {
+        val viewModel = loadedViewModel(alarmsNumbered(10))
+
+        assertTrue(assertIs<AlarmsUiState.Content>(viewModel.uiState.value).limitReached)
+    }
+
+    @Test
+    fun `nine alarms do not reach the limit`() = runTest {
+        val viewModel = loadedViewModel(alarmsNumbered(9))
+
+        assertFalse(assertIs<AlarmsUiState.Content>(viewModel.uiState.value).limitReached)
+    }
+
+    @Test
+    fun `a reload after deleting one of ten lifts the limit`() = runTest {
+        val viewModel = loadedViewModel(alarmsNumbered(10))
+        alarms.result = Result.Success(alarmsNumbered(9))
+
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertFalse(assertIs<AlarmsUiState.Content>(viewModel.uiState.value).limitReached)
+    }
+
     // --- Resume ---
 
     @Test

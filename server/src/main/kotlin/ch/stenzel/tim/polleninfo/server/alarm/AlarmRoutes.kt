@@ -19,6 +19,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.model.ScheduleDto
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.CreateResult
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.MAX_ALARMS_PER_DEVICE
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.BadRequestException
@@ -68,6 +69,10 @@ fun Route.alarmRoutes(devices: DeviceStore, alarms: AlarmStore) {
             when (val result = alarms.create(deviceId, spec)) {
                 is CreateResult.Created -> call.respond(HttpStatusCode.Created, result.alarm.toDto())
                 CreateResult.UnknownDevice -> call.respond(HttpStatusCode.NotFound)
+                CreateResult.LimitReached -> call.respond(
+                    HttpStatusCode.Conflict,
+                    ErrorDto("A device can hold at most $MAX_ALARMS_PER_DEVICE alarms"),
+                )
             }
         }
 

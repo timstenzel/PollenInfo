@@ -11,6 +11,7 @@ import ch.stenzel.tim.polleninfo.core.station.allStations
 import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
@@ -222,6 +223,24 @@ class AlarmEditorViewModelTest {
         val editing = viewModel.editing()
         assertEquals(formBefore, editing.form)
         assertEquals("Connection refused", editing.saveError)
+        assertFalse(editing.isSaving)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `reaching the alarm limit on save keeps the form and explains the limit`() = runTest {
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+        viewModel.onSpeciesToggled("BIRCH")
+        val formBefore = viewModel.editing().form
+        alarms.createResult = Result.Failure(AlarmLimitReachedException())
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        val editing = viewModel.editing()
+        assertEquals(formBefore, editing.form)
+        assertEquals("You can have at most 10 alarms. Delete one to create another.", editing.saveError)
         assertFalse(editing.isSaving)
         assertTrue(events.isEmpty())
     }

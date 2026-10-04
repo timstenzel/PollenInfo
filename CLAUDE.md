@@ -718,6 +718,14 @@ load, while any load runs, or without permission it does nothing. "Create alarm"
 button and, once there are alarms, an extended FAB; the list has bottom padding so the FAB never
 covers the last row.
 
+**At ten alarms** (`MAX_ALARMS`, the backend's limit) `Content.limitReached` — derived from the
+list, so it follows every reload — disables the FAB and shows a hint fixed *above* the list (as a
+first list item a reload into the limit would leave it scrolled out of view). Material's extended
+FAB has no disabled state, so it takes the spec's disabled colours (composited, so rows do not show
+through), ignores clicks and is `disabled()` for TalkBack. If the limit is hit anyway (another
+install sharing the id, or a race), the backend's `409` arrives as `AlarmLimitReachedException`, which
+the editor shows as its `saveError`.
+
 **`AlarmRepositoryImpl` registers lazily.** Every call — `alarms`, `alarm(id)`, `create`, `update`,
 `delete` — goes through one `withDevice { }` wrapper:
 with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
@@ -933,7 +941,7 @@ independently of the domain.
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
 | POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
 | GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
-| POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device |
+| POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device; `409 {error}` at 10 alarms |
 | PUT    | `/devices/{deviceId}/alarms/{alarmId}`  | Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown device, unknown alarm or another device's alarm |
 | DELETE | `/devices/{deviceId}/alarms/{alarmId}`  | `204`; `404` as for `PUT` |
 
@@ -968,7 +976,9 @@ form), and times that are exactly `HH:mm` (parsed `STRICT`, since the default re
 `24:00` as midnight). A threshold schedule also needs `until` after `from` (no window across
 midnight) and a severity other than `NONE`, since "Any" would alert on nothing at all. Validation runs before the device is
 looked up, so an invalid body for an unknown device is a `400`. `AlarmStore.create` returns
-`CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`); the id is a random UUID, and `created_at` is
+`CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`) | `LimitReached` (→ `409`). **A device holds at
+most ten alarms** (`MAX_ALARMS_PER_DEVICE`), counted in the same transaction as the insert, so two
+concurrent creates at nine cannot both get through; the id is a random UUID, and `created_at` is
 kept strictly increasing per device so two alarms created in the same millisecond still list in
 creation order.
 
