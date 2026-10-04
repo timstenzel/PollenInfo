@@ -6,3 +6,9 @@ package ch.stenzel.tim.polleninfo.feature.alarms.domain.model
  * offering a retry that cannot help.
  */
 class PushUnavailableException : Exception("Push notifications aren't available on this device yet")
+
+/**
+ * The backend refused an alarm as invalid (`400`). The editor only offers valid alarms, so this means
+ * the two sides disagree on a rule; [message] is the backend's explanation.
+ */
+class InvalidAlarmException(message: String) : Exception(message)

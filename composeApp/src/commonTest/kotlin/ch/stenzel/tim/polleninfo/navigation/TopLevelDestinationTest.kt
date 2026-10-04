@@ -106,6 +106,12 @@ class TopLevelDestinationTest {
     }
 
     @Test
+    fun `the alarm editor is not a tab so the bar is hidden on it`() {
+        assertNull(currentTabOn(Screen.AlarmEditor()))
+        assertNull(currentTabOn(Screen.AlarmEditor(alarmId = "alarm-1")))
+    }
+
+    @Test
     fun `the bar is hidden on the example screen`() {
         assertNull(currentTabOn(Screen.Example))
     }

@@ -29,6 +29,22 @@ data class AlarmDto(
 )
 
 /**
+ * Body of `POST /devices/{deviceId}/alarms`: an [AlarmDto] without its id.
+ *
+ * Every value is a plain string here, unlike in [AlarmDto], so an unknown station, species or day
+ * reaches `AlarmValidation` and is answered with a message naming it rather than a decoder error.
+ */
+@Serializable
+data class AlarmInputDto(
+    val enabled: Boolean,
+    val stationAbbr: String,
+    val species: List<String>,
+    val minSeverity: String,
+    val days: List<String>,
+    val schedule: ScheduleDto,
+)
+
+/**
  * Polymorphic on the wire through the default `type` class discriminator:
  * `{ "type": "daily", "at": "08:00" }` or `{ "type": "threshold", "from": "07:00", "until": "21:00" }`.
  */

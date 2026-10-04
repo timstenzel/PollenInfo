@@ -6,9 +6,11 @@ import ch.stenzel.tim.polleninfo.core.push.PushTokenResult
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.safeCall
 import ch.stenzel.tim.polleninfo.feature.alarms.data.mapper.toDomain
+import ch.stenzel.tim.polleninfo.feature.alarms.data.mapper.toInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.UnknownDeviceException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlinx.coroutines.flow.first
@@ -31,6 +33,10 @@ class AlarmRepositoryImpl(
 
     override suspend fun alarms(): Result<List<Alarm>> = safeCall {
         withDevice { deviceId -> api.getAlarms(deviceId).toDomain() }
+    }
+
+    override suspend fun create(draft: AlarmDraft): Result<Alarm> = safeCall {
+        withDevice { deviceId -> api.createAlarm(deviceId, draft.toInputDto()).toDomain() }
     }
 
     private suspend fun <T> withDevice(call: suspend (deviceId: String) -> T): T {

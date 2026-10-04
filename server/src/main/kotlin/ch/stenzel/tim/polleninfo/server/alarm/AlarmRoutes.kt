@@ -2,14 +2,20 @@ package ch.stenzel.tim.polleninfo.server.alarm
 
 import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_TIME_FORMAT
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmInput
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmValidation
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
+import ch.stenzel.tim.polleninfo.server.alarm.domain.ScheduleInput
+import ch.stenzel.tim.polleninfo.server.alarm.domain.ValidationResult
 import ch.stenzel.tim.polleninfo.server.alarm.model.AlarmDto
+import ch.stenzel.tim.polleninfo.server.alarm.model.AlarmInputDto
 import ch.stenzel.tim.polleninfo.server.alarm.model.ErrorDto
 import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceRequest
 import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceResponse
 import ch.stenzel.tim.polleninfo.server.alarm.model.ScheduleDto
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.CreateResult
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.plugins.BadRequestException
@@ -49,8 +55,40 @@ fun Route.alarmRoutes(devices: DeviceStore, alarms: AlarmStore) {
                 ?: return@get call.respond(HttpStatusCode.NotFound)
             call.respond(list.map { it.toDto() })
         }
+
+        post("/{deviceId}/alarms") {
+            val deviceId = call.parameters["deviceId"]?.let(::DeviceId)
+                ?: return@post call.respond(HttpStatusCode.BadRequest)
+            // As for registration: a malformed body is the client's error, not a 500.
+            val input = try {
+                call.receive<AlarmInputDto>()
+            } catch (e: BadRequestException) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorDto("Malformed alarm"))
+            }
+            val spec = when (val result = AlarmValidation.validate(input.toDomain())) {
+                is ValidationResult.Valid -> result.spec
+                is ValidationResult.Invalid ->
+                    return@post call.respond(HttpStatusCode.BadRequest, ErrorDto(result.message))
+            }
+            when (val result = alarms.create(deviceId, spec)) {
+                is CreateResult.Created -> call.respond(HttpStatusCode.Created, result.alarm.toDto())
+                CreateResult.UnknownDevice -> call.respond(HttpStatusCode.NotFound)
+            }
+        }
     }
 }
+
+private fun AlarmInputDto.toDomain() = AlarmInput(
+    enabled = enabled,
+    stationAbbr = stationAbbr,
+    species = species,
+    minSeverity = minSeverity,
+    days = days,
+    schedule = when (schedule) {
+        is ScheduleDto.Daily -> ScheduleInput.Daily(schedule.at)
+        is ScheduleDto.Threshold -> ScheduleInput.Threshold(schedule.from, schedule.until)
+    },
+)
 
 private fun Alarm.toDto() = AlarmDto(
     id = id.value,

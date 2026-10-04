@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.preferences.FakeNotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
@@ -34,6 +35,7 @@ class AlarmsViewModelTest {
     private val preferences = FakeNotificationPermissionPreferences()
     private val alarms = FakeAlarmRepository()
     private val stations = FakeStationRepository()
+    private val species = FakeSpeciesRepository()
 
     @BeforeTest
     fun setUp() {
@@ -45,7 +47,7 @@ class AlarmsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = AlarmsViewModel(preferences, alarms, stations)
+    private fun viewModel() = AlarmsViewModel(preferences, alarms, stations, species)
 
     /** A ViewModel whose list has loaded with [alarmsToList] after notifications were enabled. */
     private fun TestScope.loadedViewModel(
@@ -193,7 +195,7 @@ class AlarmsViewModelTest {
         val content = assertIs<AlarmsUiState.Content>(viewModel.uiState.value)
         assertEquals(listOf("Zürich", "Bern"), content.alarms.map { it.stationName })
         assertEquals(
-            listOf("Daily report at 08:00", "Threshold alert 07:00–21:00"),
+            listOf("Daily report at 08:00 · Mon–Fri · Birch, Grasses", "Threshold alert 07:00–21:00"),
             content.alarms.map { it.summary },
         )
     }
@@ -209,10 +211,21 @@ class AlarmsViewModelTest {
     }
 
     @Test
-    fun `an empty list fetches no stations`() = runTest {
+    fun `a failing species list falls back to the species ids`() = runTest {
+        species.result = Result.Failure(RuntimeException("offline"))
+
+        val viewModel = loadedViewModel(listOf(dailyAlarm()))
+
+        val content = assertIs<AlarmsUiState.Content>(viewModel.uiState.value)
+        assertEquals("Daily report at 08:00 · Mon–Fri · BIRCH, GRASSES", content.alarms.single().summary)
+    }
+
+    @Test
+    fun `an empty list fetches no stations and no species`() = runTest {
         loadedViewModel(emptyList())
 
         assertEquals(0, stations.callCount)
+        assertEquals(0, species.callCount)
     }
 
     @Test
@@ -315,5 +328,83 @@ class AlarmsViewModelTest {
 
         assertEquals(2, alarms.callCount)
         assertEquals(1, stations.callCount)
+        assertEquals(1, species.callCount)
+    }
+
+    // --- Resume ---
+
+    @Test
+    fun `onResume reloads the list`() = runTest {
+        val viewModel = loadedViewModel(emptyList())
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertEquals(2, alarms.callCount)
+        assertEquals(listOf(dailyAlarm()), assertIs<AlarmsUiState.Content>(viewModel.uiState.value).alarms.map { it.alarm })
+    }
+
+    @Test
+    fun `onResume keeps the rows on screen without a refresh indicator while it reloads`() = runTest {
+        val viewModel = loadedViewModel()
+        val before = viewModel.uiState.value
+        alarms.gate = CompletableDeferred()
+
+        viewModel.onResume()
+        runCurrent()
+        assertEquals(before, viewModel.uiState.value)
+
+        alarms.gate!!.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `a failed reload on resume keeps the list`() = runTest {
+        val viewModel = loadedViewModel()
+        val before = viewModel.uiState.value
+        alarms.result = Result.Failure(RuntimeException("offline"))
+
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertEquals(before, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `onResume before the first load does nothing`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.onResume()
+        viewModel.onPermissionState(NotificationPermissionState.CAN_REQUEST)
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertEquals(0, alarms.callCount)
+    }
+
+    @Test
+    fun `onResume while the first load runs does not load twice`() = runTest {
+        alarms.gate = CompletableDeferred()
+        val viewModel = viewModel()
+        viewModel.onPermissionState(NotificationPermissionState.ENABLED)
+        runCurrent()
+
+        viewModel.onResume()
+        alarms.gate!!.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, alarms.callCount)
+    }
+
+    @Test
+    fun `onResume without permission does not reload a kept list`() = runTest {
+        val viewModel = loadedViewModel()
+        viewModel.onPermissionState(NotificationPermissionState.MUST_OPEN_SETTINGS)
+
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertEquals(1, alarms.callCount)
     }
 }

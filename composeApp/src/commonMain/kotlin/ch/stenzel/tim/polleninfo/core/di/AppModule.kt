@@ -12,6 +12,9 @@ import ch.stenzel.tim.polleninfo.core.preferences.DeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.species.data.remote.SpeciesApiService
+import ch.stenzel.tim.polleninfo.core.species.data.repository.SpeciesRepositoryImpl
+import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.startup.StartupViewModel
 import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.core.station.data.repository.StationRepositoryImpl
@@ -19,6 +22,7 @@ import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepositor
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.repository.AlarmRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
+import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorViewModel
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsViewModel
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsViewModel
@@ -45,6 +49,9 @@ val dataModule = module {
     // construct one against any host.
     single { StationApiService(get(), apiBaseUrl) }
     single<StationRepository> { StationRepositoryImpl(get()) }
+
+    single { SpeciesApiService(get(), apiBaseUrl) }
+    single<SpeciesRepository> { SpeciesRepositoryImpl(get()) }
 
     single { StationMeasurementApiService(get(), apiBaseUrl) }
     single<StationMeasurementRepository> { StationMeasurementRepositoryImpl(get()) }
@@ -73,7 +80,8 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
-    viewModel { AlarmsViewModel(get(), get(), get()) }
+    viewModel { AlarmsViewModel(get(), get(), get(), get()) }
+    viewModel { AlarmEditorViewModel(get(), get(), get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

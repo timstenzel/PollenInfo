@@ -50,3 +50,7 @@ sealed interface ScheduleDto {
     @SerialName("threshold")
     data class Threshold(val from: String, val until: String) : ScheduleDto
 }
+
+/** Body of every `400` from the alarm endpoints. */
+@Serializable
+data class ErrorDto(val error: String)

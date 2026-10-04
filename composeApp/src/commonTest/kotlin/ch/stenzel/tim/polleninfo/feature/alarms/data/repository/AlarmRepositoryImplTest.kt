@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.data.repository
 
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.preferences.FakeDeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.push.FakePushTokenProvider
@@ -11,6 +12,9 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmDto
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
 import io.ktor.client.engine.mock.MockEngine
@@ -28,7 +32,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -80,6 +88,16 @@ class AlarmRepositoryImplTest {
                 val id = "device-${knownDevices.size + 1}"
                 knownDevices += id
                 respond("""{"deviceId":"$id"}""", HttpStatusCode.Created, jsonHeaders)
+            }
+            request.method == HttpMethod.Post && path.endsWith("/alarms") -> {
+                val deviceId = path.removePrefix("/devices/").removeSuffix("/alarms")
+                if (deviceId in knownDevices) {
+                    val input = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+                    val created = JsonObject(mapOf("id" to JsonPrimitive("created-1")) + input)
+                    respond(created.toString(), HttpStatusCode.Created, jsonHeaders)
+                } else {
+                    respondError(HttpStatusCode.NotFound)
+                }
             }
             request.method == HttpMethod.Get && path.endsWith("/alarms") -> {
                 val deviceId = path.removePrefix("/devices/").removeSuffix("/alarms")
@@ -228,6 +246,83 @@ class AlarmRepositoryImplTest {
 
             assertEquals(original - "id", encoded)
         }
+    }
+
+    private val draft = AlarmDraft(
+        enabled = true,
+        stationAbbr = "PBE",
+        species = setOf("GRASSES", "BIRCH"),
+        minSeverity = PollenSeverity.MODERATE,
+        days = setOf(DayOfWeek.SUNDAY, DayOfWeek.SATURDAY),
+        schedule = AlarmSchedule.Daily(LocalTime(7, 30)),
+    )
+
+    @Test
+    fun `create posts the draft and returns the stored alarm`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+
+        val result = repository.create(draft)
+
+        val created = assertIs<Result.Success<Alarm>>(result).data
+        assertEquals("created-1", created.id)
+        assertEquals(draft.stationAbbr, created.stationAbbr)
+        assertEquals(draft.species, created.species)
+        assertEquals(draft.schedule, created.schedule)
+        assertEquals(listOf("POST /devices/device-1/alarms"), recorded.map { it.describe() })
+        assertEquals(
+            Json.parseToJsonElement(
+                """
+                { "enabled": true, "stationAbbr": "PBE",
+                  "species": ["BIRCH", "GRASSES"], "minSeverity": "MODERATE",
+                  "days": ["SATURDAY", "SUNDAY"],
+                  "schedule": { "type": "daily", "at": "07:30" } }
+                """,
+            ),
+            Json.parseToJsonElement((recorded.single().body as TextContent).text),
+        )
+    }
+
+    @Test
+    fun `create registers first on a fresh install`() = runTest {
+        val repository = repository(backend())
+
+        assertIs<Result.Success<Alarm>>(repository.create(draft))
+        assertEquals(listOf("POST /devices", "POST /devices/device-1/alarms"), recorded.map { it.describe() })
+    }
+
+    @Test
+    fun `create re-registers once and retries on an unknown-device 404`() = runTest {
+        registration.store("forgotten")
+        val repository = repository(backend())
+
+        assertIs<Result.Success<Alarm>>(repository.create(draft))
+        assertEquals(
+            listOf("POST /devices/forgotten/alarms", "POST /devices", "POST /devices/device-1/alarms"),
+            recorded.map { it.describe() },
+        )
+    }
+
+    @Test
+    fun `a 400 on create fails with InvalidAlarm carrying the backend's reason`() = runTest {
+        registration.store("device-1")
+        val repository = repository {
+            respond("""{"error":"Select at least one day"}""", HttpStatusCode.BadRequest, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.create(draft))
+
+        assertEquals("Select at least one day", assertIs<InvalidAlarmException>(failure.exception).message)
+        assertEquals(0, registration.clearCount)
+    }
+
+    @Test
+    fun `a server error on create fails without re-registering`() = runTest {
+        registration.store("device-1")
+        val repository = repository { respondError(HttpStatusCode.InternalServerError) }
+
+        assertIs<Result.Failure>(repository.create(draft))
+        assertEquals(1, recorded.size)
     }
 
     @Test

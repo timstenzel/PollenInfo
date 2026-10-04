@@ -23,6 +23,13 @@ sealed interface Screen {
     @Serializable
     data object Alarms : Screen
 
+    /**
+     * Creates an alarm — and, once editing arrives, opens the one with [alarmId]. Not a tab, so the
+     * bottom bar is hidden on it.
+     */
+    @Serializable
+    data class AlarmEditor(val alarmId: String? = null) : Screen
+
     // Tabs 3 and 5 are reserved for features not yet defined and show `ComingSoonScreen` until then.
     // Separate objects rather than one parameterised route, so each tab keeps its own saved state
     // and one can be renamed to a real feature without touching the others.

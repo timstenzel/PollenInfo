@@ -4,17 +4,22 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_TIME_FORMAT
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
+import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalTime
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.statements.UpdateBuilder
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -27,9 +32,22 @@ interface AlarmStore {
      * caller must be able to tell apart from a registered device with no alarms.
      */
     suspend fun list(deviceId: DeviceId): List<Alarm>?
+
+    /** Stores [spec] as a new alarm of the device, under a fresh id. */
+    suspend fun create(deviceId: DeviceId, spec: AlarmSpec): CreateResult
 }
 
-class ExposedAlarmStore(private val database: Database) : AlarmStore {
+sealed interface CreateResult {
+    data class Created(val alarm: Alarm) : CreateResult
+
+    /** The device is not registered; nothing was stored. */
+    data object UnknownDevice : CreateResult
+}
+
+class ExposedAlarmStore(
+    private val database: Database,
+    private val clock: Clock = Clock.systemUTC(),
+) : AlarmStore {
 
     override suspend fun list(deviceId: DeviceId): List<Alarm>? = withContext(Dispatchers.IO) {
         // One transaction, so a device cannot vanish between the two reads.
@@ -41,9 +59,34 @@ class ExposedAlarmStore(private val database: Database) : AlarmStore {
                 .map { it.toAlarm() }
         }
     }
+
+    override suspend fun create(deviceId: DeviceId, spec: AlarmSpec): CreateResult = withContext(Dispatchers.IO) {
+        val alarm = spec.toAlarm(AlarmId(UUID.randomUUID().toString()), deviceId)
+        transaction(database) {
+            if (!deviceExists(deviceId)) return@transaction CreateResult.UnknownDevice
+            AlarmsTable.insert {
+                it.setAlarm(alarm)
+                it[createdAt] = nextCreatedAt(deviceId)
+            }
+            CreateResult.Created(alarm)
+        }
+    }
+
+    /**
+     * Now, or one millisecond after the device's newest alarm if that is not earlier. Creation order
+     * is the list order, and two alarms created within the same millisecond would otherwise fall
+     * back to the order of their random ids.
+     */
+    private fun nextCreatedAt(deviceId: DeviceId): Long {
+        val newest = AlarmsTable.createdAt.max()
+        val latest = AlarmsTable.select(newest)
+            .where { AlarmsTable.deviceId eq deviceId.value }
+            .single()[newest]
+        return if (latest == null) clock.millis() else maxOf(clock.millis(), latest + 1)
+    }
 }
 
-/** Writes every column of [alarm]; shared by inserts and, later, updates. */
+/** Writes every column of [alarm] but its creation time; shared by inserts and, later, updates. */
 internal fun UpdateBuilder<*>.setAlarm(alarm: Alarm) {
     this[AlarmsTable.id] = alarm.id.value
     this[AlarmsTable.deviceId] = alarm.deviceId.value

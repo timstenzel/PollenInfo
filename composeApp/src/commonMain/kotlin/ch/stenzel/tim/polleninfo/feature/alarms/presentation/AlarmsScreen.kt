@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -12,6 +13,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -51,7 +54,10 @@ import org.koin.compose.viewmodel.koinViewModel
  * revokes the permission elsewhere.
  */
 @Composable
-fun AlarmsScreen(viewModel: AlarmsViewModel = koinViewModel()) {
+fun AlarmsScreen(
+    onCreateAlarm: () -> Unit,
+    viewModel: AlarmsViewModel = koinViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val askedBefore by viewModel.askedBefore.collectAsStateWithLifecycle()
     val controller = rememberNotificationPermissionController()
@@ -66,7 +72,11 @@ fun AlarmsScreen(viewModel: AlarmsViewModel = koinViewModel()) {
         val asked = askedBefore ?: return@LaunchedEffect
         lifecycle.currentStateFlow
             .filter { it == Lifecycle.State.RESUMED }
-            .collect { viewModel.onPermissionState(controller.currentStatus(asked)) }
+            .collect {
+                viewModel.onPermissionState(controller.currentStatus(asked))
+                // Back from the editor among others: a list already shown is reloaded quietly.
+                viewModel.onResume()
+            }
     }
 
     AlarmsContent(
@@ -80,6 +90,7 @@ fun AlarmsScreen(viewModel: AlarmsViewModel = koinViewModel()) {
         onOpenSettings = controller::openSettings,
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
+        onCreateAlarm = onCreateAlarm,
     )
 }
 
@@ -91,9 +102,20 @@ private fun AlarmsContent(
     onOpenSettings: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
+    onCreateAlarm: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Alarms") }) },
+        floatingActionButton = {
+            // The empty state has its own, more prominent button.
+            if (uiState is AlarmsUiState.Content && uiState.alarms.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreateAlarm,
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Create alarm") },
+                )
+            }
+        },
     ) { padding ->
         val modifier = Modifier.fillMaxSize().padding(padding)
         val messageModifier = modifier.padding(24.dp)
@@ -120,7 +142,10 @@ private fun AlarmsContent(
             ) {
                 if (uiState.alarms.isEmpty()) {
                     // Scrollable so the pull gesture has something to drag.
-                    EmptyAlarmsView(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp))
+                    EmptyAlarmsView(
+                        onCreateAlarm = onCreateAlarm,
+                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+                    )
                 } else {
                     AlarmList(uiState.alarms, Modifier.fillMaxSize())
                 }
@@ -163,7 +188,7 @@ private fun PermissionRequiredView(
 }
 
 @Composable
-private fun EmptyAlarmsView(modifier: Modifier) {
+private fun EmptyAlarmsView(onCreateAlarm: () -> Unit, modifier: Modifier) {
     CenteredMessage(
         icon = Icons.Default.Notifications,
         title = "No alarms yet",
@@ -171,14 +196,14 @@ private fun EmptyAlarmsView(modifier: Modifier) {
             "reaches a level you choose.",
         modifier = modifier,
     ) {
-        // Creating alarms arrives with the alarm editor.
-        Button(onClick = {}, enabled = false) { Text("Create alarm") }
+        Button(onClick = onCreateAlarm) { Text("Create alarm") }
     }
 }
 
 @Composable
 private fun AlarmList(alarms: List<AlarmListItem>, modifier: Modifier) {
-    LazyColumn(modifier = modifier) {
+    // Room below the last row, so the create button never covers it.
+    LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp)) {
         items(alarms, key = { it.alarm.id }) { item ->
             ListItem(
                 headlineContent = { Text(item.stationName) },

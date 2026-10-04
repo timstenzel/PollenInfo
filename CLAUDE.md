@@ -296,6 +296,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | Package | Contains |
 | --- | --- |
 | `core/station` | `Station`, `StationRepository`(+`Impl`), `StationApiService`, `StationDto`, `StationMapper` — `GET /pollen/stations`, sorted alphabetically by name |
+| `core/species` | `Species` (`id`, `name`), `SpeciesRepository`(+`Impl`), `SpeciesApiService`, `SpeciesDto`, `SpeciesMapper` — `GET /pollen/species`, in the server's order. The app's pollen-type vocabulary where there is no reading (the alarm editor), loaded rather than declared so `PollenSpecies` stays authoritative |
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 
@@ -662,9 +663,9 @@ Nothing else knows about the tab. Update the order and name assertions in
 #### Alarms
 
 The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far the permission gate and the backend-loaded list exist** — alarms cannot be created from the app
-yet ("Create alarm" is shown disabled), rows show the station name and a placeholder summary
-("Daily report at 08:00"), and nothing is sent.
+far the permission gate, the backend-loaded list and creating daily reports exist** (see "Alarm
+editor" below) — threshold alerts, editing, pausing and deleting are not built yet, and nothing is
+sent.
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
@@ -675,14 +676,32 @@ the explanation back. The ViewModel never touches a platform API.
 
 **The list loads on the first `ENABLED` and not before**, so a user who never allows notifications
 causes no backend contact and no device registration. The ViewModel tracks permission and list
-separately: later resumes with `ENABLED` do not reload, and a list kept through a revocation is shown
-again unchanged when notifications come back. (On Android revoking the permission kills the
+separately: a later `ENABLED` does not reload through `onPermissionState`, and a list kept through a
+revocation is shown again unchanged when notifications come back. Reloading on return is
+`onResume()` instead (below). (On Android revoking the permission kills the
 process, so in practice that return is a fresh load of the same list — same stored device id.) It
 has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at least
 `MIN_REFRESH_INDICATOR`, and `Error` offers Retry. `Error(pushUnavailable = true)` — iOS — says
 "Push notifications aren't available on this device yet" with no Retry. Station names come from
-`StationRepository`, fetched only when there is an alarm to name (cached after that; an abbreviation
-stands in if it fails), so the iOS path makes no network call at all.
+`StationRepository` and pollen-type names from `SpeciesRepository`, both fetched only when there is
+an alarm to describe (cached after that; the abbreviation or species id stands in if one fails), so
+the iOS path makes no network call at all.
+
+Each row is the station name over `summaryOf(alarm, speciesNames)` (`AlarmSummary.kt`), e.g. "Daily
+report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate": types in display order ("All pollen types"
+when every one is selected), the minimum only when it is not "Any", and days collapsed by
+`daysSummary` — "Every day", runs of three or more as a range ("Mon–Fri"), shorter runs listed
+("Sat, Sun"). Severity words come from `PollenSeverity.label()`; `minimumLabel()` calls `NONE`
+"Any". It sits in `presentation/`, not `domain/`, because it is wording. Threshold rows still show a
+placeholder ("Threshold alert 07:00–21:00") until threshold alerts can be created.
+
+**`onResume()` reloads quietly.** The screen calls it on every `RESUMED`, right after handing over
+the permission — so back from the editor, from another tab or from another app. With a list on
+screen and notifications enabled it reloads without `isRefreshing` and swaps the rows when the
+answer arrives; a failed quiet reload keeps them (pull-to-refresh shows the error). Before the first
+load, while any load runs, or without permission it does nothing. "Create alarm" is the empty state's
+button and, once there are alarms, an extended FAB; the list has bottom padding so the FAB never
+covers the last row.
 
 **`AlarmRepositoryImpl` registers lazily.** Every call goes through one `withDevice { }` wrapper:
 with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
@@ -717,11 +736,40 @@ prompts with an alert that does not pause the screen. It waits until `AlarmsView
 (`null` until read) is known, so the wrong button never flashes. Answering the prompt calls
 `onPermissionRequested()`, which sets the flag through `NotificationPermissionPreferences`.
 
-`AlarmsViewModelTest` covers the mapping, the flag and the list cycle (`FakeAlarmRepository.gate`
-holds a load in flight). `AlarmRepositoryImplTest` drives registration, the `404` retry and both
+`AlarmsViewModelTest` covers the mapping, the flag, the list cycle and `onResume`
+(`FakeAlarmRepository.gate` holds a load in flight). `AlarmRepositoryImplTest` drives registration, the `404` retry and both
 `schedule` variants through `MockEngine`, with `FakePushTokenProvider` and
 `FakeDeviceRegistrationRepository`. The permission controllers and `FirebasePushTokenProvider` are
 checked by hand.
+
+##### Alarm editor
+
+`Screen.AlarmEditor(alarmId: String? = null)` — not a tab, so the bottom bar is hidden on it. The
+list's "Create alarm" navigates to it, and its `onDone` (`popBackStack`) runs on the top bar's back
+arrow and on `AlarmEditorEvent.Done`, sent on a buffered `Channel` after a successful save. Every
+editor is a new daily report so far; `alarmId` is reserved for editing and not read yet.
+
+`AlarmEditorViewModel` loads the stations and the pollen types in parallel (`Error` with Retry if
+either fails) and opens `Editing(form, stations, species, isSaving, saveError)` on
+`AlarmFormState.newDailyReport(home, speciesIds)`: the stored home station (the first station if it
+is no longer listed), every pollen type, every day, "Any", 08:00. Choosing another station never
+touches the stored home station.
+
+**`AlarmFormState` (`domain/model/`) holds every rule**, pure and unit-tested: field changes return a
+new state, `isValid` needs at least one pollen type and one day, `isDirty` compares against the state
+the editor opened with (so an undone change is not a change), `severityOptions` is Any … Very high,
+and `toDraft()` is the `AlarmDraft` a create sends. `Editing.canSave` is `isValid && !isSaving`;
+`save()` is ignored otherwise, and so are field changes while a save runs — the save sends the form
+as it was when tapped. A failed save keeps the form and shows its message as `saveError` until the
+next attempt. A backend `400` arrives as `InvalidAlarmException` with the server's `error` text.
+
+The screen: a station `ExposedDropdownMenuBox` (as in onboarding), `FilterChip`s in `FlowRow`s for
+pollen types, minimum severity and days (day chips announce the full day name), a time button that
+opens a 24-hour `TimePicker` in an `AlertDialog` and is announced as "Report time 08:00", the hint
+"Times are Swiss time.", and Save with a progress indicator. Section titles are headings.
+`AlarmEditorViewModelTest` covers loading, both load errors, `isSaving` under a gated create
+(`FakeAlarmRepository.createGate`), `Done` exactly once and a failed save; the composable is checked
+by hand.
 
 #### Firebase
 
@@ -824,6 +872,7 @@ independently of the domain.
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
 | POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
 | GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
+| POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device |
 
 #### Devices and alarms
 
@@ -846,6 +895,18 @@ to register again. An unknown device's list is a `404`, never `200 []` — `Alar
 `type` class discriminator — neither `Json` configures one. Days are `DayOfWeek` names, times `HH:mm`
 Swiss local time. The app keeps `minSeverity` a `String` on the wire, mapped through the same
 `toPollenSeverity` / `toWireName` pair as measurement severities.
+
+**Creating** (`POST /devices/{deviceId}/alarms`) takes the same shape without `id`. The body decodes
+into `AlarmInputDto`, whose values are all plain strings, and `alarm/domain/AlarmValidation` — pure,
+returning `ValidationResult.Valid(AlarmSpec)` | `Invalid(message)` rather than throwing — decides
+what is wrong and names it in the `400 {error}`: at least one species and one day, known species,
+severity and day names (exact enum names), a known station (case-insensitive, stored in its official
+form), and a time that is exactly `HH:mm` (parsed `STRICT`, since the default resolver reads
+`24:00` as midnight). Threshold schedules are refused for now. Validation runs before the device is
+looked up, so an invalid body for an unknown device is a `400`. `AlarmStore.create` returns
+`CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`); the id is a random UUID, and `created_at` is
+kept strictly increasing per device so two alarms created in the same millisecond still list in
+creation order.
 
 #### Persistence
 
@@ -946,7 +1007,8 @@ platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
 
 Store tests (`ExposedStoresTest`) run against `PollenInfoDatabase.inMemory()` or a temp file, never
 the real one; `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly
-(`Database.insertAlarm`) until the API can create them. `AlarmRoutesTest` hands its own stores to
+(`Database.insertAlarm`) when a test needs to choose the id or the creation time — or a threshold
+alert, which the API does not accept yet. `AlarmRoutesTest` hands its own stores to
 `configureRouting(database = …, devices = …, alarms = …)`.
 
 Rules of the road:

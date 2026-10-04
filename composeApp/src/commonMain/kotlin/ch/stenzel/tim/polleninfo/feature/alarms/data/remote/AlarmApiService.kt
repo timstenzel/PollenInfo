@@ -1,8 +1,11 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.data.remote
 
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmDto
+import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
+import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ErrorDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceRequestDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceResponseDto
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -13,6 +16,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The backend's device and alarm endpoints. [baseUrl] is injected, as on every API service, so a
@@ -36,8 +40,26 @@ class AlarmApiService(
     suspend fun getAlarms(deviceId: String): List<AlarmDto> =
         client.get("$baseUrl/devices/$deviceId/alarms").checkedForDevice().body()
 
-    private fun HttpResponse.checkedForDevice(): HttpResponse {
+    suspend fun createAlarm(deviceId: String, input: AlarmInputDto): AlarmDto =
+        client.post("$baseUrl/devices/$deviceId/alarms") {
+            contentType(ContentType.Application.Json)
+            setBody(input)
+        }.checkedForDevice().body()
+
+    /** A `400` from an alarm path carries the backend's reason, which becomes [InvalidAlarmException]. */
+    private suspend fun HttpResponse.checkedForDevice(): HttpResponse {
         if (status == HttpStatusCode.NotFound) throw UnknownDeviceException()
+        if (status == HttpStatusCode.BadRequest) {
+            val reason = try {
+                body<ErrorDto>().error
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A 400 without the usual body is still a refusal; only the reason is missing.
+                null
+            }
+            throw InvalidAlarmException(reason ?: "The backend refused this alarm")
+        }
         return checked()
     }
 

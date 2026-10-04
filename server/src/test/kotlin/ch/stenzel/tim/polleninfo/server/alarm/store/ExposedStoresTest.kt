@@ -1,8 +1,18 @@
 package ch.stenzel.tim.polleninfo.server.alarm.store
 
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import java.nio.file.Files
+import java.time.Clock
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneOffset
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.exists
@@ -10,6 +20,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -100,6 +111,52 @@ class ExposedStoresTest {
         database.insertAlarm(dailyAlarm(theirs), createdAtMillis = 2)
 
         assertEquals(listOf(myAlarm), alarms.list(mine))
+    }
+
+    private fun dailySpec(at: LocalTime = LocalTime.of(8, 0)) = AlarmSpec(
+        enabled = true,
+        station = PollenStation.BERN,
+        species = setOf(PollenSpecies.ASH),
+        minSeverity = PollenSeverity.MODERATE,
+        days = setOf(DayOfWeek.SATURDAY),
+        schedule = AlarmSchedule.Daily(at),
+    )
+
+    @Test
+    fun `a created alarm is returned and listed for its device`() = runTest {
+        val id = devices.register("token-1")
+
+        val created = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
+
+        assertEquals(dailySpec().toAlarm(created.id, id), created)
+        assertEquals(listOf(created), alarms.list(id))
+    }
+
+    @Test
+    fun `every created alarm gets its own id`() = runTest {
+        val id = devices.register("token-1")
+
+        val first = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
+        val second = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
+
+        assertNotEquals(first.id, second.id)
+    }
+
+    @Test
+    fun `alarms created within the same millisecond keep their creation order`() = runTest {
+        val id = devices.register("token-1")
+        val frozen = ExposedAlarmStore(database, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
+
+        val created = (0 until 5).map { minute ->
+            assertIs<CreateResult.Created>(frozen.create(id, dailySpec(LocalTime.of(8, minute)))).alarm
+        }
+
+        assertEquals(created, alarms.list(id))
+    }
+
+    @Test
+    fun `creating an alarm for an unknown device stores nothing`() = runTest {
+        assertEquals(CreateResult.UnknownDevice, alarms.create(DeviceId("never-registered"), dailySpec()))
     }
 
     @Test

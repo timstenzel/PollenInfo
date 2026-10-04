@@ -144,44 +144,44 @@ and a failed save keeps the input and shows an error.
 
 ### Implementation steps
 
-- [ ] Server:
+- [x] Server:
   - `AlarmValidation` (pure): non-empty species and days, a known station (case-insensitive), `HH:mm`, the daily schedule
   - `POST /devices/{id}/alarms` → `201` / `400 {error}` / `404`
   - `AlarmStore.create`
-- [ ] App: a `core/species` slice (`Species`, `SpeciesRepository(Impl)`, `SpeciesApiService`, DTO, mapper) for `GET /pollen/species`, mirroring `core/station`, wired in Koin
-- [ ] App: `AlarmFormState` (pure)
+- [x] App: a `core/species` slice (`Species`, `SpeciesRepository(Impl)`, `SpeciesApiService`, DTO, mapper) for `GET /pollen/species`, mirroring `core/station`, wired in Koin
+- [x] App: `AlarmFormState` (pure)
   - daily defaults: home station, all species, all days, Any, 08:00
   - `isValid`, `isDirty`, `toDraft()`
-- [ ] App: `AlarmSummary` (pure): the daily summary text, with day ranges collapsed ("Every day", "Mon–Fri", "Sat, Sun"), formatted with `kotlinx-datetime`
-- [ ] App editor:
+- [x] App: `AlarmSummary` (pure): the daily summary text, with day ranges collapsed ("Every day", "Mon–Fri", "Sat, Sun"), formatted with `kotlinx-datetime`
+- [x] App editor:
   - the `Screen.AlarmEditor(alarmId: String?)` route
   - `AlarmEditorViewModel` / UiState, loading stations and species in parallel (`Error` with retry if either fails)
   - `AlarmEditorEvent.Done` on a buffered channel
   - editor UI: station dropdown, species `FilterChip`s, severity chips, day chips, a `TimePicker` dialog, the Swiss-time hint, and Save with a progress indicator and an inline `saveError`
-- [ ] App: enable the list's create button; the list reloads when the tab resumes after the editor (`AlarmsViewModel.onResume()`); rows show the `AlarmSummary`
-- [ ] Update CLAUDE.md: the editor route, the alarm endpoints so far, and `core/species`
+- [x] App: enable the list's create button; the list reloads when the tab resumes after the editor (`AlarmsViewModel.onResume()`); rows show the `AlarmSummary`
+- [x] Update CLAUDE.md: the editor route, the alarm endpoints so far, and `core/species`
 
 ### Acceptance criteria
 
-- [ ] `AlarmValidationTest`: rejects empty species, empty days, an unknown station and a malformed time; accepts a valid daily report; matches the station abbreviation case-insensitively
-- [ ] `AlarmRoutesTest`: a valid `POST` → `201`, and the alarm appears in the next `GET`; an invalid one → `400` with an `error` message; an unknown device → `404`
-- [ ] App domain tests:
+- [x] `AlarmValidationTest`: rejects empty species, empty days, an unknown station and a malformed time; accepts a valid daily report; matches the station abbreviation case-insensitively
+- [x] `AlarmRoutesTest`: a valid `POST` → `201`, and the alarm appears in the next `GET`; an invalid one → `400` with an `error` message; an unknown device → `404`
+- [x] App domain tests:
   - `SpeciesRepositoryImplTest` (MockEngine): maps the seven species; a server error gives `Failure`
   - `AlarmFormStateTest`: the defaults are as specified; `isValid` is false with no species and with no days; `isDirty` is false initially and false again after a change is undone; `toDraft()` carries every field
-- [ ] `AlarmSummaryTest` pins the daily summary and each day-range form
-- [ ] `AlarmEditorViewModelTest`: success emits `Done` exactly once; a failure keeps the form and sets `saveError`; `isSaving` is observable while a gated save is in flight; a failing species load → `Error`
-- [ ] `AlarmsViewModelTest`: `onResume()` reloads the list. `TopLevelDestinationTest`: `Screen.AlarmEditor` is not a tab, so the bar is hidden
-- [ ] Manual:
+- [x] `AlarmSummaryTest` pins the daily summary and each day-range form
+- [x] `AlarmEditorViewModelTest`: success emits `Done` exactly once; a failure keeps the form and sets `saveError`; `isSaving` is observable while a gated save is in flight; a failing species load → `Error`
+- [x] `AlarmsViewModelTest`: `onResume()` reloads the list. `TopLevelDestinationTest`: `Screen.AlarmEditor` is not a tab, so the bar is hidden
+- [x] Manual:
   - with Zürich as the home station, creating a daily report for Bern shows it in the list, and Home still shows Zürich
   - the alarm is still listed after a server restart
-  - TalkBack announces every chip's name and selected state, the time field, and Save's enabled state
+- [ ] ~~Manual: TalkBack announces every chip's name and selected state, the time field, and Save's enabled state~~ *(skipped: TalkBack speech cannot be captured from this environment, as in task 01. Supporting evidence from the accessibility tree: every chip is a checkable node with the right checked state, day chips carry the full day name inside the chip node, the time button reads "Report time 08:00", and Save is enabled=false with no days selected)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes, including the Material 3 experimental opt-ins
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes, including the Material 3 experimental opt-ins
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No backtick test name contains a comma
 
 ## Task [04-deliver-daily-reports]
 

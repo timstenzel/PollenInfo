@@ -5,9 +5,8 @@ import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
-import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
-import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlin.time.Duration.Companion.milliseconds
@@ -19,8 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.format.char
 
 /**
  * Never reads the permission itself: `AlarmsScreen` reads it through the platform controller on
@@ -36,6 +33,7 @@ class AlarmsViewModel(
     private val permissionPreferences: NotificationPermissionPreferences,
     private val alarmRepository: AlarmRepository,
     private val stationRepository: StationRepository,
+    private val speciesRepository: SpeciesRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AlarmsUiState>(AlarmsUiState.CheckingPermission)
@@ -58,6 +56,9 @@ class AlarmsViewModel(
 
     /** Station names by abbreviation, kept once loaded; the station list does not change. */
     private var stationNames: Map<String, String>? = null
+
+    /** Species names by id in display order, kept once loaded, like [stationNames]. */
+    private var speciesNames: Map<String, String>? = null
 
     fun onPermissionState(state: NotificationPermissionState) {
         permission = state
@@ -82,6 +83,28 @@ class AlarmsViewModel(
 
     /** Leaves the error state by loading again from scratch. */
     fun retry() = load(keepAlarms = false)
+
+    /**
+     * The tab is visible again — back from the editor, from another tab or from another app. A list
+     * already on screen is reloaded quietly, so a saved alarm shows up without a gesture: the rows
+     * stay as they are with no indicator, and are replaced when the new list arrives. A failed quiet
+     * reload keeps them; pull-to-refresh is the way to see the error.
+     *
+     * Nothing happens before the first list has loaded, while a load runs, or without permission —
+     * [onPermissionState] owns the first load.
+     */
+    fun onResume() {
+        val current = listState as? AlarmsUiState.Content ?: return
+        if (permission != NotificationPermissionState.ENABLED || loadJob?.isActive == true) return
+
+        loadJob = viewModelScope.launch {
+            val result = loadItems()
+            if (result is Result.Success) {
+                listState = current.copy(alarms = result.data)
+                publish()
+            }
+        }
+    }
 
     private fun load(keepAlarms: Boolean) {
         loadJob?.cancel()
@@ -112,25 +135,35 @@ class AlarmsViewModel(
     }
 
     /**
-     * Stations are fetched only once there is an alarm to name, so a device without push — which
-     * fails before any request — makes no network call at all. A station list that fails falls back
-     * to the abbreviation rather than failing a list that did load.
+     * Stations and species are fetched only once there is an alarm to describe, so a device without
+     * push — which fails before any request — makes no network call at all. A name list that fails
+     * falls back to the abbreviation or id rather than failing a list that did load.
      */
     private suspend fun loadItems(): Result<List<AlarmListItem>> {
         val alarms = when (val result = alarmRepository.alarms()) {
             is Result.Success -> result.data
             is Result.Failure -> return result
         }
-        val names = if (alarms.isEmpty()) emptyMap() else stationNames()
+        if (alarms.isEmpty()) return Result.Success(emptyList())
+        val names = stationNames()
+        val species = speciesNames()
         return Result.Success(
             alarms.map { alarm ->
                 AlarmListItem(
                     alarm = alarm,
                     stationName = names[alarm.stationAbbr] ?: alarm.stationAbbr,
-                    summary = placeholderSummary(alarm),
+                    summary = summaryOf(alarm, species),
                 )
             },
         )
+    }
+
+    private suspend fun speciesNames(): Map<String, String> {
+        speciesNames?.let { return it }
+        return when (val result = speciesRepository.getSpecies()) {
+            is Result.Success -> result.data.associate { it.id to it.name }.also { speciesNames = it }
+            is Result.Failure -> emptyMap()
+        }
     }
 
     private suspend fun stationNames(): Map<String, String> {
@@ -157,20 +190,4 @@ class AlarmsViewModel(
 
         private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
     }
-}
-
-/**
- * Stands in until the real summary (types, severity and days) arrives with alarm creation; it only
- * says which kind of alarm a row is and when.
- */
-internal fun placeholderSummary(alarm: Alarm): String = when (val schedule = alarm.schedule) {
-    is AlarmSchedule.Daily -> "Daily report at ${TIME_FORMAT.format(schedule.at)}"
-    is AlarmSchedule.Threshold ->
-        "Threshold alert ${TIME_FORMAT.format(schedule.from)}–${TIME_FORMAT.format(schedule.until)}"
-}
-
-private val TIME_FORMAT = LocalTime.Format {
-    hour()
-    char(':')
-    minute()
 }

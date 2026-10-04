@@ -46,8 +46,9 @@ fun thresholdAlarm(
 )
 
 /**
- * Inserts [alarm] directly, as the server side of the system would. Alarm creation through the API
- * arrives with its own task; until then this is how a listed alarm gets into the store.
+ * Inserts [alarm] directly, with the id and creation time a test chooses — neither of which
+ * `AlarmStore.create` lets its caller pick. Also the only way to store a threshold alert until the
+ * API accepts them.
  */
 fun Database.insertAlarm(alarm: Alarm, createdAtMillis: Long) {
     transaction(this) {

@@ -6,6 +6,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ScheduleDto
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
@@ -24,7 +25,17 @@ fun AlarmDto.toDomain() = Alarm(
 fun List<AlarmDto>.toDomain(): List<Alarm> = map { it.toDomain() }
 
 /** The request body that would store [this] alarm as it is; its id travels in the path. */
-fun Alarm.toInputDto() = AlarmInputDto(
+fun Alarm.toInputDto() = AlarmDraft(
+    enabled = enabled,
+    stationAbbr = stationAbbr,
+    species = species,
+    minSeverity = minSeverity,
+    days = days,
+    schedule = schedule,
+).toInputDto()
+
+/** The body of a create. Sets are sent sorted, so the same alarm always reads the same on the wire. */
+fun AlarmDraft.toInputDto() = AlarmInputDto(
     enabled = enabled,
     stationAbbr = stationAbbr,
     species = species.sorted(),

@@ -28,6 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -143,6 +144,118 @@ class AlarmRoutesTest {
         assertEquals("threshold-1", threshold.getValue("id").jsonPrimitive.content)
         assertEquals("PBE", threshold.getValue("stationAbbr").jsonPrimitive.content)
         assertEquals("false", threshold.getValue("enabled").jsonPrimitive.content)
+    }
+
+    private val validDailyJson = """
+        { "enabled": true, "stationAbbr": "PBE",
+          "species": ["BIRCH", "GRASSES"], "minSeverity": "MODERATE",
+          "days": ["SATURDAY", "SUNDAY"],
+          "schedule": { "type": "daily", "at": "07:30" } }
+    """.trimIndent()
+
+    private suspend fun ApplicationTestBuilder.postAlarm(deviceId: String, body: String) =
+        client.post("/devices/$deviceId/alarms") {
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+    @Test
+    fun `a valid POST returns 201 with the stored alarm`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val response = postAlarm(deviceId, validDailyJson)
+
+        assertEquals(HttpStatusCode.Created, response.status)
+        val created = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertTrue(created.getValue("id").jsonPrimitive.content.isNotBlank())
+        assertEquals(Json.parseToJsonElement(validDailyJson).jsonObject, JsonObject(created - "id"))
+    }
+
+    @Test
+    fun `a created alarm appears in the next GET`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val created = Json.parseToJsonElement(postAlarm(deviceId, validDailyJson).bodyAsText())
+        val listed = Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText())
+
+        assertEquals(JsonArray(listOf(created)), listed)
+    }
+
+    @Test
+    fun `alarms created one after another are listed in creation order`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val ids = listOf("06:00", "05:00", "07:00").map { time ->
+            val body = validDailyJson.replace("07:30", time)
+            Json.parseToJsonElement(postAlarm(deviceId, body).bodyAsText()).jsonObject.getValue("id")
+        }
+        val listed = Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText())
+
+        assertEquals(ids, listed.jsonArray.map { it.jsonObject.getValue("id") })
+    }
+
+    @Test
+    fun `a lowercase station abbreviation is stored in its official form`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val response = postAlarm(deviceId, validDailyJson.replace("\"PBE\"", "\"pbe\""))
+
+        assertEquals(HttpStatusCode.Created, response.status)
+        val created = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("PBE", created.getValue("stationAbbr").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `an invalid POST returns 400 with an error message and stores nothing`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val response = postAlarm(deviceId, validDailyJson.replace("[\"BIRCH\", \"GRASSES\"]", "[]"))
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val error = Json.parseToJsonElement(response.bodyAsText()).jsonObject.getValue("error")
+        assertEquals("Select at least one pollen type", error.jsonPrimitive.content)
+        assertEquals(JsonArray(emptyList()), Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText()))
+    }
+
+    @Test
+    fun `a malformed time returns 400`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        assertEquals(HttpStatusCode.BadRequest, postAlarm(deviceId, validDailyJson.replace("07:30", "7.30")).status)
+    }
+
+    @Test
+    fun `a malformed body returns 400 with an error message`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val response = postAlarm(deviceId, """{"stationAbbr":"PZH"}""")
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(Json.parseToJsonElement(response.bodyAsText()).jsonObject.containsKey("error"))
+    }
+
+    @Test
+    fun `an unknown schedule type returns 400`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        val response = postAlarm(deviceId, validDailyJson.replace("\"daily\"", "\"weekly\""))
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `POST alarms for an unknown device returns 404`() = testApplication {
+        installApp()
+
+        assertEquals(HttpStatusCode.NotFound, postAlarm("never-registered", validDailyJson).status)
     }
 
     @Test
