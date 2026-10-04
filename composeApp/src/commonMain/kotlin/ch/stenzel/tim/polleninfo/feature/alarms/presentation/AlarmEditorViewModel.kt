@@ -8,6 +8,7 @@ import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -24,8 +25,9 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 /**
- * Creates a daily report. The stations and pollen types are loaded together, and the form opens on
- * the defaults of [AlarmFormState.newDailyReport] with the home station preselected.
+ * Creates an alarm. The stations and pollen types are loaded together, and the form opens on the
+ * defaults of [AlarmFormState.newDailyReport] with the home station preselected; the type toggle
+ * turns it into a threshold alert.
  *
  * Every rule about the fields lives in [AlarmFormState]; this class only applies the user's changes
  * to it and runs the save.
@@ -59,7 +61,13 @@ class AlarmEditorViewModel(
 
     fun onDayToggled(day: DayOfWeek) = editForm { toggleDay(day) }
 
+    fun onTypeSelected(type: AlarmType) = editForm { withType(type) }
+
     fun onTimeSelected(time: LocalTime) = editForm { withTime(time) }
+
+    fun onWindowStartSelected(time: LocalTime) = editForm { withWindowStart(time) }
+
+    fun onWindowEndSelected(time: LocalTime) = editForm { withWindowEnd(time) }
 
     /** Ignored unless the form can be saved, so a double tap cannot create the alarm twice. */
     fun save() {

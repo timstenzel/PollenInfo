@@ -20,6 +20,9 @@ import java.util.Locale
  */
 val READING_STALE_AFTER: Duration = Duration.ofHours(3)
 
+/** A threshold alert to send, and the pollen types to record as notified once it is delivered. */
+data class ThresholdOutcome(val message: PushMessage, val species: Set<PollenSpecies>)
+
 /**
  * When an alarm is due and what it says. Pure — no clock, no I/O, no logging — so every rule is
  * tested with an explicit `now`. Times are compared in [ALARM_ZONE] whatever zone `now` comes in.
@@ -74,6 +77,52 @@ object AlarmRules {
     }
 
     /**
+     * True when [alarm] is an enabled threshold alert whose day [now] is and whose window [now] is
+     * in — from `from` (inclusive) until `until` (exclusive).
+     */
+    fun isThresholdActive(alarm: Alarm, now: ZonedDateTime): Boolean {
+        val schedule = alarm.schedule as? AlarmSchedule.Threshold ?: return false
+        val local = now.withZoneSameInstant(ALARM_ZONE)
+        val time = local.toLocalTime()
+        return alarm.enabled &&
+            local.dayOfWeek in alarm.days &&
+            !time.isBefore(schedule.from) &&
+            time.isBefore(schedule.until)
+    }
+
+    /**
+     * The threshold alert to send at [now], or `null` when there is none.
+     *
+     * - Not active ([isThresholdActive]), or no current [reading] ([isCurrent]) → `null`: an alert
+     *   is never raised on old data, nor on none.
+     * - Otherwise every selected type with a reading at or above the minimum that is not in
+     *   [notifiedToday] qualifies, and all of them go into one message. None qualifies → `null`.
+     *
+     * The caller records [ThresholdOutcome.species] once the message is delivered, which is what
+     * makes it at most once per type per day. A type that was already over the threshold before the
+     * window opened therefore notifies at the first evaluation inside it.
+     */
+    fun evaluateThreshold(
+        alarm: Alarm,
+        now: ZonedDateTime,
+        reading: StationMeasurement?,
+        notifiedToday: Set<PollenSpecies>,
+    ): ThresholdOutcome? {
+        if (!isThresholdActive(alarm, now)) return null
+        if (reading == null || !isCurrent(reading.measuredAt, now)) return null
+        val qualifying = reading.species.filter {
+            it.species in alarm.species &&
+                it.species !in notifiedToday &&
+                it.severity?.atLeast(alarm.minSeverity) == true
+        }
+        if (qualifying.isEmpty()) return null
+        return ThresholdOutcome(
+            message = message(alarm, severityList(qualifying), PushChannel.THRESHOLD_ALERT),
+            species = qualifying.map { it.species }.toSet(),
+        )
+    }
+
+    /**
      * Current means younger than [READING_STALE_AFTER] **and** from today in [ALARM_ZONE], so a
      * reading from shortly before midnight never stands in for today's.
      */
@@ -83,17 +132,19 @@ object AlarmRules {
 
     fun title(station: PollenStation): String = "Pollen in ${station.displayName}"
 
-    /**
-     * Worst first, then in [PollenSpecies] declaration order — the order the app's
-     * `GetStationMeasurementUseCase` displays a station in.
-     */
     private fun readingBody(selected: List<SpeciesMeasurement>): String = when {
         selected.isEmpty() -> NO_READING_FOR_SELECTION
         selected.all { it.severity == PollenSeverity.NONE } -> NO_POLLEN
-        else -> selected
-            .sortedWith(compareByDescending<SpeciesMeasurement> { it.severity }.thenBy { it.species.ordinal })
-            .joinToString(" · ") { "${it.species.displayName}: ${it.severity!!.label()}" }
+        else -> severityList(selected)
     }
+
+    /**
+     * "Grasses: High · Birch: Moderate" — worst first, then in [PollenSpecies] declaration order, the
+     * order the app's `GetStationMeasurementUseCase` displays a station in. Every entry has a severity.
+     */
+    private fun severityList(readings: List<SpeciesMeasurement>): String = readings
+        .sortedWith(compareByDescending<SpeciesMeasurement> { it.severity }.thenBy { it.species.ordinal })
+        .joinToString(" · ") { "${it.species.displayName}: ${it.severity!!.label()}" }
 
     private fun noCurrentReadingBody(station: PollenStation, measuredAt: Instant, now: ZonedDateTime): String {
         val latest = measuredAt.atZone(ALARM_ZONE)
@@ -108,10 +159,12 @@ object AlarmRules {
     private fun unavailableBody(station: PollenStation) =
         "No current reading for ${station.displayName}. Readings are currently unavailable."
 
-    private fun dailyMessage(alarm: Alarm, body: String) = PushMessage(
+    private fun dailyMessage(alarm: Alarm, body: String) = message(alarm, body, PushChannel.DAILY_REPORT)
+
+    private fun message(alarm: Alarm, body: String, channel: PushChannel) = PushMessage(
         title = title(alarm.station),
         body = body,
-        channel = PushChannel.DAILY_REPORT,
+        channel = channel,
         data = mapOf(DATA_STATION to alarm.station.abbr, DATA_ALARM to alarm.id.value),
     )
 

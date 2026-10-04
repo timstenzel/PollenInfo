@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.scheduler.AlarmScheduler
 import ch.stenzel.tim.polleninfo.server.alarm.scheduler.launchAlarmScheduler
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
 import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
 import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
@@ -53,6 +54,7 @@ fun Application.module() {
     launchAlarmScheduler(
         scheduler = AlarmScheduler(
             alarms = alarms,
+            log = ExposedNotificationLog(database),
             measurements = measurementService,
             push = pushSenderFromEnvironment(),
             clock = clock,

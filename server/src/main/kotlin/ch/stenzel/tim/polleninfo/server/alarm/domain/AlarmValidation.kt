@@ -81,9 +81,20 @@ object AlarmValidation {
             is ScheduleInput.Daily -> AlarmSchedule.Daily(
                 at = parseTime(schedule.at) ?: return invalid("Time must be HH:mm, got '${schedule.at}'"),
             )
-            // Threshold alerts arrive with their own rules (a window, no "Any"); until then none can
-            // be created rather than one being stored unchecked.
-            is ScheduleInput.Threshold -> return invalid("Threshold alerts cannot be created yet")
+            is ScheduleInput.Threshold -> {
+                val from = parseTime(schedule.from)
+                    ?: return invalid("Start time must be HH:mm, got '${schedule.from}'")
+                val until = parseTime(schedule.until)
+                    ?: return invalid("End time must be HH:mm, got '${schedule.until}'")
+                // A window that crosses midnight is out of scope, so an end at or before the start
+                // is a window that never opens.
+                if (until <= from) return invalid("End time must be after the start time")
+                // "Any" would alert on a reading of nothing at all.
+                if (minSeverity == PollenSeverity.NONE) {
+                    return invalid("A threshold alert needs a severity of at least LOW")
+                }
+                AlarmSchedule.Threshold(from = from, until = until)
+            }
         }
 
         return ValidationResult.Valid(

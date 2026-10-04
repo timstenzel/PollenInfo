@@ -29,7 +29,8 @@ the request fails (`502`). No maximum age is applied to a retained reading; that
 policy and lives in the app's warning, so the two must stay together.
 
 The one timer is the **alarm scheduler** (see "Alarm delivery"): once a minute it reads a station
-only when one of that station's enabled alarms is due, and it reads through the **same**
+only when one of that station's enabled alarms needs it — a daily report due that minute, or a
+threshold alert whose window is open — and it reads through the **same**
 `MeasurementService`, so alarms and app users together still cost at most one upstream request per
 station per cache period. A station with no due alarm and nobody looking at it costs nothing. There
 is still no cold-start poll and no "the first poll failed" state: a scheduler fetch is just another
@@ -668,9 +669,9 @@ Nothing else knows about the tab. Update the order and name assertions in
 #### Alarms
 
 The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far the permission gate, the backend-loaded list, creating daily reports and delivering them
-exist** (see "Alarm editor" below and "Alarm delivery" under the server) — threshold alerts,
-editing, pausing and deleting are not built yet.
+far the permission gate, the backend-loaded list, creating daily reports and threshold alerts, and
+delivering both exist** (see "Alarm editor" below and "Alarm delivery" under the server) — editing,
+pausing and deleting are not built yet.
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
@@ -693,12 +694,12 @@ an alarm to describe (cached after that; the abbreviation or species id stands i
 the iOS path makes no network call at all.
 
 Each row is the station name over `summaryOf(alarm, speciesNames)` (`AlarmSummary.kt`), e.g. "Daily
-report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate": types in display order ("All pollen types"
+report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate" or "Threshold alert 07:00–21:00 · Every day ·
+Birch, Grasses ≥ High" — the same three parts for both types: types in display order ("All pollen types"
 when every one is selected), the minimum only when it is not "Any", and days collapsed by
 `daysSummary` — "Every day", runs of three or more as a range ("Mon–Fri"), shorter runs listed
 ("Sat, Sun"). Severity words come from `PollenSeverity.label()`; `minimumLabel()` calls `NONE`
-"Any". It sits in `presentation/`, not `domain/`, because it is wording. Threshold rows still show a
-placeholder ("Threshold alert 07:00–21:00") until threshold alerts can be created.
+"Any". It sits in `presentation/`, not `domain/`, because it is wording.
 
 **`onResume()` reloads quietly.** The screen calls it on every `RESUMED`, right after handing over
 the permission — so back from the editor, from another tab or from another app. With a list on
@@ -752,7 +753,7 @@ checked by hand.
 `Screen.AlarmEditor(alarmId: String? = null)` — not a tab, so the bottom bar is hidden on it. The
 list's "Create alarm" navigates to it, and its `onDone` (`popBackStack`) runs on the top bar's back
 arrow and on `AlarmEditorEvent.Done`, sent on a buffered `Channel` after a successful save. Every
-editor is a new daily report so far; `alarmId` is reserved for editing and not read yet.
+editor is a new alarm so far; `alarmId` is reserved for editing and not read yet.
 
 `AlarmEditorViewModel` loads the stations and the pollen types in parallel (`Error` with Retry if
 either fails) and opens `Editing(form, stations, species, isSaving, saveError)` on
@@ -761,17 +762,24 @@ is no longer listed), every pollen type, every day, "Any", 08:00. Choosing anoth
 touches the stored home station.
 
 **`AlarmFormState` (`domain/model/`) holds every rule**, pure and unit-tested: field changes return a
-new state, `isValid` needs at least one pollen type and one day, `isDirty` compares against the state
-the editor opened with (so an undone change is not a change), `severityOptions` is Any … Very high,
-and `toDraft()` is the `AlarmDraft` a create sends. `Editing.canSave` is `isValid && !isSaving`;
+new state, `isValid` needs at least one pollen type, one day and — for a threshold alert — a window
+whose end is after its start (`isWindowValid`; windows across midnight are out of scope), `isDirty`
+compares against the state the editor opened with (so an undone change is not a change), and
+`toDraft()` is the `AlarmDraft` a create sends. `type` (`AlarmType.DAILY` | `THRESHOLD`) follows the
+schedule; `withType` switches it and resets what means something different in each — daily is "Any"
+at 08:00, threshold is High from 07:00 to 21:00 — keeping station, types and days. `severityOptions`
+is Any … Very high for a daily report and Low … Very high for a threshold alert. `withTime` only
+applies to a daily report, `withWindowStart` / `withWindowEnd` only to a threshold alert. `Editing.canSave` is `isValid && !isSaving`;
 `save()` is ignored otherwise, and so are field changes while a save runs — the save sends the form
 as it was when tapped. A failed save keeps the form and shows its message as `saveError` until the
 next attempt. A backend `400` arrives as `InvalidAlarmException` with the server's `error` text.
 
-The screen: a station `ExposedDropdownMenuBox` (as in onboarding), `FilterChip`s in `FlowRow`s for
-pollen types, minimum severity and days (day chips announce the full day name), a time button that
-opens a 24-hour `TimePicker` in an `AlertDialog` and is announced as "Report time 08:00", the hint
-"Times are Swiss time.", and Save with a progress indicator. Section titles are headings.
+The screen: a `SingleChoiceSegmentedButtonRow` type toggle ("Daily report" / "Threshold alert"), a
+station `ExposedDropdownMenuBox` (as in onboarding), `FilterChip`s in `FlowRow`s for pollen types,
+severity and days (day chips announce the full day name), then either a time button that opens a
+24-hour `TimePicker` in an `AlertDialog` and is announced as "Report time 08:00", or two of them for
+the window ("Window start 07:00", "Window end 21:00") with a hint while the end is not after the
+start, the hint "Times are Swiss time.", and Save with a progress indicator. Section titles are headings.
 `AlarmEditorViewModelTest` covers loading, both load errors, `isSaving` under a gated create
 (`FakeAlarmRepository.createGate`), `Done` exactly once and a failed save; the composable is checked
 by hand.
@@ -868,7 +876,8 @@ server/src/main/kotlin/.../server/
 └── alarm/
     ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId,
     │                   ALARM_ZONE, AlarmRules, PushMessage / PushChannel, AlarmValidation
-    ├── store/          DeviceStore, AlarmStore (+ Exposed implementations), tables, PollenInfoDatabase
+    ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
+    │                   PollenInfoDatabase
     ├── push/           PushSender, FcmPushSender, LoggingPushSender, pushSenderFromEnvironment
     ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
@@ -920,8 +929,9 @@ into `AlarmInputDto`, whose values are all plain strings, and `alarm/domain/Alar
 returning `ValidationResult.Valid(AlarmSpec)` | `Invalid(message)` rather than throwing — decides
 what is wrong and names it in the `400 {error}`: at least one species and one day, known species,
 severity and day names (exact enum names), a known station (case-insensitive, stored in its official
-form), and a time that is exactly `HH:mm` (parsed `STRICT`, since the default resolver reads
-`24:00` as midnight). Threshold schedules are refused for now. Validation runs before the device is
+form), and times that are exactly `HH:mm` (parsed `STRICT`, since the default resolver reads
+`24:00` as midnight). A threshold schedule also needs `until` after `from` (no window across
+midnight) and a severity other than `NONE`, since "Any" would alert on nothing at all. Validation runs before the device is
 looked up, so an invalid body for an unknown device is a `400`. `AlarmStore.create` returns
 `CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`); the id is a random UUID, and `created_at` is
 kept strictly increasing per device so two alarms created in the same millisecond still list in
@@ -944,9 +954,11 @@ compiler — revisit with the Kotlin bump.
   busy timeout. Isolation is `SERIALIZABLE`, one of the two SQLite supports.
 - The schema is `SchemaUtils.create` on start. There is no migration tool: changing an existing
   table needs one first.
-- Tables: `devices(id PK, fcm_token NULL, created_at)` and `alarms(id PK, device_id → devices,
+- Tables: `devices(id PK, fcm_token NULL, created_at)`, `alarms(id PK, device_id → devices,
   enabled, station_abbr, species, min_severity, days, type, at_time, from_time, until_time,
-  created_at)`. Sets are comma-separated enum names, times `HH:mm`, so the file reads well in
+  created_at)` and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date,
+  PK(all three))` — which pollen types each threshold alert has notified about on a Swiss date
+  (ISO `yyyy-MM-dd`). Sets are comma-separated enum names, times `HH:mm`, so the file reads well in
   `sqlite3`.
 - Store interfaces are `suspend`; the Exposed implementations run each transaction on
   `Dispatchers.IO`. `configureRouting`'s store defaults share one private in-memory database, never
@@ -961,14 +973,16 @@ for the next whole minute, logs and survives a failing tick, and is cancelled on
 
 Each tick takes the current minute in `ALARM_ZONE` (`Europe/Zurich` — every alarm day and time is
 Swiss time, and `java.time` handles daylight saving), loads `AlarmStore.enabledWithDeliverableDevice()`
-(enabled alarms whose device has a push token), keeps the ones due **this minute**, groups them by
-station and reads each such station **once** through the routes' shared `MeasurementService`.
+(enabled alarms whose device has a push token), keeps the daily reports due **this minute** and the
+threshold alerts whose window is open, groups them by station and reads each such station **once** through the routes' shared `MeasurementService`.
 Stations run in parallel children of a `supervisorScope`, each with its own `try`, so one station's
 failure — upstream or delivery — never stops another's reports. A second tick within the same minute
 does nothing. **There is no catch-up**: a minute the scheduler did not run in (backend down, clock
 jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
 
 **The rules are `alarm/domain/AlarmRules`** — pure, with `now` passed in, no clock, I/O or logging:
+
+**Daily reports.**
 
 - **Due** (`isDailyDue`): enabled, today's weekday selected, and the local time truncated to the
   minute equals `at`.
@@ -985,6 +999,26 @@ jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
   "…Readings are currently unavailable." when there is no reading at all.
 - Title "Pollen in <station>"; channel `PushChannel.DAILY_REPORT`; data `stationAbbr` and `alarmId`,
   so opening a station from a notification can be added without a backend change.
+
+**Threshold alerts** (`evaluateThreshold(alarm, now, reading, notifiedToday)` → `ThresholdOutcome`
+(message + the types to record) or `null`):
+
+- **Active** (`isThresholdActive`): enabled, today's weekday selected, and `from <= local time <
+  until` — start inclusive, end exclusive. Evaluated on **every** tick of the window; the
+  30-minute cache bounds what that costs upstream, so a new reading is noticed within half an hour.
+- **Only on a current reading** (the same `isCurrent`). A stale or missing one sends nothing, ever —
+  an outage at the source must never produce a false "high today".
+- **Qualifying types**: selected, reported by the station, `severity.atLeast(minSeverity)`, and not
+  in `notifiedToday`. All of them go into **one** message, body as a daily report's ("Grasses: Very
+  high · Birch: High"); none → `null`. Same title and data, channel `PushChannel.THRESHOLD_ALERT`.
+- **At most once per type per alarm per Swiss day.** `alarm/store/NotificationLog`
+  (`notifiedSpecies`, `record`, `pruneBefore`) is the persisted record, so a restart never resends.
+  The scheduler records the types only on `Sent`; after `Failed` or `Unregistered` nothing is
+  recorded and the next tick in the window tries again. It is keyed per type, so a type that
+  qualifies later the same day still notifies on its own, and a type already over the threshold
+  before the window opens notifies at the first tick inside it. Climbing further (High → Very
+  high) does not notify again. The log is pruned of earlier days on the first tick of each Swiss
+  day; a failed prune is retried next tick and never costs that minute's alarms.
 
 **Sending** is `alarm/push/PushSender` → `PushResult` `Sent` | `Unregistered` | `Failed(cause)`; it
 never throws for a delivery failure.
@@ -1004,15 +1038,16 @@ never throws for a delivery failure.
   the token's last six characters and the message and reports `Sent`. **The key is never
   committed.**
 - So far `Unregistered` and `Failed` are only logged; a daily report is not retried within its
-  minute.
+  minute, a threshold alert is retried on the next tick of its window.
 
 The server logs through `logback-classic` (`server/src/main/resources/logback.xml`, INFO); without
 an SLF4J backend every log line, including the logged pushes, would be dropped.
 
 `AlarmSchedulerTest` runs `tick()` against an in-memory database, `MeasurementService` over
 `FakePollenService` (whose `failures` map fails single stations), `FakePushSender` and
-`MutableClock`. `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers), content
-and every staleness form.
+`MutableClock` — a scheduler built a second time on the same database stands in for a restart.
+`AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers, both window edges),
+content, batching, the per-day exclusion and every staleness form.
 
 #### `GET /pollen/stations/{abbr}/measurements`
 
@@ -1088,8 +1123,7 @@ platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
 
 Store tests (`ExposedStoresTest`) run against `PollenInfoDatabase.inMemory()` or a temp file, never
 the real one; `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly
-(`Database.insertAlarm`) when a test needs to choose the id or the creation time — or a threshold
-alert, which the API does not accept yet. `AlarmRoutesTest` hands its own stores to
+(`Database.insertAlarm`) when a test needs to choose the id or the creation time. `AlarmRoutesTest` hands its own stores to
 `configureRouting(database = …, devices = …, alarms = …)`.
 
 Rules of the road:

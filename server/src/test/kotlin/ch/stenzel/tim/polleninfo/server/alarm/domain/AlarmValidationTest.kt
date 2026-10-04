@@ -135,10 +135,65 @@ class AlarmValidationTest {
         }
     }
 
-    @Test
-    fun `rejects threshold alerts until they can be created`() {
-        val input = validDaily.copy(minSeverity = "HIGH", schedule = ScheduleInput.Threshold("07:00", "21:00"))
+    // --- Threshold alerts ---
 
-        assertIs<ValidationResult.Invalid>(AlarmValidation.validate(input))
+    private val validThreshold = validDaily.copy(
+        minSeverity = "HIGH",
+        schedule = ScheduleInput.Threshold("07:00", "21:00"),
+    )
+
+    @Test
+    fun `accepts a valid threshold alert`() {
+        assertEquals(
+            AlarmSchedule.Threshold(from = LocalTime.of(7, 0), until = LocalTime.of(21, 0)),
+            valid(validThreshold).schedule,
+        )
+        assertEquals(PollenSeverity.HIGH, valid(validThreshold).minSeverity)
+    }
+
+    @Test
+    fun `rejects a window whose end equals its start`() {
+        assertEquals(
+            "End time must be after the start time",
+            invalidMessage(validThreshold.copy(schedule = ScheduleInput.Threshold("07:00", "07:00"))),
+        )
+    }
+
+    @Test
+    fun `accepts a window whose end is one minute after its start`() {
+        assertEquals(
+            AlarmSchedule.Threshold(from = LocalTime.of(7, 0), until = LocalTime.of(7, 1)),
+            valid(validThreshold.copy(schedule = ScheduleInput.Threshold("07:00", "07:01"))).schedule,
+        )
+    }
+
+    @Test
+    fun `rejects a window whose end is before its start`() {
+        assertIs<ValidationResult.Invalid>(
+            AlarmValidation.validate(validThreshold.copy(schedule = ScheduleInput.Threshold("21:00", "07:00"))),
+        )
+    }
+
+    @Test
+    fun `rejects Any as the severity of a threshold alert`() {
+        assertEquals(
+            "A threshold alert needs a severity of at least LOW",
+            invalidMessage(validThreshold.copy(minSeverity = "NONE")),
+        )
+    }
+
+    @Test
+    fun `accepts every severity above Any for a threshold alert`() {
+        PollenSeverity.entries.drop(1).forEach { severity ->
+            assertEquals(severity, valid(validThreshold.copy(minSeverity = severity.name)).minSeverity)
+        }
+    }
+
+    @Test
+    fun `rejects a malformed window time`() {
+        listOf("7:00" to "21:00", "07:00" to "24:00", "" to "21:00").forEach { (from, until) ->
+            val result = AlarmValidation.validate(validThreshold.copy(schedule = ScheduleInput.Threshold(from, until)))
+            assertIs<ValidationResult.Invalid>(result, "'$from'–'$until' should be rejected")
+        }
     }
 }

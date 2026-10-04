@@ -22,16 +22,38 @@ class AlarmFormState private constructor(
     val days: Set<DayOfWeek> get() = draft.days
     val schedule: AlarmSchedule get() = draft.schedule
 
+    val type: AlarmType
+        get() = when (draft.schedule) {
+            is AlarmSchedule.Daily -> AlarmType.DAILY
+            is AlarmSchedule.Threshold -> AlarmType.THRESHOLD
+        }
+
     /**
      * Whether the backend would accept this alarm. An alarm without pollen types or without days
-     * could never fire, so it cannot be saved.
+     * could never fire, and a threshold window whose end is not after its start never opens (windows
+     * across midnight are not supported), so none of them can be saved.
      */
-    val isValid: Boolean get() = draft.species.isNotEmpty() && draft.days.isNotEmpty()
+    val isValid: Boolean
+        get() = draft.species.isNotEmpty() && draft.days.isNotEmpty() && isWindowValid
+
+    /** False only for a threshold window whose end is not after its start. */
+    val isWindowValid: Boolean
+        get() = when (val schedule = draft.schedule) {
+            is AlarmSchedule.Daily -> true
+            is AlarmSchedule.Threshold -> schedule.until > schedule.from
+        }
 
     val isDirty: Boolean get() = draft != initial
 
-    /** The minimum severities a daily report offers. [PollenSeverity.NONE] is "Any": always sent. */
-    val severityOptions: List<PollenSeverity> get() = PollenSeverity.entries
+    /**
+     * The severities this type offers. A daily report starts at [PollenSeverity.NONE] ("Any":
+     * always sent); a threshold alert at Low, since "Any" would alert on nothing at all.
+     */
+    val severityOptions: List<PollenSeverity>
+        get() = when (type) {
+            AlarmType.DAILY -> PollenSeverity.entries
+            AlarmType.THRESHOLD -> PollenSeverity.entries - PollenSeverity.NONE
+        }
 
     fun toDraft(): AlarmDraft = draft
 
@@ -43,8 +65,40 @@ class AlarmFormState private constructor(
 
     fun toggleDay(day: DayOfWeek) = edit { copy(days = days.toggle(day)) }
 
-    /** The time of a daily report. */
-    fun withTime(at: LocalTime) = edit { copy(schedule = AlarmSchedule.Daily(at)) }
+    /**
+     * Switches between a daily report and a threshold alert. The severity and the time fields mean
+     * something different in each, so both go back to the new type's defaults; choosing the current
+     * type changes nothing.
+     */
+    fun withType(type: AlarmType): AlarmFormState {
+        if (type == this.type) return this
+        return edit {
+            when (type) {
+                AlarmType.DAILY -> copy(
+                    minSeverity = DEFAULT_DAILY_SEVERITY,
+                    schedule = AlarmSchedule.Daily(DEFAULT_DAILY_TIME),
+                )
+                AlarmType.THRESHOLD -> copy(
+                    minSeverity = DEFAULT_THRESHOLD_SEVERITY,
+                    schedule = AlarmSchedule.Threshold(DEFAULT_WINDOW_FROM, DEFAULT_WINDOW_UNTIL),
+                )
+            }
+        }
+    }
+
+    /** The time of a daily report; ignored for a threshold alert. */
+    fun withTime(at: LocalTime) = editSchedule<AlarmSchedule.Daily> { AlarmSchedule.Daily(at) }
+
+    /** The start of a threshold alert's window; ignored for a daily report. */
+    fun withWindowStart(from: LocalTime) = editSchedule<AlarmSchedule.Threshold> { copy(from = from) }
+
+    /** The end of a threshold alert's window; ignored for a daily report. */
+    fun withWindowEnd(until: LocalTime) = editSchedule<AlarmSchedule.Threshold> { copy(until = until) }
+
+    private inline fun <reified S : AlarmSchedule> editSchedule(change: S.() -> S): AlarmFormState {
+        val schedule = draft.schedule as? S ?: return this
+        return edit { copy(schedule = schedule.change()) }
+    }
 
     private inline fun edit(change: AlarmDraft.() -> AlarmDraft) = AlarmFormState(draft.change(), initial)
 
@@ -57,18 +111,22 @@ class AlarmFormState private constructor(
 
     companion object {
         val DEFAULT_DAILY_TIME = LocalTime(8, 0)
+        val DEFAULT_DAILY_SEVERITY = PollenSeverity.NONE
+        val DEFAULT_THRESHOLD_SEVERITY = PollenSeverity.HIGH
+        val DEFAULT_WINDOW_FROM = LocalTime(7, 0)
+        val DEFAULT_WINDOW_UNTIL = LocalTime(21, 0)
 
         /**
          * A new daily report: the home station, every pollen type in [speciesIds], every day,
          * "Any" severity, at [DEFAULT_DAILY_TIME] — so an alarm saved without changes reports on
-         * everything, every morning.
+         * everything, every morning. [withType] turns it into a threshold alert.
          */
         fun newDailyReport(homeStationAbbr: String, speciesIds: Collection<String>): AlarmFormState {
             val draft = AlarmDraft(
                 enabled = true,
                 stationAbbr = homeStationAbbr,
                 species = speciesIds.toSet(),
-                minSeverity = PollenSeverity.NONE,
+                minSeverity = DEFAULT_DAILY_SEVERITY,
                 days = DayOfWeek.entries.toSet(),
                 schedule = AlarmSchedule.Daily(DEFAULT_DAILY_TIME),
             )
@@ -78,3 +136,6 @@ class AlarmFormState private constructor(
 }
 
 private fun <T> Set<T>.toggle(element: T): Set<T> = if (element in this) this - element else this + element
+
+/** What an alarm does: a report at a fixed time, or an alert while a window is open. */
+enum class AlarmType { DAILY, THRESHOLD }

@@ -195,7 +195,7 @@ class AlarmsViewModelTest {
         val content = assertIs<AlarmsUiState.Content>(viewModel.uiState.value)
         assertEquals(listOf("Zürich", "Bern"), content.alarms.map { it.stationName })
         assertEquals(
-            listOf("Daily report at 08:00 · Mon–Fri · Birch, Grasses", "Threshold alert 07:00–21:00"),
+            listOf("Daily report at 08:00 · Mon–Fri · Birch, Grasses", "Threshold alert 07:00–21:00 · Every day · Hazel ≥ High"),
             content.alarms.map { it.summary },
         )
     }

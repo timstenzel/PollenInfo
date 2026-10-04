@@ -4,6 +4,8 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
 import ch.stenzel.tim.polleninfo.feature.alarms.WEEKDAYS
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.datetime.DayOfWeek
@@ -12,6 +14,29 @@ import kotlinx.datetime.LocalTime
 class AlarmSummaryTest {
 
     private val speciesNames = allSpecies.associate { it.id to it.name }
+
+    // --- Threshold summary ---
+
+    @Test
+    fun `a threshold alert names its window days types and severity`() {
+        val alarm = thresholdAlarm().copy(species = setOf("BIRCH", "GRASSES"), days = WEEKDAYS)
+
+        assertEquals(
+            "Threshold alert 07:00–21:00 · Mon–Fri · Birch, Grasses ≥ High",
+            summaryOf(alarm, speciesNames),
+        )
+    }
+
+    @Test
+    fun `a threshold alert on every day for every type says so`() {
+        val alarm = thresholdAlarm().copy(
+            species = speciesNames.keys,
+            minSeverity = PollenSeverity.LOW,
+            schedule = AlarmSchedule.Threshold(LocalTime(6, 5), LocalTime(9, 30)),
+        )
+
+        assertEquals("Threshold alert 06:05–09:30 · Every day · All pollen types ≥ Low", summaryOf(alarm, speciesNames))
+    }
 
     // --- Daily summary ---
 

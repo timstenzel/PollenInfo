@@ -1,9 +1,14 @@
 package ch.stenzel.tim.polleninfo.server.alarm.scheduler
 
+import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
+import ch.stenzel.tim.polleninfo.server.alarm.domain.PushChannel
+import ch.stenzel.tim.polleninfo.server.alarm.push.PushResult
 import ch.stenzel.tim.polleninfo.server.alarm.push.FakePushSender
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
 import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
 import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
@@ -18,7 +23,9 @@ import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenService
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.hourlyCsv
 import java.io.IOException
 import java.time.Duration
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,6 +39,7 @@ class AlarmSchedulerTest {
     private val database = PollenInfoDatabase.inMemory()
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
+    private val log = ExposedNotificationLog(database)
 
     /** One reading from 07:00 Swiss time: Birch MODERATE, Grasses HIGH. */
     private val pollen = FakePollenService(
@@ -41,13 +49,17 @@ class AlarmSchedulerTest {
     )
     private val push = FakePushSender()
 
-    private fun scheduler() = AlarmScheduler(
+    private fun measurementService() = MeasurementService(
+        pollenService = pollen,
+        thresholds = PollenThresholds(),
+        cache = TtlCache(MeasurementService.CACHE_TTL, clock),
+    )
+
+    /** A fresh scheduler with a fresh cache, as after a restart; only the database is shared. */
+    private fun scheduler(measurements: MeasurementService = measurementService()) = AlarmScheduler(
         alarms = alarms,
-        measurements = MeasurementService(
-            pollenService = pollen,
-            thresholds = PollenThresholds(),
-            cache = TtlCache(MeasurementService.CACHE_TTL, clock),
-        ),
+        log = log,
+        measurements = measurements,
         push = push,
         clock = clock,
     )
@@ -173,5 +185,166 @@ class AlarmSchedulerTest {
         scheduler().tick()
 
         assertEquals(listOf("token-be"), push.sent.map { it.token })
+    }
+
+    // --- threshold alerts ---
+
+    /** Registers a device with [token] and gives it an every-day threshold alert. */
+    private suspend fun thresholdAlert(
+        token: String,
+        species: Set<PollenSpecies> = setOf(PollenSpecies.GRASSES),
+        minSeverity: PollenSeverity = PollenSeverity.HIGH,
+        from: LocalTime = LocalTime.of(7, 0),
+        until: LocalTime = LocalTime.of(21, 0),
+    ): Alarm {
+        val device = devices.register(token)
+        val alarm = dailyAlarm(device).copy(
+            species = species,
+            minSeverity = minSeverity,
+            days = DayOfWeek.entries.toSet(),
+            schedule = AlarmSchedule.Threshold(from, until),
+        )
+        database.insertAlarm(alarm, createdAtMillis = nextCreatedAt++)
+        return alarm
+    }
+
+    /** Publishes one row at [utc] (`dd.MM.yyyy HH:mm`, as upstream). */
+    private fun publish(utc: String, values: Map<PollenSpecies, Int>) {
+        pollen.bytes = hourlyCsv(rows = listOf(utc to values))
+    }
+
+    private val monday = LocalDate.of(2026, 8, 3)
+
+    @Test
+    fun `a threshold alert fires once per species per day and again the next day`() = runTest {
+        thresholdAlert("token-1")
+        val scheduler = scheduler()
+
+        repeat(30) {
+            scheduler.tick()
+            clock.advanceBy(Duration.ofMinutes(1))
+        }
+        val first = push.sent.single()
+        assertEquals("Pollen in Zürich", first.message.title)
+        assertEquals("Grasses: High", first.message.body)
+        assertEquals(PushChannel.THRESHOLD_ALERT, first.message.channel)
+
+        // Tuesday 08:00 in Zürich, with Tuesday's reading.
+        clock.advanceBy(Duration.ofHours(24).minusMinutes(30))
+        publish("04.08.2026 05:00", mapOf(PollenSpecies.GRASSES to 20))
+        scheduler.tick()
+
+        assertEquals(2, push.sent.size)
+        assertEquals("Grasses: High", push.sent.last().message.body)
+    }
+
+    @Test
+    fun `a second species qualifying later gets its own message`() = runTest {
+        thresholdAlert("token-1", species = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES))
+        val scheduler = scheduler()
+        scheduler.tick()
+
+        // Half an hour later the cache has expired and the 08:00 row shows Birch at High too.
+        clock.advanceBy(Duration.ofMinutes(30))
+        publish("03.08.2026 06:00", mapOf(PollenSpecies.BIRCH to 100, PollenSpecies.GRASSES to 25))
+        scheduler.tick()
+
+        assertEquals(listOf("Grasses: High", "Birch: High"), push.sent.map { it.message.body })
+    }
+
+    @Test
+    fun `species qualifying on the same reading share one message`() = runTest {
+        publish("03.08.2026 05:00", mapOf(PollenSpecies.BIRCH to 100, PollenSpecies.GRASSES to 25))
+        thresholdAlert("token-1", species = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES))
+
+        scheduler().tick()
+
+        assertEquals("Birch: High · Grasses: High", push.sent.single().message.body)
+    }
+
+    @Test
+    fun `a failed send is retried on the next tick`() = runTest {
+        val alarm = thresholdAlert("token-1")
+        push.results["token-1"] = PushResult.Failed(IOException("FCM is down"))
+        val scheduler = scheduler()
+        scheduler.tick()
+
+        push.results.remove("token-1")
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+
+        assertEquals(2, push.sent.size)
+        assertEquals(setOf(PollenSpecies.GRASSES), log.notifiedSpecies(alarm.id, monday))
+    }
+
+    @Test
+    fun `a species over the threshold before the window opens fires at the first tick inside it`() = runTest {
+        thresholdAlert("token-1", from = LocalTime.of(8, 30))
+        val scheduler = scheduler()
+        scheduler.tick()
+        assertEquals(emptyList(), push.sent)
+        assertEquals(emptyList(), pollen.requested)
+
+        clock.advanceBy(Duration.ofMinutes(30))
+        scheduler.tick()
+
+        assertEquals("Grasses: High", push.sent.single().message.body)
+    }
+
+    @Test
+    fun `an upstream failure with only a stale reading sends nothing`() = runTest {
+        val measurements = measurementService()
+        // Someone looks at Zürich at 08:00, so the 07:00 reading is cached.
+        measurements.measurementFor(PollenStation.ZUERICH)
+        thresholdAlert("token-1")
+        pollen.failure = IOException("MeteoSwiss is down")
+
+        // At 10:00 the retained 07:00 reading is three hours old.
+        clock.advanceBy(Duration.ofHours(2))
+        scheduler(measurements).tick()
+
+        assertEquals(emptyList(), push.sent)
+    }
+
+    @Test
+    fun `a scheduler recreated on the same database does not resend that day`() = runTest {
+        thresholdAlert("token-1")
+        scheduler().tick()
+
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler().tick()
+
+        assertEquals(1, push.sent.size)
+    }
+
+    @Test
+    fun `the log is pruned when the Swiss date changes`() = runTest {
+        val alarm = thresholdAlert("token-1")
+        val scheduler = scheduler()
+        scheduler.tick()
+        assertEquals(setOf(PollenSpecies.GRASSES), log.notifiedSpecies(alarm.id, monday))
+
+        // 23:59 on Monday in Zürich is still Monday: nothing is pruned.
+        clock.advanceBy(Duration.ofHours(15).plusMinutes(59))
+        scheduler.tick()
+        assertEquals(setOf(PollenSpecies.GRASSES), log.notifiedSpecies(alarm.id, monday))
+
+        // Midnight in Zürich, though still Monday in UTC.
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertEquals(emptySet(), log.notifiedSpecies(alarm.id, monday))
+    }
+
+    @Test
+    fun `a daily report and a threshold alert for one station share one fetch`() = runTest {
+        dailyReport("token-daily")
+        thresholdAlert("token-threshold")
+
+        scheduler().tick()
+
+        assertEquals(setOf("token-daily", "token-threshold"), push.sent.map { it.token }.toSet())
+        assertEquals(listOf(PollenStation.ZUERICH), pollen.requested)
     }
 }

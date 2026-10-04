@@ -10,6 +10,8 @@ import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.allStations
 import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -237,5 +239,37 @@ class AlarmEditorViewModelTest {
         assertNull(viewModel.editing().saveError)
         alarms.createGate!!.complete(Unit)
         advanceUntilIdle()
+    }
+
+    // --- Threshold alerts ---
+
+    @Test
+    fun `switching to a threshold alert and editing its window saves a threshold draft`() = runTest {
+        val viewModel = loadedViewModel()
+
+        viewModel.onTypeSelected(AlarmType.THRESHOLD)
+        viewModel.onWindowStartSelected(LocalTime(6, 0))
+        viewModel.onWindowEndSelected(LocalTime(20, 0))
+        viewModel.save()
+        advanceUntilIdle()
+
+        val draft = alarms.createdDrafts.single()
+        assertEquals(PollenSeverity.HIGH, draft.minSeverity)
+        assertEquals(AlarmSchedule.Threshold(LocalTime(6, 0), LocalTime(20, 0)), draft.schedule)
+    }
+
+    @Test
+    fun `a window whose end is not after its start cannot be saved`() = runTest {
+        val viewModel = loadedViewModel()
+        viewModel.onTypeSelected(AlarmType.THRESHOLD)
+
+        viewModel.onWindowEndSelected(LocalTime(7, 0))
+        assertFalse(viewModel.editing().canSave)
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertTrue(alarms.createdDrafts.isEmpty())
+        viewModel.onWindowEndSelected(LocalTime(7, 1))
+        assertTrue(viewModel.editing().canSave)
     }
 }

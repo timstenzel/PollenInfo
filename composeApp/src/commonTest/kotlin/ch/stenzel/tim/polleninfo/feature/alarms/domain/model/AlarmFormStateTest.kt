@@ -128,4 +128,110 @@ class AlarmFormStateTest {
             form.toDraft(),
         )
     }
+
+    // --- Type ---
+
+    private val threshold = newForm.withType(AlarmType.THRESHOLD)
+
+    @Test
+    fun `a new alarm is a daily report`() {
+        assertEquals(AlarmType.DAILY, newForm.type)
+    }
+
+    @Test
+    fun `switching to threshold sets High and 07 00 to 21 00`() {
+        assertEquals(AlarmType.THRESHOLD, threshold.type)
+        assertEquals(PollenSeverity.HIGH, threshold.minSeverity)
+        assertEquals(AlarmSchedule.Threshold(LocalTime(7, 0), LocalTime(21, 0)), threshold.schedule)
+        assertTrue(threshold.isValid)
+    }
+
+    @Test
+    fun `switching back to daily sets Any and 08 00`() {
+        val daily = newForm
+            .withMinSeverity(PollenSeverity.LOW)
+            .withTime(LocalTime(6, 15))
+            .withType(AlarmType.THRESHOLD)
+            .withType(AlarmType.DAILY)
+
+        assertEquals(AlarmType.DAILY, daily.type)
+        assertEquals(PollenSeverity.NONE, daily.minSeverity)
+        assertEquals(AlarmSchedule.Daily(LocalTime(8, 0)), daily.schedule)
+    }
+
+    @Test
+    fun `switching type keeps station pollen types and days`() {
+        val edited = newForm.withStation("PBE").toggleSpecies("BIRCH").toggleDay(DayOfWeek.SUNDAY)
+
+        val switched = edited.withType(AlarmType.THRESHOLD)
+
+        assertEquals("PBE", switched.stationAbbr)
+        assertEquals(edited.species, switched.species)
+        assertEquals(edited.days, switched.days)
+    }
+
+    @Test
+    fun `choosing the current type changes nothing`() {
+        val edited = newForm.withMinSeverity(PollenSeverity.LOW).withTime(LocalTime(6, 15))
+
+        assertEquals(edited, edited.withType(AlarmType.DAILY))
+    }
+
+    @Test
+    fun `switching type makes the form dirty and switching back to the defaults does not`() {
+        assertTrue(threshold.isDirty)
+        assertFalse(threshold.withType(AlarmType.DAILY).isDirty)
+    }
+
+    @Test
+    fun `the threshold severity options exclude Any`() {
+        assertEquals(
+            listOf(PollenSeverity.LOW, PollenSeverity.MODERATE, PollenSeverity.HIGH, PollenSeverity.VERY_HIGH),
+            threshold.severityOptions,
+        )
+    }
+
+    // --- Threshold window ---
+
+    @Test
+    fun `the window start and end can be changed`() {
+        val form = threshold.withWindowStart(LocalTime(6, 30)).withWindowEnd(LocalTime(22, 0))
+
+        assertEquals(AlarmSchedule.Threshold(LocalTime(6, 30), LocalTime(22, 0)), form.schedule)
+    }
+
+    @Test
+    fun `isValid is false when the end equals the start`() {
+        val form = threshold.withWindowEnd(LocalTime(7, 0))
+
+        assertFalse(form.isWindowValid)
+        assertFalse(form.isValid)
+    }
+
+    @Test
+    fun `isValid is false when the end is before the start`() {
+        assertFalse(threshold.withWindowStart(LocalTime(22, 0)).isValid)
+    }
+
+    @Test
+    fun `an end one minute after the start is valid`() {
+        val form = threshold.withWindowEnd(LocalTime(7, 1))
+
+        assertTrue(form.isWindowValid)
+        assertTrue(form.isValid)
+    }
+
+    @Test
+    fun `window times are ignored on a daily report and the report time on a threshold alert`() {
+        assertEquals(newForm, newForm.withWindowStart(LocalTime(6, 0)).withWindowEnd(LocalTime(9, 0)))
+        assertEquals(threshold, threshold.withTime(LocalTime(9, 0)))
+    }
+
+    @Test
+    fun `toDraft carries the threshold window`() {
+        val draft = threshold.withMinSeverity(PollenSeverity.MODERATE).withWindowEnd(LocalTime(19, 0)).toDraft()
+
+        assertEquals(PollenSeverity.MODERATE, draft.minSeverity)
+        assertEquals(AlarmSchedule.Threshold(LocalTime(7, 0), LocalTime(19, 0)), draft.schedule)
+    }
 }

@@ -11,27 +11,31 @@ import kotlinx.datetime.isoDayNumber
 
 /**
  * The one line a list row says about [alarm], e.g.
- * `Daily report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate`. The station is not part of it:
- * the row shows that as its headline.
+ * `Daily report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate` or
+ * `Threshold alert 07:00–21:00 · Every day · Birch, Grasses ≥ High` — the same three parts for both
+ * types, so a list of both scans alike. The station is not part of it: the row shows that as its
+ * headline.
  *
  * [speciesNames] maps species ids to display names in the order the app lists pollen types; the
  * selected ones are named in that order, and an id missing from it is shown as itself rather than
  * dropped. Selecting every known type reads "All pollen types". A minimum of
- * [PollenSeverity.NONE] ("Any") adds nothing, since the report is then always sent.
+ * [PollenSeverity.NONE] ("Any") adds nothing, since the report is then always sent; a threshold
+ * alert never has it.
  *
  * Lives beside the screen rather than in `domain/` because it is wording, and it takes the severity
  * words from `PollenSeverity.label()` so the list cannot spell a band differently from the rest of
  * the app.
  */
-fun summaryOf(alarm: Alarm, speciesNames: Map<String, String>): String = when (val schedule = alarm.schedule) {
-    is AlarmSchedule.Daily -> listOf(
-        "Daily report at ${formatTime(schedule.at)}",
+fun summaryOf(alarm: Alarm, speciesNames: Map<String, String>): String {
+    val type = when (val schedule = alarm.schedule) {
+        is AlarmSchedule.Daily -> "Daily report at ${formatTime(schedule.at)}"
+        is AlarmSchedule.Threshold -> "Threshold alert ${formatTime(schedule.from)}–${formatTime(schedule.until)}"
+    }
+    return listOf(
+        type,
         daysSummary(alarm.days),
         speciesSummary(alarm.species, speciesNames) + severitySuffix(alarm.minSeverity),
     ).joinToString(SEPARATOR)
-
-    // Threshold alerts cannot be created from the app yet; the full summary arrives with them.
-    is AlarmSchedule.Threshold -> "Threshold alert ${formatTime(schedule.from)}–${formatTime(schedule.until)}"
 }
 
 /**

@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlin.io.path.deleteRecursively
@@ -26,7 +27,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.exposed.exceptions.ExposedSQLException
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.test.assertFailsWith
 
 class ExposedStoresTest {
@@ -34,6 +39,7 @@ class ExposedStoresTest {
     private val database = PollenInfoDatabase.inMemory()
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
+    private val log = ExposedNotificationLog(database)
 
     private val tempDir = Files.createTempDirectory("polleninfo-db-test")
 
@@ -203,5 +209,96 @@ class ExposedStoresTest {
         assertTrue(path.exists())
         assertTrue(ExposedDeviceStore(reopened).exists(id))
         assertEquals(listOf(alarm), ExposedAlarmStore(reopened).list(id))
+    }
+
+    // --- Notification log ---
+
+    private val today = LocalDate.of(2026, 8, 3)
+
+    private suspend fun storedThresholdAlarm(): AlarmId {
+        val alarm = thresholdAlarm(devices.register("token-1"))
+        database.insertAlarm(alarm, createdAtMillis = 1)
+        return alarm.id
+    }
+
+    @Test
+    fun `an alarm that never notified has no notified species`() = runTest {
+        assertEquals(emptySet(), log.notifiedSpecies(storedThresholdAlarm(), today))
+    }
+
+    @Test
+    fun `recorded species are notified on their day only`() = runTest {
+        val id = storedThresholdAlarm()
+
+        log.record(id, setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), today)
+
+        assertEquals(setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), log.notifiedSpecies(id, today))
+        assertEquals(emptySet(), log.notifiedSpecies(id, today.plusDays(1)))
+        assertEquals(emptySet(), log.notifiedSpecies(id, today.minusDays(1)))
+    }
+
+    @Test
+    fun `recording adds to what was recorded earlier that day`() = runTest {
+        val id = storedThresholdAlarm()
+
+        log.record(id, setOf(PollenSpecies.BIRCH), today)
+        log.record(id, setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), today)
+
+        assertEquals(setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), log.notifiedSpecies(id, today))
+    }
+
+    @Test
+    fun `one alarm's record does not count for another`() = runTest {
+        val mine = storedThresholdAlarm()
+        val theirs = storedThresholdAlarm()
+
+        log.record(mine, setOf(PollenSpecies.BIRCH), today)
+
+        assertEquals(emptySet(), log.notifiedSpecies(theirs, today))
+    }
+
+    @Test
+    fun `recording for an alarm that does not exist does nothing`() = runTest {
+        log.record(AlarmId("never-stored"), setOf(PollenSpecies.BIRCH), today)
+
+        assertEquals(emptySet(), log.notifiedSpecies(AlarmId("never-stored"), today))
+    }
+
+    @Test
+    fun `pruning forgets the days before the given one and keeps that day`() = runTest {
+        val id = storedThresholdAlarm()
+        log.record(id, setOf(PollenSpecies.BIRCH), today.minusDays(2))
+        log.record(id, setOf(PollenSpecies.ASH), today.minusDays(1))
+        log.record(id, setOf(PollenSpecies.GRASSES), today)
+
+        log.pruneBefore(today)
+
+        assertEquals(emptySet(), log.notifiedSpecies(id, today.minusDays(2)))
+        assertEquals(emptySet(), log.notifiedSpecies(id, today.minusDays(1)))
+        assertEquals(setOf(PollenSpecies.GRASSES), log.notifiedSpecies(id, today))
+    }
+
+    @Test
+    fun `deleting an alarm removes its log rows because foreign keys are enforced`() = runTest {
+        val id = storedThresholdAlarm()
+        log.record(id, setOf(PollenSpecies.BIRCH), today)
+
+        transaction(database) { AlarmsTable.deleteWhere { AlarmsTable.id eq id.value } }
+
+        assertEquals(0L, transaction(database) { NotificationLogTable.selectAll().count() })
+    }
+
+    @Test
+    fun `the log survives closing and reopening a file backed database`() = runTest {
+        val path = tempDir.resolve("polleninfo.db")
+        val first = PollenInfoDatabase.file(path)
+        val alarm = thresholdAlarm(ExposedDeviceStore(first).register("token-1"))
+        first.insertAlarm(alarm, createdAtMillis = 1)
+        ExposedNotificationLog(first).record(alarm.id, setOf(PollenSpecies.BIRCH), today)
+        TransactionManager.closeAndUnregister(first)
+
+        val reopened = PollenInfoDatabase.file(path)
+
+        assertEquals(setOf(PollenSpecies.BIRCH), ExposedNotificationLog(reopened).notifiedSpecies(alarm.id, today))
     }
 }

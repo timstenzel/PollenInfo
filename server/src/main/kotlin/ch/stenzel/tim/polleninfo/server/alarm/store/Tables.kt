@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.server.alarm.store
 
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
 /**
@@ -37,4 +38,17 @@ internal object AlarmsTable : Table("alarms") {
 
     const val TYPE_DAILY = "daily"
     const val TYPE_THRESHOLD = "threshold"
+}
+
+/**
+ * Which pollen types each threshold alert has already notified about on a Swiss calendar day
+ * ([localDate], ISO `yyyy-MM-dd`). Persisted so that a restart never repeats a notification sent
+ * earlier the same day; rows go with their alarm.
+ */
+internal object NotificationLogTable : Table("notification_log") {
+    val alarmId = reference("alarm_id", AlarmsTable.id, onDelete = ReferenceOption.CASCADE)
+    val species = varchar("species", length = 16)
+    val localDate = varchar("local_date", length = 10)
+
+    override val primaryKey = PrimaryKey(alarmId, species, localDate)
 }

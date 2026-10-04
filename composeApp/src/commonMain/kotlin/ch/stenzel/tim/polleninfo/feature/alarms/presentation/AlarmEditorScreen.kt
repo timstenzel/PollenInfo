@@ -28,6 +28,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -51,14 +55,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
-import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Creates a daily report. Shown without the bottom bar — it is a task with a clear way back, not a
+ * Creates a daily report or a threshold alert. Shown without the bottom bar — it is a task with a clear way back, not a
  * tab. [onDone] leaves the editor, after a save or when the user goes back.
  */
 @Composable
@@ -84,7 +88,10 @@ fun AlarmEditorScreen(
         onSpeciesToggled = viewModel::onSpeciesToggled,
         onMinSeveritySelected = viewModel::onMinSeveritySelected,
         onDayToggled = viewModel::onDayToggled,
+        onTypeSelected = viewModel::onTypeSelected,
         onTimeSelected = viewModel::onTimeSelected,
+        onWindowStartSelected = viewModel::onWindowStartSelected,
+        onWindowEndSelected = viewModel::onWindowEndSelected,
         onSave = viewModel::save,
     )
 }
@@ -99,7 +106,10 @@ private fun AlarmEditorContent(
     onSpeciesToggled: (String) -> Unit,
     onMinSeveritySelected: (PollenSeverity) -> Unit,
     onDayToggled: (DayOfWeek) -> Unit,
+    onTypeSelected: (AlarmType) -> Unit,
     onTimeSelected: (LocalTime) -> Unit,
+    onWindowStartSelected: (LocalTime) -> Unit,
+    onWindowEndSelected: (LocalTime) -> Unit,
     onSave: () -> Unit,
 ) {
     Scaffold(
@@ -145,7 +155,10 @@ private fun AlarmEditorContent(
                 onSpeciesToggled = onSpeciesToggled,
                 onMinSeveritySelected = onMinSeveritySelected,
                 onDayToggled = onDayToggled,
+                onTypeSelected = onTypeSelected,
                 onTimeSelected = onTimeSelected,
+                onWindowStartSelected = onWindowStartSelected,
+                onWindowEndSelected = onWindowEndSelected,
                 onSave = onSave,
                 modifier = modifier,
             )
@@ -160,7 +173,10 @@ private fun EditingForm(
     onSpeciesToggled: (String) -> Unit,
     onMinSeveritySelected: (PollenSeverity) -> Unit,
     onDayToggled: (DayOfWeek) -> Unit,
+    onTypeSelected: (AlarmType) -> Unit,
     onTimeSelected: (LocalTime) -> Unit,
+    onWindowStartSelected: (LocalTime) -> Unit,
+    onWindowEndSelected: (LocalTime) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier,
 ) {
@@ -170,9 +186,14 @@ private fun EditingForm(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Daily report", style = MaterialTheme.typography.titleMedium)
+        TypeToggle(selected = form.type, enabled = enabled, onTypeSelected = onTypeSelected)
         Text(
-            "A summary of the selected pollen types at one time on the chosen days.",
+            when (form.type) {
+                AlarmType.DAILY -> "A summary of the selected pollen types at one time on the chosen days."
+                AlarmType.THRESHOLD ->
+                    "A notification as soon as a selected pollen type reaches the chosen level, " +
+                        "at most once per type per day."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -198,7 +219,12 @@ private fun EditingForm(
         }
         if (form.species.isEmpty()) ValidationHint("Select at least one pollen type.")
 
-        SectionHeading("Send only from")
+        SectionHeading(
+            when (form.type) {
+                AlarmType.DAILY -> "Send only from"
+                AlarmType.THRESHOLD -> "Notify from"
+            },
+        )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             form.severityOptions.forEach { severity ->
                 FilterChip(
@@ -210,10 +236,11 @@ private fun EditingForm(
             }
         }
         Text(
-            if (form.minSeverity == PollenSeverity.NONE) {
-                "Sent every chosen day."
-            } else {
-                "Sent only when a selected type is at least ${form.minSeverity.minimumLabel()}."
+            when {
+                form.type == AlarmType.THRESHOLD ->
+                    "Sent when a selected type is at least ${form.minSeverity.minimumLabel()}."
+                form.minSeverity == PollenSeverity.NONE -> "Sent every chosen day."
+                else -> "Sent only when a selected type is at least ${form.minSeverity.minimumLabel()}."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -236,9 +263,32 @@ private fun EditingForm(
         }
         if (form.days.isEmpty()) ValidationHint("Select at least one day.")
 
-        SectionHeading("Time")
-        val at = (form.schedule as? AlarmSchedule.Daily)?.at ?: AlarmFormState.DEFAULT_DAILY_TIME
-        TimeField(label = "Report time", time = at, enabled = enabled, onTimeSelected = onTimeSelected)
+        when (val schedule = form.schedule) {
+            is AlarmSchedule.Daily -> {
+                SectionHeading("Time")
+                TimeField(label = "Report time", time = schedule.at, enabled = enabled, onTimeSelected = onTimeSelected)
+            }
+            is AlarmSchedule.Threshold -> {
+                SectionHeading("Active window")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TimeField(
+                        label = "Window start",
+                        time = schedule.from,
+                        enabled = enabled,
+                        onTimeSelected = onWindowStartSelected,
+                    )
+                    // Decorative: each button names its own end of the window.
+                    Text("–", modifier = Modifier.clearAndSetSemantics {})
+                    TimeField(
+                        label = "Window end",
+                        time = schedule.until,
+                        enabled = enabled,
+                        onTimeSelected = onWindowEndSelected,
+                    )
+                }
+                if (!form.isWindowValid) ValidationHint("The end must be after the start.")
+            }
+        }
         Text(
             "Times are Swiss time.",
             style = MaterialTheme.typography.bodySmall,
@@ -261,6 +311,29 @@ private fun EditingForm(
                 }
             } else {
                 Text("Save")
+            }
+        }
+    }
+}
+
+/** Daily report or threshold alert, as two segments; each announces its own selected state. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TypeToggle(
+    selected: AlarmType,
+    enabled: Boolean,
+    onTypeSelected: (AlarmType) -> Unit,
+) {
+    val options = listOf(AlarmType.DAILY to "Daily report", AlarmType.THRESHOLD to "Threshold alert")
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (type, label) ->
+            SegmentedButton(
+                selected = type == selected,
+                onClick = { onTypeSelected(type) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                enabled = enabled,
+            ) {
+                Text(label)
             }
         }
     }

@@ -93,10 +93,10 @@ class AlarmRulesTest {
 
     @Test
     fun `the time is compared in Swiss time whatever zone now is given in`() {
-        val sixUtc = mondayAtEight.toInstant().atZone(ZoneOffset.UTC)
+        val fiveUtc = mondayAtEight.toInstant().atZone(ZoneOffset.UTC)
 
-        assertNotNull(AlarmRules.evaluateDaily(alarm(), sixUtc, fresh()))
-        assertNull(AlarmRules.evaluateDaily(alarm(at = LocalTime.of(6, 0)), sixUtc, fresh()))
+        assertNotNull(AlarmRules.evaluateDaily(alarm(), fiveUtc, fresh()))
+        assertNull(AlarmRules.evaluateDaily(alarm(at = LocalTime.of(6, 0)), fiveUtc, fresh()))
     }
 
     @Test
@@ -290,5 +290,163 @@ class AlarmRulesTest {
     @Test
     fun `the freshness limit matches the app's three hours`() {
         assertEquals(Duration.ofHours(3), READING_STALE_AFTER)
+    }
+
+    // --- threshold alerts ---
+
+    private fun thresholdAlarm(
+        enabled: Boolean = true,
+        species: Set<PollenSpecies> = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES),
+        minSeverity: PollenSeverity = PollenSeverity.HIGH,
+        days: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
+        from: LocalTime = LocalTime.of(7, 0),
+        until: LocalTime = LocalTime.of(21, 0),
+    ) = alarm(enabled = enabled, species = species, minSeverity = minSeverity, days = days)
+        .copy(schedule = AlarmSchedule.Threshold(from, until))
+
+    /** Birch HIGH, Grasses VERY_HIGH, measured half an hour before [at]. */
+    private fun highReading(at: ZonedDateTime = mondayAtEight) = reading(
+        measuredAt = at.minusMinutes(30).toInstant(),
+        severities = mapOf(PollenSpecies.BIRCH to PollenSeverity.HIGH, PollenSpecies.GRASSES to PollenSeverity.VERY_HIGH),
+    )
+
+    private fun evaluateThreshold(
+        alarm: Alarm = thresholdAlarm(),
+        now: ZonedDateTime = mondayAtEight,
+        reading: StationMeasurement? = highReading(now),
+        notifiedToday: Set<PollenSpecies> = emptySet(),
+    ) = AlarmRules.evaluateThreshold(alarm, now, reading, notifiedToday)
+
+    @Test
+    fun `a threshold alert fires at the first minute of its window`() {
+        val opening = mondayAtEight.withHour(7)
+
+        assertNotNull(evaluateThreshold(now = opening))
+    }
+
+    @Test
+    fun `a threshold alert does not fire one minute before its window`() {
+        assertNull(evaluateThreshold(now = mondayAtEight.withHour(6).withMinute(59)))
+    }
+
+    @Test
+    fun `a threshold alert fires in the last minute of its window`() {
+        assertNotNull(evaluateThreshold(now = mondayAtEight.withHour(20).withMinute(59).withSecond(59)))
+    }
+
+    @Test
+    fun `a threshold alert does not fire at the end of its window`() {
+        assertNull(evaluateThreshold(now = mondayAtEight.withHour(21)))
+    }
+
+    @Test
+    fun `a threshold alert does not fire on a day it excludes`() {
+        assertNull(evaluateThreshold(alarm = thresholdAlarm(days = setOf(DayOfWeek.SUNDAY))))
+    }
+
+    @Test
+    fun `a disabled threshold alert never fires`() {
+        assertNull(evaluateThreshold(alarm = thresholdAlarm(enabled = false)))
+    }
+
+    @Test
+    fun `a daily report is never treated as a threshold alert`() {
+        assertNull(evaluateThreshold(alarm = alarm(minSeverity = PollenSeverity.HIGH)))
+    }
+
+    @Test
+    fun `a type exactly at the threshold fires`() {
+        val outcome = evaluateThreshold(alarm = thresholdAlarm(species = setOf(PollenSpecies.BIRCH)))
+
+        assertEquals(setOf(PollenSpecies.BIRCH), outcome?.species)
+    }
+
+    @Test
+    fun `a type one band below the threshold does not fire`() {
+        val reading = reading(severities = mapOf(PollenSpecies.BIRCH to PollenSeverity.MODERATE))
+
+        assertNull(evaluateThreshold(alarm = thresholdAlarm(species = setOf(PollenSpecies.BIRCH)), reading = reading))
+    }
+
+    @Test
+    fun `only selected types are considered`() {
+        val outcome = evaluateThreshold(alarm = thresholdAlarm(species = setOf(PollenSpecies.GRASSES)))
+
+        assertEquals(setOf(PollenSpecies.GRASSES), outcome?.species)
+    }
+
+    @Test
+    fun `a selected type the station does not report is ignored`() {
+        val alarm = thresholdAlarm(species = setOf(PollenSpecies.ASH, PollenSpecies.BIRCH))
+
+        assertEquals(setOf(PollenSpecies.BIRCH), evaluateThreshold(alarm = alarm)?.species)
+        assertNull(evaluateThreshold(alarm = thresholdAlarm(species = setOf(PollenSpecies.ASH))))
+    }
+
+    @Test
+    fun `a type already notified today is excluded`() {
+        val outcome = evaluateThreshold(notifiedToday = setOf(PollenSpecies.BIRCH))
+
+        assertEquals(setOf(PollenSpecies.GRASSES), outcome?.species)
+        assertEquals("Grasses: Very high", outcome?.message?.body)
+    }
+
+    @Test
+    fun `nothing fires once every qualifying type has notified today`() {
+        assertNull(evaluateThreshold(notifiedToday = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES)))
+    }
+
+    @Test
+    fun `two qualifying types give one message naming both worst first`() {
+        val outcome = assertNotNull(evaluateThreshold())
+
+        assertEquals(setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), outcome.species)
+        assertEquals("Grasses: Very high · Birch: High", outcome.message.body)
+    }
+
+    @Test
+    fun `the alert names the station and goes on the threshold alert channel`() {
+        val message = assertNotNull(evaluateThreshold()).message
+
+        assertEquals("Pollen in Zürich", message.title)
+        assertEquals(PushChannel.THRESHOLD_ALERT, message.channel)
+        assertEquals(mapOf("stationAbbr" to "PZH", "alarmId" to "alarm-1"), message.data)
+    }
+
+    @Test
+    fun `a reading just under three hours old fires`() {
+        val reading = highReading().copy(measuredAt = mondayAtEight.minusHours(3).plusMinutes(1).toInstant())
+
+        assertNotNull(evaluateThreshold(reading = reading))
+    }
+
+    @Test
+    fun `a reading three hours old does not fire`() {
+        val reading = highReading().copy(measuredAt = mondayAtEight.minusHours(3).toInstant())
+
+        assertNull(evaluateThreshold(reading = reading))
+    }
+
+    @Test
+    fun `a reading from yesterday's date does not fire even when it is under three hours old`() {
+        val justAfterMidnight = mondayAtEight.withHour(0).withMinute(30)
+        val alarm = thresholdAlarm(from = LocalTime.MIDNIGHT)
+        val beforeMidnight = highReading().copy(measuredAt = justAfterMidnight.minusHours(1).toInstant())
+
+        assertNull(evaluateThreshold(alarm = alarm, now = justAfterMidnight, reading = beforeMidnight))
+        assertNotNull(evaluateThreshold(alarm = alarm, now = justAfterMidnight, reading = highReading(justAfterMidnight)))
+    }
+
+    @Test
+    fun `no reading at all does not fire`() {
+        assertNull(evaluateThreshold(reading = null))
+    }
+
+    @Test
+    fun `the window is compared in Swiss time whatever zone now is given in`() {
+        val fiveUtc = mondayAtEight.withZoneSameInstant(ZoneOffset.UTC).withHour(5)
+
+        // 05:00 UTC is 07:00 in Zürich: inside the window although the UTC hour is not.
+        assertNotNull(evaluateThreshold(now = fiveUtc, reading = highReading(fiveUtc)))
     }
 }

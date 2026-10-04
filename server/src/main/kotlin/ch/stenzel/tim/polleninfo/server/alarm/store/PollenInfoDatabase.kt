@@ -11,8 +11,8 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 
 /**
- * The server's SQLite database: alarms and device registrations, which unlike the reading cache
- * must survive a restart.
+ * The server's SQLite database: alarms, device registrations and the threshold notification log,
+ * which unlike the reading cache must survive a restart.
  *
  * Every way of opening one switches foreign keys on for **every** connection — SQLite defaults them
  * off per connection, and Exposed opens a connection per transaction — and creates any missing
@@ -63,7 +63,7 @@ object PollenInfoDatabase {
             // SQLite supports only SERIALIZABLE and READ_UNCOMMITTED.
             databaseConfig = DatabaseConfig { defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE },
         )
-        transaction(database) { SchemaUtils.create(DevicesTable, AlarmsTable) }
+        transaction(database) { SchemaUtils.create(DevicesTable, AlarmsTable, NotificationLogTable) }
         return database
     }
 

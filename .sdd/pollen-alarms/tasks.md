@@ -260,24 +260,24 @@ The once-per-day record is persisted, so a restart doesn't resend.
 
 ### Implementation steps
 
-- [ ] Server: extend `AlarmValidation` (`until > from`, no `NONE` for threshold) and storage for threshold schedules
-- [ ] Server: the `notification_log` table (`ON DELETE CASCADE` from `alarms`) and the `NotificationLog` store (`notifiedSpecies`, `record`, `pruneBefore`)
-- [ ] Server: `AlarmRules.evaluateThreshold` (pure), returning the message and the species to record
-- [ ] Server: the scheduler's threshold path evaluates active alarms every tick, records on `Sent`, doesn't record on `Failed`, and prunes the log when the Zurich date changes
-- [ ] App editor:
+- [x] Server: extend `AlarmValidation` (`until > from`, no `NONE` for threshold) and storage for threshold schedules
+- [x] Server: the `notification_log` table (`ON DELETE CASCADE` from `alarms`) and the `NotificationLog` store (`notifiedSpecies`, `record`, `pruneBefore`)
+- [x] Server: `AlarmRules.evaluateThreshold` (pure), returning the message and the species to record
+- [x] Server: the scheduler's threshold path evaluates active alarms every tick, records on `Sent`, doesn't record on `Failed`, and prunes the log when the Zurich date changes
+- [x] App editor:
   - a `SingleChoiceSegmentedButtonRow` type toggle on new alarms
   - `AlarmFormState` type switching resets the severity and time defaults
   - severity options per type
   - start and end time pickers
-- [ ] App: the threshold `AlarmSummary` ("Threshold alert · Birch, Grasses ≥ High · 07:00–21:00")
-- [ ] Update CLAUDE.md: a summary of the alarm rules for both types
+- [x] App: the threshold `AlarmSummary` ("Threshold alert · Birch, Grasses ≥ High · 07:00–21:00") *(shipped as "Threshold alert 07:00–21:00 · Mon–Fri · Birch, Grasses ≥ High": the same three parts as the daily row, and it keeps the days, which user story 15 requires the row to summarise)*
+- [x] Update CLAUDE.md: a summary of the alarm rules for both types
 
 ### Acceptance criteria
 
-- [ ] `AlarmValidationTest`: `until == from` is rejected and `until = from + 1 min` accepted; `NONE` is rejected for threshold and accepted for daily
-- [ ] `AlarmRulesTest` (threshold window and severity): `from` is inclusive and `until` exclusive, checked one minute either side; severity at the threshold fires, one band below doesn't; species without a reading are ignored; a disabled alarm doesn't fire
-- [ ] `AlarmRulesTest` (threshold dedup and freshness): `notifiedToday` excludes species; two qualifying species give one message naming both; a reading 2:59 old fires and one 3:00 old doesn't; a reading from yesterday's date doesn't fire
-- [ ] `AlarmSchedulerTest`:
+- [x] `AlarmValidationTest`: `until == from` is rejected and `until = from + 1 min` accepted; `NONE` is rejected for threshold and accepted for daily
+- [x] `AlarmRulesTest` (threshold window and severity): `from` is inclusive and `until` exclusive, checked one minute either side; severity at the threshold fires, one band below doesn't; species without a reading are ignored; a disabled alarm doesn't fire
+- [x] `AlarmRulesTest` (threshold dedup and freshness): `notifiedToday` excludes species; two qualifying species give one message naming both; a reading 2:59 old fires and one 3:00 old doesn't; a reading from yesterday's date doesn't fire
+- [x] `AlarmSchedulerTest`:
   - fires once per species per day, and again the next day
   - a second species qualifying later gets its own message
   - a `Failed` send is retried on the next tick
@@ -285,20 +285,19 @@ The once-per-day record is persisted, so a restart doesn't resend.
   - an upstream failure with only a stale reading sends nothing
   - a scheduler recreated on the same database doesn't resend that day
   - the log is pruned on date change
-- [ ] `ExposedStoresTest`: `record` / `notifiedSpecies` / `pruneBefore`; deleting an alarm row removes its log rows, which proves foreign keys are enforced
-- [ ] `AlarmFormStateTest`: switching to threshold sets High and 07:00–21:00, and back to daily sets Any and 08:00; `isValid` is false when end ≤ start; the threshold severity options exclude Any. `AlarmSummaryTest` pins the threshold summary
-- [ ] Manual:
-  - a threshold alert at Low for a station that is currently measuring delivers one notification on the "Threshold alerts" channel within a minute, and no second one on later ticks
-  - the app's notification settings show "Daily reports" and "Threshold alerts" as separate, independently switchable categories
-  - TalkBack announces the type toggle's selected segment and both window time fields
+- [x] `ExposedStoresTest`: `record` / `notifiedSpecies` / `pruneBefore`; deleting an alarm row removes its log rows, which proves foreign keys are enforced
+- [x] `AlarmFormStateTest`: switching to threshold sets High and 07:00–21:00, and back to daily sets Any and 08:00; `isValid` is false when end ≤ start; the threshold severity options exclude Any. `AlarmSummaryTest` pins the threshold summary
+- [ ] ~~Manual: a threshold alert at Low for a station that is currently measuring delivers one notification on the "Threshold alerts" channel within a minute, and no second one on later ticks~~ *(skipped: no Firebase service-account key (`FCM_CREDENTIALS` unset), and on 2026-10-04 every station reports all seven types at None, so nothing can reach Low. Supporting evidence: on the emulator a Low threshold alert for Zürich 07:00–21:00 was created at 19:09 (`201 Created`), stored as `threshold|LOW|07:00|21:00|PZH|1`, listed as "Threshold alert 07:00–21:00 · Every day · All pollen types ≥ Low"; the scheduler then ran with no send, no error and no `notification_log` row; the `notification_log` table was created on the existing database with `ON DELETE CASCADE`. Delivery-once and no-resend are pinned by `AlarmSchedulerTest`)*
+- [x] Manual: the app's notification settings show "Daily reports" and "Threshold alerts" as separate, independently switchable categories *(emulator, app notification settings → Other: two switches "Daily reports" and "Threshold alerts"; switching Threshold alerts off left Daily reports on, and `dumpsys notification` showed `threshold_alert` importance 0 next to `daily_report` importance 3; switched back on afterwards)*
+- [ ] ~~Manual: TalkBack announces the type toggle's selected segment and both window time fields~~ *(skipped: TalkBack speech cannot be captured from this environment, as in tasks 01 and 03. Supporting evidence from the accessibility tree: the two segments are checkable nodes, "Daily report" checked on open and "Threshold alert" checked after switching; the window buttons are nodes "Window start 07:00" and "Window end 21:00"; the severity chips are Low to Very high with High checked)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No test sleeps or contacts Google/FCM or MeteoSwiss
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No test sleeps or contacts Google/FCM or MeteoSwiss
+- [x] No backtick test name contains a comma
 
 ## Task [06-edit-pause-and-delete-alarms]
 

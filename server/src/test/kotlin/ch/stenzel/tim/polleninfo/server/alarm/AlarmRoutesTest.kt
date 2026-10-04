@@ -173,6 +173,36 @@ class AlarmRoutesTest {
     }
 
     @Test
+    fun `a valid threshold POST returns 201 with the stored alarm`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val thresholdJson = validDailyJson
+            .replace("\"MODERATE\"", "\"HIGH\"")
+            .replace("""{ "type": "daily", "at": "07:30" }""", """{ "type": "threshold", "from": "07:00", "until": "21:00" }""")
+
+        val response = postAlarm(deviceId, thresholdJson)
+
+        assertEquals(HttpStatusCode.Created, response.status)
+        val created = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(Json.parseToJsonElement(thresholdJson).jsonObject, JsonObject(created - "id"))
+    }
+
+    @Test
+    fun `a threshold POST whose window does not open returns 400`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val body = validDailyJson
+            .replace("\"MODERATE\"", "\"HIGH\"")
+            .replace("""{ "type": "daily", "at": "07:30" }""", """{ "type": "threshold", "from": "21:00", "until": "21:00" }""")
+
+        val response = postAlarm(deviceId, body)
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val error = Json.parseToJsonElement(response.bodyAsText()).jsonObject.getValue("error")
+        assertEquals("End time must be after the start time", error.jsonPrimitive.content)
+    }
+
+    @Test
     fun `a created alarm appears in the next GET`() = testApplication {
         installApp()
         val deviceId = register()
