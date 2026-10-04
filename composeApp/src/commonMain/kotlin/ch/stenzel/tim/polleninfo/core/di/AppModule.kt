@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.core.di
 
+import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.data.remote.StationHistoryApiService
 import ch.stenzel.tim.polleninfo.core.history.data.repository.StationHistoryRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
@@ -68,6 +70,8 @@ val dataModule = module {
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
     single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
     single<DeviceRegistrationRepository> { DataStoreDeviceRegistrationRepository(get()) }
+    // Device-only: no API service takes a diary entry.
+    single<DiaryRepository> { DataStoreDiaryRepository(get()) }
 
     // PushTokenProvider comes from platformModule.
     single { AlarmApiService(get(), apiBaseUrl) }
@@ -89,7 +93,7 @@ val presentationModule = module {
     viewModel { ExampleViewModel(get()) }
     // CoarseLocationProvider comes from platformModule; the ViewModel only knows the interface.
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
-    viewModel { HomeViewModel(get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
     viewModel { DiaryViewModel(get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }

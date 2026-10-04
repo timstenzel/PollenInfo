@@ -33,6 +33,10 @@ sealed interface HomeUiState {
      *
      * [isRefreshing] is set while a pull-to-refresh runs, so the readings stay on screen until the
      * new ones replace them.
+     *
+     * [showFeelingPrompt] asks "How do you feel today?" — only here, never over a spinner or an
+     * error — while today's Swiss date has neither an answer nor a dismissal. [feelingSaveError] is
+     * set while the last answer could not be stored, and the prompt stays up so it can be retried.
      */
     data class Content(
         override val stationName: String,
@@ -43,6 +47,8 @@ sealed interface HomeUiState {
         val species: List<SpeciesReading>,
         val refreshedAt: Instant,
         val isRefreshing: Boolean = false,
+        val showFeelingPrompt: Boolean = false,
+        val feelingSaveError: String? = null,
     ) : HomeUiState
 
     data class Error(

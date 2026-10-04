@@ -2,6 +2,10 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.swissToday
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
@@ -12,13 +16,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 
 class HomeViewModel(
     selectedStationRepository: SelectedStationRepository,
     private val getStationMeasurement: GetStationMeasurementUseCase,
+    private val diaryRepository: DiaryRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
@@ -35,7 +42,21 @@ class HomeViewModel(
      */
     private var loadJob: Job? = null
 
+    /** The diary as last read; `null` until it has been, so the prompt never flashes up unasked. */
+    private var diary: DiarySnapshot? = null
+
+    /** Why the last answer was not stored; cleared by the next attempt. */
+    private var feelingSaveError: String? = null
+
     init {
+        viewModelScope.launch {
+            combine(diaryRepository.entries, diaryRepository.dismissedOn, ::DiarySnapshot)
+                .collect { snapshot ->
+                    diary = snapshot
+                    // An answer or a dismissal hides the prompt at once, with no reload.
+                    refreshPrompt()
+                }
+        }
         viewModelScope.launch {
             // Observed, not read once. `StartupViewModel` takes only the first value because
             // rebuilding the navigation graph mid-session would yank the user out of the navigation
@@ -64,6 +85,47 @@ class HomeViewModel(
 
     /** Leaves the error state by loading again from scratch. */
     fun retry() = load(keepReadings = false)
+
+    /** Stores today's answer; the prompt hides when the diary reports it stored. */
+    fun onFeelingSelected(feeling: Feeling) {
+        viewModelScope.launch {
+            feelingSaveError = null
+            val result = diaryRepository.record(swissToday(clock), feeling)
+            if (result is Result.Failure) feelingSaveError = FEELING_SAVE_ERROR_MESSAGE
+            refreshPrompt()
+        }
+    }
+
+    /** Closes the prompt for today without recording an answer. */
+    fun onFeelingPromptDismissed() {
+        viewModelScope.launch {
+            feelingSaveError = null
+            // A failed dismissal simply leaves the prompt up to be closed again.
+            diaryRepository.dismiss(swissToday(clock))
+            refreshPrompt()
+        }
+    }
+
+    /** Re-derives the prompt on the Content shown, if any; Loading and Error never carry it. */
+    private fun refreshPrompt() {
+        val current = _uiState.value as? HomeUiState.Content ?: return
+        _uiState.value = withPrompt(current)
+    }
+
+    /**
+     * "Today" is taken from the clock each time Content is built, so the prompt returns on the
+     * first load, refresh or diary change after Swiss midnight.
+     */
+    private fun withPrompt(content: HomeUiState.Content): HomeUiState.Content {
+        val today = swissToday(clock)
+        val show = diary?.let { snapshot ->
+            snapshot.dismissedOn != today && snapshot.entries.none { it.date == today }
+        } ?: false
+        return content.copy(
+            showFeelingPrompt = show,
+            feelingSaveError = if (show) feelingSaveError else null,
+        )
+    }
 
     private fun load(keepReadings: Boolean) {
         loadJob?.cancel()
@@ -94,7 +156,7 @@ class HomeViewModel(
             val result = getStationMeasurement(station.abbr)
             minimumIndicator?.join()
             _uiState.value = when (result) {
-                is Result.Success -> HomeUiState.Content(
+                is Result.Success -> withPrompt(HomeUiState.Content(
                     stationName = station.name,
                     measuredAt = result.data.measuredAt,
                     overallSeverity = result.data.overallSeverity,
@@ -102,7 +164,7 @@ class HomeViewModel(
                     unit = result.data.unit,
                     species = result.data.species,
                     refreshedAt = clock.now(),
-                )
+                ))
 
                 is Result.Failure -> HomeUiState.Error(
                     stationName = station.name,
@@ -118,5 +180,8 @@ class HomeViewModel(
 
         private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
         private const val NO_STATION_MESSAGE = "No measuring station is selected."
+        private const val FEELING_SAVE_ERROR_MESSAGE = "Your answer could not be saved. Please try again."
     }
+
+    private data class DiarySnapshot(val entries: List<DiaryEntry>, val dismissedOn: LocalDate?)
 }

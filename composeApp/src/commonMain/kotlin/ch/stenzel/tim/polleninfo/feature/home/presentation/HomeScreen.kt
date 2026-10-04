@@ -26,11 +26,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
@@ -58,6 +65,8 @@ fun HomeScreen(viewModel: HomeViewModel = koinViewModel()) {
         uiState = uiState,
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
+        onFeelingSelected = viewModel::onFeelingSelected,
+        onFeelingPromptDismissed = viewModel::onFeelingPromptDismissed,
     )
 }
 
@@ -67,6 +76,8 @@ private fun HomeContent(
     uiState: HomeUiState,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
+    onFeelingSelected: (Feeling) -> Unit,
+    onFeelingPromptDismissed: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -85,7 +96,28 @@ private fun HomeContent(
                 onRefresh = onRefresh,
                 modifier = modifier,
             ) {
-                ReadingView(uiState, Modifier.fillMaxSize())
+                // The card floats over the list rather than taking space from it; while it is up,
+                // the list's end grows by the card's height so the last row can still be scrolled
+                // fully above it.
+                var promptHeightPx by remember { mutableIntStateOf(0) }
+                val promptInset = if (uiState.showFeelingPrompt) {
+                    with(LocalDensity.current) { promptHeightPx.toDp() } + PROMPT_MARGIN
+                } else {
+                    0.dp
+                }
+                ReadingView(uiState, bottomInset = promptInset, modifier = Modifier.fillMaxSize())
+                if (uiState.showFeelingPrompt) {
+                    FeelingPrompt(
+                        saveError = uiState.feelingSaveError,
+                        onFeelingSelected = onFeelingSelected,
+                        onDismiss = onFeelingPromptDismissed,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(PROMPT_MARGIN)
+                            .fillMaxWidth()
+                            .onSizeChanged { promptHeightPx = it.height },
+                    )
+                }
             }
 
             is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
@@ -93,15 +125,22 @@ private fun HomeContent(
     }
 }
 
+/** The gap around the floating feeling card. */
+private val PROMPT_MARGIN = 16.dp
+
 @Composable
 private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
     Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable
-private fun ReadingView(content: HomeUiState.Content, modifier: Modifier) {
+private fun ReadingView(content: HomeUiState.Content, bottomInset: Dp, modifier: Modifier) {
     // Scrollable even when it fits, so the pull gesture has something to drag.
-    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 24.dp + bottomInset),
+    ) {
         // Classified against the clock at composition, deliberately not remembered: the age is a
         // fact about now, so a later recomposition must be free to escalate it to stale.
         val now = Clock.System.now()

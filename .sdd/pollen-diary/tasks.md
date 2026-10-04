@@ -98,28 +98,28 @@ device. (The answer becomes visible in the Diary in task 04.)
 
 ### Implementation steps
 
-- [ ] App: `core/diary` — `Feeling` (+ `level`), `DiaryEntry`, `DiaryRepository` (`entries`, `dismissedOn`, `record` that never overwrites a date, `dismiss`), pure `DiaryCodec`, logic-free `DataStoreDiaryRepository`, `swissToday(clock)`; Koin wiring; `FakeDiaryRepository` in `commonTest`.
-- [ ] App: `HomeViewModel` takes `DiaryRepository` (update its `presentationModule` registration); `Content` gains `showFeelingPrompt` and `feelingSaveError`, re-derived on every `Content` emission and diary change; `onFeelingSelected` / `onFeelingPromptDismissed`.
-- [ ] App: `FeelingPrompt` composable (heading, buttons Very bad → Very good left to right with full words, close announced as "Not today"), floated bottom-centre over Home's list; the list's bottom padding grows by the card's height while shown.
-- [ ] CLAUDE.md: `core/diary`, device-only storage, the Home prompt.
+- [x] App: `core/diary` — `Feeling` (+ `level`), `DiaryEntry`, `DiaryRepository` (`entries`, `dismissedOn`, `record` that never overwrites a date, `dismiss`), pure `DiaryCodec`, logic-free `DataStoreDiaryRepository`, `swissToday(clock)`; Koin wiring; `FakeDiaryRepository` in `commonTest`.
+- [x] App: `HomeViewModel` takes `DiaryRepository` (update its `presentationModule` registration); `Content` gains `showFeelingPrompt` and `feelingSaveError`, re-derived on every `Content` emission and diary change; `onFeelingSelected` / `onFeelingPromptDismissed`.
+- [x] App: `FeelingPrompt` composable (heading, buttons Very bad → Very good left to right with full words, close announced as "Not today"), floated bottom-centre over Home's list; the list's bottom padding grows by the card's height while shown.
+- [x] CLAUDE.md: `core/diary`, device-only storage, the Home prompt.
 
 ### Acceptance criteria
 
-- [ ] `DiaryCodecTest`: round trip, empty list, corrupt input → empty list, unknown feeling skipped; `FeelingTest` pins all four levels.
-- [ ] `HomeViewModelTest`: the prompt is in `Content` only (never `Loading` or `Error`); it hides after an answer (via a diary change, without a reload) and after a dismissal for today; a dismissal records no entry; it shows again once the clock is on the next Swiss day; a failed save keeps it with `feelingSaveError` set.
-- [ ] The existing `HomeViewModelTest` cases and all Alarms tests pass unchanged.
-- [ ] No API service or request DTO in the app takes a `Feeling` or `DiaryEntry` (`grep` over `composeApp/src/commonMain/**/data/remote`).
-- [ ] *(emulator)* The card appears over a loaded Home and not while loading or on error; the last species row can be scrolled fully above it; a tap hides it for the rest of the day across an app restart; with airplane mode on, an answer still saves; Home's pull-to-refresh and retry still work.
-- [ ] *(emulator)* TalkBack reads the question as a heading, each button by its full word and the close button as "Not today".
+- [x] `DiaryCodecTest`: round trip, empty list, corrupt input → empty list, unknown feeling skipped; `FeelingTest` pins all four levels.
+- [x] `HomeViewModelTest`: the prompt is in `Content` only (never `Loading` or `Error`); it hides after an answer (via a diary change, without a reload) and after a dismissal for today; a dismissal records no entry; it shows again once the clock is on the next Swiss day; a failed save keeps it with `feelingSaveError` set.
+- [x] The existing `HomeViewModelTest` cases and all Alarms tests pass unchanged.
+- [x] No API service or request DTO in the app takes a `Feeling` or `DiaryEntry` (`grep` over `composeApp/src/commonMain/**/data/remote`).
+- [x] *(emulator)* The card appears over a loaded Home and not while loading or on error; the last species row can be scrolled fully above it; a tap hides it for the rest of the day across an app restart; with airplane mode on, an answer still saves; Home's pull-to-refresh and retry still work.
+- [ ] ~~*(emulator)* TalkBack reads the question as a heading, each button by its full word and the close button as "Not today".~~ *(skipped: TalkBack's speech output can't be captured from adb on this emulator (it logs no utterances, and its own permission dialog took focus). The accessibility tree (uiautomator) confirms the close button's `content-desc` "Not today" and the four buttons' texts "Very bad", "Bad", "Good", "Very good"; the heading flag (`semantics { heading() }`) isn't visible in that tree. Check with TalkBack by hand.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] `./gradlew :composeApp:assembleDebug` passes.
-- [ ] No new compiler warnings compared with `main`.
-- [ ] No JVM-only API in `commonMain` and no comma in backtick test names.
-- [ ] CLAUDE.md updated as listed in the steps.
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] `./gradlew :composeApp:assembleDebug` passes.
+- [x] No new compiler warnings compared with `main`.
+- [x] No JVM-only API in `commonMain` and no comma in backtick test names.
+- [x] CLAUDE.md updated as listed in the steps.
 
 ---
 

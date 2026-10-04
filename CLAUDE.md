@@ -326,6 +326,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/species` | `Species` (`id`, `name`), `SpeciesRepository`(+`Impl`), `SpeciesApiService`, `SpeciesDto`, `SpeciesMapper` — `GET /pollen/species`, in the server's order. The app's pollen-type vocabulary where there is no reading (the alarm editor), loaded rather than declared so `PollenSpecies` stays authoritative |
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
+| `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`, `DiaryRepository`, the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` — the user's answers, **on the device only** (see "Diary answers") |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
@@ -334,7 +335,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
 `FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
 `FakeStationMeasurementRepository`), `core/history/HistoryFixtures.kt` (`stationHistory(...)` and
-the gated `FakeStationHistoryRepository`).
+the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt`.
 
 ### Talking to our own backend
 
@@ -439,6 +440,29 @@ the device alone; clearing app data loses access to them. Same rules again:
 `DataStoreDeviceRegistrationRepository` is logic-free, consumers use
 `FakeDeviceRegistrationRepository`.
 
+#### Diary answers
+
+`core/diary/DiaryRepository` is the fourth, and the only one holding health information: the
+user's daily answers (`entries`, sorted by date), the last date the Home prompt was closed
+unanswered (`dismissedOn`), `record(date, feeling)` and `dismiss(date)`. **The answers never leave
+the device** — no API service or request DTO takes a `Feeling` or `DiaryEntry`, so nothing has to be
+promised about a server. They are kept indefinitely and never pruned; clearing app data or
+reinstalling loses them (accepted until accounts exist). An answer is immutable: `record` on a date
+that already has one changes nothing.
+
+`DataStoreDiaryRepository` stores two string keys in the shared `DataStore<Preferences>` — the
+entries as `DiaryCodec` JSON (`[{"date":"2026-10-04","feeling":"BAD"}]`, ISO dates and enum names,
+so the file is portable to a later account) and the dismissed date as ISO text. It is logic-free and
+untested like the others: the format is `DiaryCodec` (pure, `DiaryCodecTest` — an unknown feeling or
+a malformed element is skipped, corrupt input decodes to an empty diary rather than crashing every
+start) and the never-overwrite rule is `List<DiaryEntry>.recording` (`DiaryEntryTest`); `record`
+applies it inside one `edit`, so two quick taps cannot both see an empty day. Consumers use
+`FakeDiaryRepository`.
+
+**A day is the Swiss calendar day**: `swissToday(clock)` (`Europe/Zurich`) is the app's single
+definition of "today", so an answer is filed under the same date as the backend's daily means it is
+compared with, whatever zone the device is in.
+
 ### Location
 
 `core/location/` holds the whole location story, split into **two** pieces on purpose.
@@ -520,6 +544,20 @@ Pulling down refreshes it with the current readings kept on screen (`Content.isR
 the same reading and its age does not move — the backend never re-contacts MeteoSwiss on demand,
 and there is deliberately no client-controllable cache bypass. A missing selection (unreachable
 past the startup gate) resolves to `Error` with a message, never an endless spinner.
+
+**The feeling prompt.** Once per Swiss day Home asks "How do you feel today?" in a card
+(`FeelingPrompt.kt`) floated bottom-centre over its list, inside the pull-to-refresh box. It has
+four full-word buttons, Very bad → Very good left to right, a close `IconButton` announced as "Not
+today", and the question as a heading. `HomeViewModel` takes `DiaryRepository` and collects its two
+flows; `Content.showFeelingPrompt` is re-derived on every `Content` it builds (load, refresh, station
+change) and on every diary change: shown while `swissToday(clock)` has neither an entry nor
+`dismissedOn`. Until the diary has been read it is hidden, so the card never flashes up for a day
+already answered. `Loading` and `Error` never carry it. `onFeelingSelected(feeling)` records today's
+answer and `onFeelingPromptDismissed()` records only the dismissal; either hides the card through the
+diary flow, with no reload. A failed save keeps the card with `Content.feelingSaveError`, cleared by
+the next attempt. Swiss midnight passing while Home stays open shows the prompt at the next such
+event, not on the dot — accepted. While the card is up the list's bottom padding grows by its
+measured height (plus its margin), so the last species row still scrolls fully above it.
 
 It **observes** the selection rather than taking its first value, unlike the startup gate below —
 see that section for why the two differ. There is deliberately no way to change the station from
