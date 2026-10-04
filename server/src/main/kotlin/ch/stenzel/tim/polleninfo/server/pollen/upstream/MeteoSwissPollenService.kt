@@ -13,7 +13,8 @@ import java.io.IOException
  *
  * This is the only class in the project that contacts the upstream, and the only place the base
  * address and the per-station path convention are asserted against reality. Both are the risks this
- * class exists to carry: [PollenStation.hourlyNowPath] had no caller before it.
+ * class exists to carry: [PollenStation.hourlyNowPath] and [PollenStation.dailyRecentPath] have no
+ * other caller.
  *
  * [client] and [baseUrl] are constructor parameters, following the app's `StationApiService(client,
  * baseUrl)` precedent, so tests drive it against a mock engine and no test ever reaches the network.
@@ -27,8 +28,12 @@ class MeteoSwissPollenService(
     private val baseUrl: String = BASE_URL,
 ) : PollenService {
 
-    override suspend fun hourlyNow(station: PollenStation): ByteArray {
-        val url = "$baseUrl/${station.hourlyNowPath}"
+    override suspend fun hourlyNow(station: PollenStation): ByteArray = fetch(station.hourlyNowPath)
+
+    override suspend fun dailyRecent(station: PollenStation): ByteArray = fetch(station.dailyRecentPath)
+
+    private suspend fun fetch(path: String): ByteArray {
+        val url = "$baseUrl/$path"
         val response = client.get(url)
         // Checked here rather than left to the client's `expectSuccess`: an injected client may be
         // configured either way, and a 404 body must never reach the parser as if it were a file.

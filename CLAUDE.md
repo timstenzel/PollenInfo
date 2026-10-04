@@ -36,6 +36,11 @@ station per cache period. A station with no due alarm and nobody looking at it c
 is still no cold-start poll and no "the first poll failed" state: a scheduler fetch is just another
 caller of the cache.
 
+The Diary's **pollen history** is a second, separate cache on the same terms: a station's daily file
+is fetched on demand and kept for **3 hours** (`HistoryService.RECENT_TTL`), with the same
+stale-on-failure rule. The scheduler does not use it. See
+"`GET /pollen/stations/{abbr}/history`".
+
 **The apps never call the MeteoSwiss API directly.** All upstream fetching, parsing and severity
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
 station metadata and threshold logic in one place and off the devices.
@@ -100,9 +105,9 @@ Timestamps are `dd.MM.yyyy HH:mm` in **UTC**.
 | `ogd-pollen_meta_stations.csv`                       | All 15 stations: abbr, name, canton, WGS84 lat/lon, altitude |
 | `ogd-pollen_meta_parameters.csv`                     | Parameter codes → taxon, unit, granularity  |
 | `ogd-pollen_meta_datainventory.csv`                  | Which station reports which parameter since when |
-| `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — the only file we fetch |
+| `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — fetched for measurements and alarms |
 | `<abbr>/ogd-pollen_<abbr>_h_recent.csv`              | Hourly, year to date                        |
-| `<abbr>/ogd-pollen_<abbr>_d_recent.csv`              | Daily averages, year to date                |
+| `<abbr>/ogd-pollen_<abbr>_d_recent.csv`              | **Daily averages, year to date**, one row per day up to yesterday — fetched for the history |
 
 `<abbr>` is the lowercase station abbreviation, e.g. `pzh/ogd-pollen_pzh_h_now.csv`.
 
@@ -185,7 +190,7 @@ table can be adopted later without touching anything else.
 ### Severity palette and bars
 
 (The only other colours outside the Material scheme are the map's lakes, `MapPalette.kt` — see
-"All stations".)
+"All stations" — and the Diary's species lines, `SpeciesPalette.kt` — see "Diary".)
 
 The app shows a severity as a word and a bar. The bar colours live in `:theme` as
 `SeverityPalette.kt` — `severityNoneLight` … `severityVeryHighDark`, running grey → green → amber →
@@ -279,7 +284,7 @@ For a real feature that talks to our own backend, mirror one of the real slices 
 are the same layering pointed at `:server` through `apiBaseUrl`. The first three no longer own a
 data layer: the station list and the reading pipeline they consume live in `core/` (below), so
 those slices are mostly `presentation/`. `feature/alarms` is the full layering again, since nothing
-else reads alarms.
+else reads alarms. `feature/diary` reads `core/history` and so has no `data/` either.
 
 - **`feature/onboarding`** — a form: one list fetched once, a user choice persisted through
   `core/preferences`, and completion delivered as a one-shot event. Its own domain code is
@@ -296,6 +301,9 @@ else reads alarms.
   case), `map/` (pure map geometry, see "All stations" below) and `presentation/`. `PerStationMeasurementRepository` in its `commonTest` is the fake for
   scripting a failure or a gate **per station**, which the single-result
   `FakeStationMeasurementRepository` cannot.
+- **`feature/diary`** — a chart over a history: `chart/` (pure `DiaryChartGeometry` and the
+  spoken `diaryChartDescription`, tested in `commonTest`, plus the `DiaryChart` canvas) and
+  `presentation/`. See "Diary" below.
 - **`feature/alarms`** — the complete slice, with writes: `data/` (`AlarmApiService`, DTOs incl. the
   polymorphic `ScheduleDto`, mapper, `AlarmRepositoryImpl` with lazy device registration),
   `domain/` (`Alarm`, `AlarmDraft`, the pure `AlarmFormState`, typed failures, the repository
@@ -315,13 +323,16 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/station` | `Station`, `StationRepository`(+`Impl`), `StationApiService`, `StationDto`, `StationMapper` — `GET /pollen/stations`, sorted alphabetically by name |
 | `core/species` | `Species` (`id`, `name`), `SpeciesRepository`(+`Impl`), `SpeciesApiService`, `SpeciesDto`, `SpeciesMapper` — `GET /pollen/species`, in the server's order. The app's pollen-type vocabulary where there is no reading (the alarm editor), loaded rather than declared so `PollenSpecies` stays authoritative |
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
+| `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
+| `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
 `FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
-`FakeStationMeasurementRepository`).
+`FakeStationMeasurementRepository`), `core/history/HistoryFixtures.kt` (`stationHistory(...)` and
+the gated `FakeStationHistoryRepository`).
 
 ### Talking to our own backend
 
@@ -628,17 +639,18 @@ Browsing here never changes the station stored during onboarding; Home keeps sho
 `AppNavigation` wraps the `NavHost` in an outer `Scaffold` whose `bottomBar` is a Material 3
 `NavigationBar`. **`navigation/TopLevelDestination` is the tab list** — an enum in display order,
 each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
-`Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), `FEATURE_3` →
-`Screen.Feature3`, `ALARMS` → `Screen.Alarms` (see "Alarms" below) and `FEATURE_5` →
-`Screen.Feature5`. Tabs 3 and 5 are placeholders for features not yet defined. All
+`Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), `DIARY` →
+`Screen.Diary` (see "Diary" below), `ALARMS` → `Screen.Alarms` (see "Alarms" below) and
+`FEATURE_5` → `Screen.Feature5`. Tab 5 is a placeholder for a feature not yet defined. All
 stations shows `SwissOutline` (`feature/allstations/map/SwissOutlineIcon.kt`), a stroke-only
 `ImageVector` built from `SWISS_BORDER` through `SwissMapProjection`, so it tints like a Material
-icon; Alarms shows `Icons.Default.Notifications`; the other three use `Icons.Default.LocationOn` for
-now, at the product owner's request. The tabs are icon-only,
-so `contentDescription` ("Home", "All stations", "Feature 3", "Alarms", "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
+icon; Diary shows the book `Icons.AutoMirrored.Filled.MenuBook`; Alarms shows
+`Icons.Default.Notifications`; Home and the placeholder use `Icons.Default.LocationOn` for now, at
+the product owner's request. The tabs are icon-only,
+so `contentDescription` ("Home", "All stations", "Diary", "Alarms", "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
 label.
 
-Each placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`
+The placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`
 with a `TopAppBar` naming the tab (its `contentDescription`, so the title and the spoken name cannot
 disagree), a pin and "Coming soon". The placeholder routes are separate `data object`s rather than
 one parameterised route, so each tab keeps its own saved state.
@@ -662,7 +674,7 @@ outer `Scaffold`.
 `popUpTo<Screen.Home> { saveState = true }`, `launchSingleTop = true`, `restoreState = true`. So:
 
 - **At most one tab sits above Home** on the back stack — switching never builds up history.
-- **Back from any placeholder returns to Home; back from Home leaves the app**, on both launch paths.
+- **Back from any other tab returns to Home; back from Home leaves the app**, on both launch paths.
   No `BackHandler` is involved.
 - **Each tab keeps its state.** The tab being left is saved and the one entered is restored, so
   Home's `HomeViewModel` survives a round trip and its readings reappear without a reload.
@@ -678,6 +690,39 @@ history would then pile up with every tab switch.
 `composable<Screen.X>` in `AppNavigation` at the feature's screen instead of `ComingSoonScreen`.
 Nothing else knows about the tab. Update the order and name assertions in
 `TopLevelDestinationTest`.
+
+#### Diary
+
+The third tab, `feature/diary`: the daily pollen levels at the user's home station over the 30 days
+ending yesterday, as one line per pollen type, under the line "Compare how you felt with the pollen
+levels at a station.\*" and above the note "\* This is not a medical diagnosis. If you suspect a
+pollen allergy, please see a doctor." The screen scrolls as a whole and has no pull-to-refresh.
+
+`DiaryViewModel(selectedStationRepository, stationHistoryRepository)` reads the stored home station
+**once** and never writes it, then loads `GET /pollen/stations/{abbr}/history?range=month` through
+`StationHistoryRepository`: `Loading` → `Content(stationAbbr, stationName, range, history,
+speciesIds, isLoading)` | `Error(message)` with Retry. `speciesIds` are the ids the history reports,
+in the backend's order. No stored station is an `Error`, never a spinner.
+
+**The chart.** `DiaryChartGeometry` (`chart/`, pure, no Compose import) lays the history out for a
+plot of a given size: x by day index (first day at the left edge, last at the right), y by severity
+with `NONE` at the bottom and `VERY_HIGH` at the top, so higher is always worse; each species is a
+list of polylines split at every day without a value — a single known day between gaps survives as
+a one-point run, drawn as a dot — so the chart never bridges a day it does not know; one grid line
+per severity; a date label every 7 days counted back from yesterday. `DiaryChart` draws it on a
+canvas — severity words on the left, "4 Sep" dates below, 2 dp lines in each species' palette
+colour — and is one `clearAndSetSemantics` node announced as `diaryChartDescription(...)`: "Graph of
+your diary and 7 pollen types, last 30 days".
+
+**Species colours** are `SpeciesPalette.kt` in `:theme` — 7 categorical colours, each with an
+explicit light and dark value and its WCAG contrast against `surfaceLight` / `surfaceDark` recorded
+beside it (all ≥ 3.5:1). Their hues stay inside cyan → blue → violet → magenta so no line can be
+read as a severity (grey, green, amber, orange and red belong to `SeverityPalette`); the species
+order is one of the few that clear colour-vision checks for neighbouring legend entries in both
+schemes, so **re-run a palette validator on any change** rather than nudging a value. The one
+documented near-miss is Oak's light teal, ΔE 9.4 from `severityLowLight` — accepted because
+severity colours are not drawn in the chart. The id → colour mapping is `core/ui/species/
+SpeciesColors.kt`.
 
 #### Alarms
 
@@ -928,8 +973,8 @@ Two deliberate choices:
 Ktor plugin configuration is split into `plugins/` extension functions on `Application`
 (`configureSerialization`, `configureLogging`, `configureRouting`) and composed in
 `Application.module()`, which also builds the long-lived collaborators once — the
-`MeasurementService` (via `meteoSwissMeasurementService`), the database and the stores — and passes
-them into `configureRouting(...)`, then starts the alarm scheduler with the same
+upstream `PollenService` (via `meteoSwissPollenService`), the `MeasurementService` and the
+`HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`, then starts the alarm scheduler with the same
 `MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
@@ -937,14 +982,15 @@ feature package, taking their collaborators as parameters so tests can supply th
 server/src/main/kotlin/.../server/
 ├── plugins/            configureSerialization / configureLogging / configureRouting
 ├── pollen/
-│   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
+│   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds, SWISS_ZONE
 │   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
-│   ├── measurement/    MeasurementService, StationMeasurement
+│   ├── measurement/    MeasurementService, StationMeasurement, TtlCache
+│   ├── history/        HistoryRange, historyWindow, HistoryService, StationHistory
 │   ├── model/          Wire DTOs (@Serializable)
 │   └── PollenRoutes.kt
 └── alarm/
     ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId,
-    │                   ALARM_ZONE, AlarmRules, PushMessage / PushChannel, AlarmValidation
+    │                   ALARM_ZONE (= SWISS_ZONE), AlarmRules, PushMessage / PushChannel, AlarmValidation
     ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
     │                   PollenInfoDatabase
     ├── push/           PushSender, FcmPushSender, LoggingPushSender, pushSenderFromEnvironment
@@ -952,6 +998,10 @@ server/src/main/kotlin/.../server/
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
     └── AlarmRoutes.kt
 ```
+
+**`SWISS_ZONE`** (`pollen/domain`, `Europe/Zurich`) is the one zone in which the server answers
+"which day is it" — the history window and every alarm. `ALARM_ZONE` is an alias of it, so
+`pollen/` never imports from `alarm/`.
 
 Domain enums and threshold logic have no Ktor or serialization-transport concerns beyond
 `@Serializable`; wire shapes are separate DTOs in `model/` so the public API can evolve
@@ -965,6 +1015,7 @@ independently of the domain.
 | GET    | `/pollen/stations`                      | All 15 stations with coordinates and altitude        |
 | GET    | `/pollen/stations/{abbr}`               | One station (case-insensitive abbr), 404 if unknown  |
 | GET    | `/pollen/stations/{abbr}/measurements`  | That station's latest reading, classified            |
+| GET    | `/pollen/stations/{abbr}/history?range=week\|month\|year` | That station's daily levels, classified, over the days ending yesterday; `400 {error}` bad or missing range; `404` unknown station; `502` upstream failed with nothing retained |
 | GET    | `/pollen/species`                       | The 7 taxa with display and latin names              |
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
 | POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
@@ -1059,7 +1110,7 @@ compiler — revisit with the Kotlin bump.
 for the next whole minute, logs and survives a failing tick, and is cancelled on
 `ApplicationStopped`). The loop holds no logic; `tick()` is the tested surface.
 
-Each tick takes the current minute in `ALARM_ZONE` (`Europe/Zurich` — every alarm day and time is
+Each tick takes the current minute in `ALARM_ZONE` (`SWISS_ZONE`, `Europe/Zurich` — every alarm day and time is
 Swiss time, and `java.time` handles daylight saving), loads `AlarmStore.enabledWithDeliverableDevice()`
 (enabled alarms whose device has a push token), keeps the daily reports due **this minute** and the
 threshold alerts whose window is open, groups them by station and reads each such station **once** through the routes' shared `MeasurementService`.
@@ -1188,27 +1239,68 @@ load, so an earlier reading still covers it; `Failed.cause` is then a `NoUsableR
 the route maps to `404` rather than `502`.
 
 `PollenService` has exactly one production implementation, **`MeteoSwissPollenService`** — it
-fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` over HTTP, takes its `HttpClient` and base
+fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` (`hourlyNow`) and
+`BASE_URL/<abbr>/ogd-pollen_<abbr>_d_recent.csv` (`dailyRecent`) over HTTP, takes its `HttpClient` and base
 address as constructor parameters (the `StationApiService(client, baseUrl)` precedent, so tests
 drive it with `MockEngine`), and throws on any non-2xx rather than letting an error body reach the
 parser as if it were a file. The only other implementation is `FakePollenService` in
 `server/src/test` — programmable bytes, a settable failure and a record of what was requested,
-which is how band boundaries and the "no usable row" case get driven.
+which is how band boundaries and the "no usable row" case get driven. The hourly file has `bytes` /
+`failure` / `failures` / `requested`; each daily file has its own set (`dailyRecentBytes`,
+`dailyRecentFailure`, `dailyRecentRequested`), so one file can fail while the other answers.
+`hourlyCsv(...)` and `dailyCsv(...)` build files in the published shape.
 
 Verbatim downloads of all 15 published files live in `server/src/test/resources/fixtures/
 ogd-pollen/`, laid out under the same relative paths the service serves them from. They are test
 resources rather than main ones — they must not ship in the server jar — and no class wraps them:
-`PollenCsvParserTest` reads them directly by `PollenStation.hourlyNowPath` and asserts every one
+`PollenCsvParserTest` reads them directly by `PollenStation.hourlyNowPath` (and Zürich's daily file by
+`dailyRecentPath`) and asserts every one
 still parses to a reading covering all seven taxa, and that each file holds the abbreviation of the
 directory it sits in. That is what keeps the parser honest against the real column layout, and what
 catches a re-download filed into the wrong station's directory.
 
-Production wiring lives in `meteoSwissMeasurementService`, which `Application.module()` calls (and
-which is also `configureRouting`'s default): it builds the `HttpClient(CIO)`, installs a 15-second
-request/connect timeout on it, and closes it on `ApplicationStopped`. Tests pass their
-own `MeasurementService` and never construct that client. This outbound leg is why `:server` has
+Production wiring lives in `meteoSwissPollenService`, which `Application.module()` calls once and
+hands to both the `MeasurementService` and the `HistoryService` (`configureRouting`'s defaults call
+it too): it builds the `HttpClient(CIO)`, installs a 15-second request/connect timeout on it, and
+closes it on `ApplicationStopped`. Tests pass their own `MeasurementService` and `HistoryService`
+and never construct that client. This outbound leg is why `:server` has
 `ktor-client-core` + `ktor-client-cio` on `implementation` (CIO because the server needs no
 platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
+
+#### `GET /pollen/stations/{abbr}/history`
+
+```json
+{ "stationAbbr": "PZH", "range": "month", "from": "2026-09-04", "until": "2026-10-03",
+  "days": [ { "date": "2026-09-04",
+              "species": [ { "id": "BIRCH", "concentration": 12, "severity": "LOW" },
+                           { "id": "ASH", "concentration": null, "severity": null } ] } ] }
+```
+
+- `range` is exactly `week`, `month` or `year` (`HistoryRange`, 7 / 30 / 365 days). **The window
+  ends yesterday** in `SWISS_ZONE` (`historyWindow(range, today)`, pure): a day's mean exists only
+  once the day is over. Today never appears.
+- **Every date of the window is present**, oldest first, each with all seven taxa in `PollenSpecies`
+  order. `concentration` and `severity` are `null` together and mean no value — including whole days
+  the publisher **left out of the file**, which it does (Zürich's 2026 file skips 19 days, most of
+  April). The client never has to line dates up itself.
+- These are the `d0` daily means (`PollenSpecies.dailyCode`), classified against the same
+  `PollenThresholds` — the bands' own unit, so unlike the hourly measurements this does not skew high.
+
+| Case | Status |
+| --- | --- |
+| Success, fresh or retained rows | `200` |
+| Missing or unknown `range` — checked **before** the station, so also for an unknown one | `400 {error}` |
+| Unknown abbr (case-insensitive) | `404` |
+| Upstream fetch failed, nothing retained | `502` |
+
+Behind it is `pollen/history/HistoryService(pollenService, thresholds, clock)`: a `TtlCache` of the
+*parsed* daily rows (`PollenCsvParser.parseDaily` — d0 columns only, `null` for an empty cell or a
+missing column, all-`null` rows kept, unparseable dates skipped), per station, for
+`RECENT_TTL` = 3 hours; classification per request. On a failed reload the retained rows are served
+(dates they do not reach yet come back empty); with nothing retained the result is `Failed`.
+`pollen/` declares its own `ErrorDto` for the `400` body, the same shape as the alarm routes'.
+`HistoryServiceTest` pins the Swiss-midnight edge, gap filling, the TTL from both sides, stale
+serving and classification at a band edge.
 
 ## Testing
 

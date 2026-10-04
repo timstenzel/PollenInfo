@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.server.alarm.domain
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
+import ch.stenzel.tim.polleninfo.server.pollen.domain.SWISS_ZONE
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
@@ -46,7 +47,8 @@ sealed interface AlarmSchedule {
 val ALARM_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
- * Swiss time, the one zone every alarm's days and times are in. Every "which day is it" and "what
- * time is it" question about an alarm goes through this, so daylight saving is `java.time`'s job.
+ * The one zone every alarm's days and times are in: Swiss time. Every "which day is it" and "what
+ * time is it" question about an alarm goes through this. An alias of [SWISS_ZONE], so alarms and
+ * the pollen history can never disagree about the date.
  */
-val ALARM_ZONE: ZoneId = ZoneId.of("Europe/Zurich")
+val ALARM_ZONE: ZoneId = SWISS_ZONE

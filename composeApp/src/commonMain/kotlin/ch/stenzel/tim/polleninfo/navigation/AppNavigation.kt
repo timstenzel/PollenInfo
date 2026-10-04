@@ -20,6 +20,7 @@ import androidx.navigation.toRoute
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorScreen
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsScreen
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsScreen
+import ch.stenzel.tim.polleninfo.feature.diary.presentation.DiaryScreen
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
@@ -97,9 +98,8 @@ private fun AppNavHost(
             AllStationsScreen()
         }
 
-        // Placeholder tabs. The title is the tab's accessibility name, so the two cannot disagree.
-        composable<Screen.Feature3> {
-            ComingSoonScreen(TopLevelDestination.FEATURE_3.contentDescription)
+        composable<Screen.Diary> {
+            DiaryScreen()
         }
 
         composable<Screen.Alarms> {
@@ -116,6 +116,7 @@ private fun AppNavHost(
             )
         }
 
+        // Placeholder tab. The title is the tab's accessibility name, so the two cannot disagree.
         composable<Screen.Feature5> {
             ComingSoonScreen(TopLevelDestination.FEATURE_5.contentDescription)
         }

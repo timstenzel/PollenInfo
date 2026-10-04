@@ -222,6 +222,9 @@ class MeasurementServiceTest {
                     if (station == PollenStation.ZUERICH) zurichGate.await()
                     return hourlyCsv()
                 }
+
+                override suspend fun dailyRecent(station: PollenStation): ByteArray =
+                    error("not used by MeasurementService")
             }
             val gatedService = MeasurementService(
                 gated,

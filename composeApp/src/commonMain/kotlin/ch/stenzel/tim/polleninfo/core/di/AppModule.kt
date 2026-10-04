@@ -1,5 +1,8 @@
 package ch.stenzel.tim.polleninfo.core.di
 
+import ch.stenzel.tim.polleninfo.core.history.data.remote.StationHistoryApiService
+import ch.stenzel.tim.polleninfo.core.history.data.repository.StationHistoryRepositoryImpl
+import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.measurement.data.remote.StationMeasurementApiService
 import ch.stenzel.tim.polleninfo.core.measurement.data.repository.StationMeasurementRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.measurement.domain.repository.StationMeasurementRepository
@@ -27,6 +30,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorViewMode
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsViewModel
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsViewModel
+import ch.stenzel.tim.polleninfo.feature.diary.presentation.DiaryViewModel
 import ch.stenzel.tim.polleninfo.feature.example.data.remote.ExampleApiService
 import ch.stenzel.tim.polleninfo.feature.example.data.repository.ExampleRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleRepository
@@ -57,6 +61,9 @@ val dataModule = module {
     single { StationMeasurementApiService(get(), apiBaseUrl) }
     single<StationMeasurementRepository> { StationMeasurementRepositoryImpl(get()) }
 
+    single { StationHistoryApiService(get(), apiBaseUrl) }
+    single<StationHistoryRepository> { StationHistoryRepositoryImpl(get()) }
+
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
     single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
@@ -84,6 +91,7 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
+    viewModel { DiaryViewModel(get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
 }

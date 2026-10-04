@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -22,12 +23,11 @@ enum class TopLevelDestination(
 
     ALL_STATIONS(Screen.AllStations, SwissOutline, "All stations"),
 
-    // Placeholder: shares the pin until its feature gets its own icon.
-    FEATURE_3(Screen.Feature3, Icons.Default.LocationOn, "Feature 3"),
+    DIARY(Screen.Diary, Icons.AutoMirrored.Filled.MenuBook, "Diary"),
 
     ALARMS(Screen.Alarms, Icons.Default.Notifications, "Alarms"),
 
-    // Placeholder, as above.
+    // Placeholder: shares the pin until its feature gets its own icon.
     FEATURE_5(Screen.Feature5, Icons.Default.LocationOn, "Feature 5"),
     ;
 

@@ -99,6 +99,43 @@ class MeteoSwissPollenServiceTest {
         assertFailsWith<IOException> { service.hourlyNow(PollenStation.ZUERICH) }
     }
 
+    @Test
+    fun `the daily recent file is requested from the station's daily recent path`() = runTest {
+        val service = serviceWith(baseUrl = MeteoSwissPollenService.BASE_URL)
+
+        service.dailyRecent(PollenStation.ZUERICH)
+
+        assertEquals(
+            listOf(
+                "https://data.geo.admin.ch/ch.meteoschweiz.ogd-pollen/" +
+                    "pzh/ogd-pollen_pzh_d_recent.csv",
+            ),
+            requestedUrls,
+        )
+    }
+
+    @Test
+    fun `the daily recent bytes are returned undecoded`() = runTest {
+        val published = byteArrayOf(0x4D, 0xFC.toByte(), 0x6E)
+        val service = serviceWith(body = published)
+
+        assertContentEquals(published, service.dailyRecent(PollenStation.ZUERICH))
+    }
+
+    @Test
+    fun `a daily recent request that is not found fails`() = runTest {
+        val service = serviceWith(status = HttpStatusCode.NotFound)
+
+        assertFailsWith<IOException> { service.dailyRecent(PollenStation.ZUERICH) }
+    }
+
+    @Test
+    fun `a daily recent request answered with a server error fails`() = runTest {
+        val service = serviceWith(status = HttpStatusCode.InternalServerError)
+
+        assertFailsWith<IOException> { service.dailyRecent(PollenStation.ZUERICH) }
+    }
+
     private companion object {
         const val TEST_BASE_URL = "https://example.invalid/ogd-pollen"
     }

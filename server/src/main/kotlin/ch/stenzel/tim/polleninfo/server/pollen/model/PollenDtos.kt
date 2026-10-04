@@ -59,3 +59,44 @@ data class SpeciesReadingDto(
     val concentration: Int?,
     val severity: PollenSeverity?,
 )
+
+/**
+ * Wire shape of `GET /pollen/stations/{abbr}/history?range=week|month|year`.
+ *
+ * [days] holds one entry per date from [from] to [until] (ISO `yyyy-MM-dd`, both inclusive), oldest
+ * first, with no date left out: a day the publisher has no value for is present with every taxon
+ * empty.
+ */
+@Serializable
+data class StationHistoryDto(
+    val stationAbbr: String,
+    val range: String,
+    val from: String,
+    val until: String,
+    val days: List<HistoryDayDto>,
+)
+
+/** One day of a history response. [species] holds all seven taxa in declaration order. */
+@Serializable
+data class HistoryDayDto(
+    val date: String,
+    val species: List<HistorySpeciesDto>,
+)
+
+/**
+ * One taxon's daily mean. [concentration] and [severity] are null together and mean "no value",
+ * as in [SpeciesReadingDto].
+ */
+@Serializable
+data class HistorySpeciesDto(
+    val id: String,
+    val concentration: Int?,
+    val severity: PollenSeverity?,
+)
+
+/**
+ * A `400` body. The same `{ "error": "…" }` shape as the alarm routes' — declared again here
+ * because `pollen/` does not import from `alarm/`.
+ */
+@Serializable
+data class ErrorDto(val error: String)

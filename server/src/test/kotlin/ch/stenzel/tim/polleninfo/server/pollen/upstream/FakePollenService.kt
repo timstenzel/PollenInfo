@@ -15,11 +15,22 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
  * obtained" path can be driven without an unreachable host. [failures] does the same for single
  * stations, so one station can fail while the others answer. [requested] records what was asked for,
  * so a caller can assert the station reached the service unchanged.
+ *
+ * All of those concern the hourly file. Each daily file has its own set — bytes, a failure and a
+ * record of requests — so a test can fail one file while the other answers, and see which file a
+ * caller actually asked for.
  */
 class FakePollenService(
     var bytes: ByteArray = hourlyCsv(),
     var failure: Exception? = null,
+    var dailyRecentBytes: ByteArray = dailyCsv(),
 ) : PollenService {
+
+    /** Thrown by [dailyRecent] instead of returning [dailyRecentBytes]. */
+    var dailyRecentFailure: Exception? = null
+
+    /** Every station whose daily recent file was asked for, in order. */
+    val dailyRecentRequested = mutableListOf<PollenStation>()
 
     /** Thrown for these stations only, ahead of [failure]. */
     val failures = mutableMapOf<PollenStation, Exception>()
@@ -32,6 +43,12 @@ class FakePollenService(
         failures[station]?.let { throw it }
         failure?.let { throw it }
         return bytes
+    }
+
+    override suspend fun dailyRecent(station: PollenStation): ByteArray {
+        dailyRecentRequested += station
+        dailyRecentFailure?.let { throw it }
+        return dailyRecentBytes
     }
 }
 
@@ -52,6 +69,23 @@ fun hourlyCsv(
     val header = (listOf("station_abbr", "reference_timestamp") + columns.map { it.hourlyCode })
     val lines = listOf(header.joinToString(";")) + rows.map { (timestamp, values) ->
         (listOf(abbr, timestamp) + columns.map { values[it]?.toString() ?: "" }).joinToString(";")
+    }
+    return lines.joinToString(separator = "\r\n", postfix = "\r\n").toByteArray(Charsets.ISO_8859_1)
+}
+
+/**
+ * Builds a daily file in the published shape, with the `d0` columns only: one row per date
+ * (`dd.MM.yyyy`, written with the publisher's `00:00` time), the same empty-cell and missing-column
+ * conventions as [hourlyCsv].
+ */
+fun dailyCsv(
+    abbr: String = PollenStation.ZUERICH.abbr,
+    rows: List<Pair<String, Map<PollenSpecies, Int>>> = emptyList(),
+    columns: List<PollenSpecies> = PollenSpecies.entries,
+): ByteArray {
+    val header = (listOf("station_abbr", "reference_timestamp") + columns.map { it.dailyCode })
+    val lines = listOf(header.joinToString(";")) + rows.map { (date, values) ->
+        (listOf(abbr, "$date 00:00") + columns.map { values[it]?.toString() ?: "" }).joinToString(";")
     }
     return lines.joinToString(separator = "\r\n", postfix = "\r\n").toByteArray(Charsets.ISO_8859_1)
 }

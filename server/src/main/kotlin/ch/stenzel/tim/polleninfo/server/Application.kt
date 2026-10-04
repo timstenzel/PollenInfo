@@ -11,7 +11,9 @@ import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import ch.stenzel.tim.polleninfo.server.plugins.meteoSwissMeasurementService
+import ch.stenzel.tim.polleninfo.server.plugins.meteoSwissPollenService
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
+import ch.stenzel.tim.polleninfo.server.pollen.history.HistoryService
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
@@ -29,14 +31,17 @@ fun main() {
 
 /**
  * Builds every long-lived collaborator once. The [MeasurementService] is built here rather than
- * inside routing so that the routes and the alarm scheduler share one reading cache.
+ * inside routing so that the routes and the alarm scheduler share one reading cache; the history
+ * shares its upstream client. The scheduler does not use the history.
  */
 fun Application.module() {
     configureSerialization()
     configureLogging()
 
     val thresholds = PollenThresholds()
-    val measurementService = meteoSwissMeasurementService(thresholds)
+    val pollenService = meteoSwissPollenService()
+    val measurementService = meteoSwissMeasurementService(thresholds, pollenService)
+    val historyService = HistoryService(pollenService, thresholds)
     val database = PollenInfoDatabase.fromEnvironment()
     log.info("Alarm database: ${database.url}")
 
@@ -46,6 +51,7 @@ fun Application.module() {
     configureRouting(
         thresholds = thresholds,
         measurementService = measurementService,
+        historyService = historyService,
         database = database,
         devices = devices,
         alarms = alarms,
