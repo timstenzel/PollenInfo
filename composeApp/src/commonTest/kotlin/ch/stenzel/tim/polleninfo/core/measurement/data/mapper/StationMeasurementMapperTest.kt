@@ -81,6 +81,14 @@ class StationMeasurementMapperTest {
     }
 
     @Test
+    fun `every severity writes the wire string it is read from`() {
+        val wire = listOf("NONE", "LOW", "MODERATE", "HIGH", "VERY_HIGH")
+
+        assertEquals(wire, PollenSeverity.entries.map { it.toWireName() })
+        PollenSeverity.entries.forEach { assertEquals(it, it.toWireName().toPollenSeverity()) }
+    }
+
+    @Test
     fun `an unrecognised severity fails the mapping rather than defaulting`() {
         // Defaulting to NONE would render a band we do not know about as a calm day.
         assertFailsWith<IllegalArgumentException> {

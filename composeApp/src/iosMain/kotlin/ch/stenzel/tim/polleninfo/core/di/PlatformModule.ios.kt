@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import ch.stenzel.tim.polleninfo.core.location.CoarseLocationProvider
 import ch.stenzel.tim.polleninfo.core.location.IosCoarseLocationProvider
+import ch.stenzel.tim.polleninfo.core.push.PushTokenProvider
+import ch.stenzel.tim.polleninfo.core.push.UnavailablePushTokenProvider
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +22,7 @@ import platform.Foundation.NSUserDomainMask
 actual val platformModule: Module = module {
     single<DataStore<Preferences>> { createDataStore() }
     single<CoarseLocationProvider> { IosCoarseLocationProvider() }
+    single<PushTokenProvider> { UnavailablePushTokenProvider() }
 }
 
 /**

@@ -24,7 +24,7 @@ fun SpeciesReadingDto.toDomain(): SpeciesReading = SpeciesReading(
 )
 
 /**
- * The one place the five severity wire strings are written down.
+ * The five severity wire strings live here and in [toWireName] below, and nowhere else.
  *
  * Spelled out rather than delegated to `valueOf` or to enum deserialisation: the app declares its
  * own [PollenSeverity] because it cannot depend on `:server`, so something has to hold the two
@@ -35,11 +35,20 @@ fun SpeciesReadingDto.toDomain(): SpeciesReading = SpeciesReading(
  * [PollenSeverity.NONE] would be worse than an error: a backend that started sending a band we do
  * not know about would be rendered as a calm day.
  */
-private fun String.toPollenSeverity(): PollenSeverity = when (this) {
+internal fun String.toPollenSeverity(): PollenSeverity = when (this) {
     "NONE" -> PollenSeverity.NONE
     "LOW" -> PollenSeverity.LOW
     "MODERATE" -> PollenSeverity.MODERATE
     "HIGH" -> PollenSeverity.HIGH
     "VERY_HIGH" -> PollenSeverity.VERY_HIGH
     else -> throw IllegalArgumentException("unknown pollen severity '$this'")
+}
+
+/** The reverse of [toPollenSeverity], for requests that send a severity, such as an alarm's minimum. */
+internal fun PollenSeverity.toWireName(): String = when (this) {
+    PollenSeverity.NONE -> "NONE"
+    PollenSeverity.LOW -> "LOW"
+    PollenSeverity.MODERATE -> "MODERATE"
+    PollenSeverity.HIGH -> "HIGH"
+    PollenSeverity.VERY_HIGH -> "VERY_HIGH"
 }

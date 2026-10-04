@@ -7,6 +7,9 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    // Reads composeApp/google-services.json (committed; it identifies the Firebase project and is
+    // not a secret) into resources that firebase-messaging initialises from.
+    alias(libs.plugins.googleServices)
 }
 
 kotlin {
@@ -82,6 +85,10 @@ kotlin {
             // not be able to take them away.
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
+            // Push tokens for pollen alarms. This is the one place the app needs Google Play
+            // services; location deliberately stays on the platform provider.
+            implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.firebase.messaging)
         }
 
         iosMain.dependencies {

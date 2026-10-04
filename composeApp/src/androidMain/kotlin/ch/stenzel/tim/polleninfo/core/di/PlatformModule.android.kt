@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import ch.stenzel.tim.polleninfo.core.location.AndroidCoarseLocationProvider
 import ch.stenzel.tim.polleninfo.core.location.CoarseLocationProvider
+import ch.stenzel.tim.polleninfo.core.push.FirebasePushTokenProvider
+import ch.stenzel.tim.polleninfo.core.push.PushTokenProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,6 +18,7 @@ import org.koin.dsl.module
 actual val platformModule: Module = module {
     single<DataStore<Preferences>> { createDataStore(get()) }
     single<CoarseLocationProvider> { AndroidCoarseLocationProvider(get()) }
+    single<PushTokenProvider> { FirebasePushTokenProvider() }
 }
 
 /**

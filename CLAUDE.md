@@ -34,15 +34,16 @@ notifications need severities for stations nobody has open** — the cache is th
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
 station metadata and threshold logic in one place and off the devices.
 
-Push notifications are a later feature and there is no push code in the tree — when they land, the
-server gains an outbound leg to FCM/APNS and the apps a subscription call.
+Push notifications are being built (see "Alarms"). So far the Android app obtains an FCM token and
+registers the device with the backend, which keeps devices and alarms in SQLite (see "Persistence");
+nothing is sent yet — the outbound leg to FCM arrives with the alarm scheduler. iOS has no push leg.
 
 ### Modules
 
 | Module       | Type                        | Contains                                                    |
 | ------------ | --------------------------- | ----------------------------------------------------------- |
 | `:composeApp`| KMP (android, ios*)         | The app: UI, ViewModels, repositories, REST client           |
-| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching |
+| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching, device and alarm store (SQLite) |
 | `:theme`     | KMP (android, ios*)         | Shared Material 3 colors / typography / `PollenInfoTheme`    |
 
 Package root everywhere: `ch.stenzel.tim.polleninfo`.
@@ -72,6 +73,10 @@ Notes:
 - Prefer the targeted test tasks over `./gradlew check` for the same reason.
 - The Gradle configuration cache is enabled; if a build behaves oddly after editing build scripts,
   add `--no-configuration-cache`.
+- `./gradlew :server:run` writes its database to `server/data/polleninfo.db` (override with
+  `POLLENINFO_DB`). Delete the file for a clean backend; the app then re-registers on its own. Inspect
+  it with the SDK's `sqlite3` (`platform-tools/`). The directory is git-ignored.
+- The Android build needs `composeApp/google-services.json` (committed — see "Firebase").
 
 ## Data source: MeteoSwiss OGD pollen
 
@@ -395,6 +400,12 @@ whether the notification prompt has ever been shown, which Android needs (see "A
 rules apply: `DataStoreNotificationPermissionPreferences` is logic-free and untested, and consumers
 use `FakeNotificationPermissionPreferences`.
 
+`DeviceRegistrationRepository` is the third: the anonymous `deviceId` the backend issued
+(`Flow<String?>`, `store`, `clear`). It is the only key to this install's alarms, so it lives on
+the device alone; clearing app data loses access to them. Same rules again:
+`DataStoreDeviceRegistrationRepository` is logic-free, consumers use
+`FakeDeviceRegistrationRepository`.
+
 ### Location
 
 `core/location/` holds the whole location story, split into **two** pieces on purpose.
@@ -419,7 +430,8 @@ looking for a position nobody is waiting for. The two location messages clear on
 error must not outlive its cause.
 
 Android uses `LocationManagerCompat.getCurrentLocation` on `NETWORK_PROVIDER` only. **No Play
-Services**, and no GPS fallback: `ACCESS_COARSE_LOCATION` does not grant `GPS_PROVIDER`, and
+Services** (push is the one feature that needs them — see "Firebase"; location stays Play-free),
+and no GPS fallback: `ACCESS_COARSE_LOCATION` does not grant `GPS_PROVIDER`, and
 `FUSED_PROVIDER` needs API 31 against `minSdk` 26. The compat shim is what makes this work below API
 30, which is why `androidx.core:core-ktx` is an explicit `androidMain` dependency. There is
 deliberately no `getLastKnownLocation` fallback — a days-old fix from another country would silently
@@ -451,9 +463,9 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 
 Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
-`appModules`. It provides the `DataStore<Preferences>` and the `CoarseLocationProvider`. The
-DataStore factory needs a file path and an IO dispatcher, neither of which exists in `commonMain`;
-the location provider is a different platform class on each side. Each actual builds the store itself —
+`appModules`. It provides the `DataStore<Preferences>`, the `CoarseLocationProvider` and the
+`PushTokenProvider`. The DataStore factory needs a file path and an IO dispatcher, neither of which
+exists in `commonMain`; the two providers are different platform classes on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
 Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
 is `internal` on Kotlin/Native, so the iOS actual uses `Dispatchers.Default`. Keeping this module
@@ -650,14 +662,36 @@ Nothing else knows about the tab. Update the order and name assertions in
 #### Alarms
 
 The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far only the permission gate and an empty state exist** — no backend contact, no alarm list, and the
-"Create alarm" button is shown disabled.
+far the permission gate and the backend-loaded list exist** — alarms cannot be created from the app
+yet ("Create alarm" is shown disabled), rows show the station name and a placeholder summary
+("Daily report at 08:00"), and nothing is sent.
 
-**Notifications are checked first.** `AlarmsUiState` is `Loading` (renders nothing; the permission
-has not been read yet) → `PermissionRequired(state)` or `Content` (for now always "No alarms yet").
-`AlarmsViewModel.onPermissionState(state)` maps `ENABLED` to `Content` and the two other
+**Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
+permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
+`Loading` → `Content(alarms, isRefreshing)` | `Error(message, pushUnavailable)`.
+`AlarmsViewModel.onPermissionState(state)` maps the two non-enabled
 `NotificationPermissionState`s to `PermissionRequired`, in either direction, so revoking later brings
 the explanation back. The ViewModel never touches a platform API.
+
+**The list loads on the first `ENABLED` and not before**, so a user who never allows notifications
+causes no backend contact and no device registration. The ViewModel tracks permission and list
+separately: later resumes with `ENABLED` do not reload, and a list kept through a revocation is shown
+again unchanged when notifications come back. (On Android revoking the permission kills the
+process, so in practice that return is a fresh load of the same list — same stored device id.) It
+has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at least
+`MIN_REFRESH_INDICATOR`, and `Error` offers Retry. `Error(pushUnavailable = true)` — iOS — says
+"Push notifications aren't available on this device yet" with no Retry. Station names come from
+`StationRepository`, fetched only when there is an alarm to name (cached after that; an abbreviation
+stands in if it fails), so the iOS path makes no network call at all.
+
+**`AlarmRepositoryImpl` registers lazily.** Every call goes through one `withDevice { }` wrapper:
+with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
+before any request), `POST /devices`, and stores the issued id. If a device call answers `404`
+(`UnknownDeviceException` from `AlarmApiService` — the backend lost its database, say) it clears the
+id, registers once and retries once; a second `404` is a `Failure`. Registration is behind a
+`Mutex`, and a re-registration that finds a newer id already stored uses it instead of replacing it
+again, so concurrent calls never register twice. `AlarmApiService` checks status codes itself rather
+than letting `body()` read an error response as data.
 
 `core/notifications/` holds the platform side. `NotificationPermissionState` is `ENABLED`,
 `CAN_REQUEST` (button "Allow notifications", the system prompt) or `MUST_OPEN_SETTINGS` (button
@@ -683,7 +717,31 @@ prompts with an alert that does not pause the screen. It waits until `AlarmsView
 (`null` until read) is known, so the wrong button never flashes. Answering the prompt calls
 `onPermissionRequested()`, which sets the flag through `NotificationPermissionPreferences`.
 
-`AlarmsViewModelTest` covers the mapping and the flag. The controllers are checked by hand.
+`AlarmsViewModelTest` covers the mapping, the flag and the list cycle (`FakeAlarmRepository.gate`
+holds a load in flight). `AlarmRepositoryImplTest` drives registration, the `404` retry and both
+`schedule` variants through `MockEngine`, with `FakePushTokenProvider` and
+`FakeDeviceRegistrationRepository`. The permission controllers and `FirebasePushTokenProvider` are
+checked by hand.
+
+#### Firebase
+
+Push is FCM, and **FCM is the one place the app depends on Google Play services** — push on devices
+without them is out of scope, and location deliberately stays on the platform provider.
+
+- `composeApp/google-services.json` is **committed**: it identifies the Firebase project and is not a
+  secret. It holds two Android clients, `ch.stenzel.tim.polleninfo` and
+  `ch.stenzel.tim.polleninfo.debug` (the debug `applicationIdSuffix`); without a client for the
+  variant's id, `process<Variant>GoogleServices` fails the build. Re-download it from the Firebase
+  console after adding an app id.
+- Gradle: the `com.google.gms.google-services` plugin on `:composeApp`, and the Firebase BoM plus
+  `firebase-messaging` in `androidMain` only.
+- `core/push/PushTokenProvider` (`suspend fun token(): PushTokenResult` — `Available(token)` |
+  `Unavailable`) is bound in `platformModule`: `FirebasePushTokenProvider` on Android wraps
+  `FirebaseMessaging.getInstance().token` with `suspendCancellableCoroutine`; iOS binds
+  `UnavailablePushTokenProvider`. A *failed* token task (no Play services, no network) is thrown,
+  not `Unavailable`, so the screen offers Retry — `Unavailable` is reserved for "this platform cannot
+  receive push".
+- The server's service-account key (for sending) is never committed; it arrives with sending.
 
 ### The startup gate
 
@@ -729,18 +787,25 @@ Two deliberate choices:
 
 Ktor plugin configuration is split into `plugins/` extension functions on `Application`
 (`configureSerialization`, `configureLogging`, `configureRouting`) and composed in
-`Application.module()`. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
+`Application.module()`, which also builds the long-lived collaborators once — the
+`MeasurementService` (via `meteoSwissMeasurementService`), the database and the stores — and passes
+them into `configureRouting(...)`. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
 ```
 server/src/main/kotlin/.../server/
 ├── plugins/            configureSerialization / configureLogging / configureRouting
-└── pollen/
-    ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
-    ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
-    ├── measurement/    MeasurementService, StationMeasurement
-    ├── model/          Wire DTOs (@Serializable)
-    └── PollenRoutes.kt
+├── pollen/
+│   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds
+│   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
+│   ├── measurement/    MeasurementService, StationMeasurement
+│   ├── model/          Wire DTOs (@Serializable)
+│   └── PollenRoutes.kt
+└── alarm/
+    ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId
+    ├── store/          DeviceStore, AlarmStore (+ Exposed implementations), tables, PollenInfoDatabase
+    ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
+    └── AlarmRoutes.kt
 ```
 
 Domain enums and threshold logic have no Ktor or serialization-transport concerns beyond
@@ -757,6 +822,55 @@ independently of the domain.
 | GET    | `/pollen/stations/{abbr}/measurements`  | That station's latest reading, classified            |
 | GET    | `/pollen/species`                       | The 7 taxa with display and latin names              |
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
+| POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
+| GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
+
+#### Devices and alarms
+
+There are no accounts. An install registers once, anonymously, and gets a `deviceId` — 128 bits from
+`SecureRandom`, base64url without padding, always 22 characters. **The id is the secret**: whoever
+holds it can read that device's alarms; alarms hold no personal data, so this is accepted for now.
+Every path under `/devices/{deviceId}` answers `404` for an unknown id, which is how the app learns
+to register again. An unknown device's list is a `404`, never `200 []` — `AlarmStore.list` returns
+`null` for it so the two cannot be confused.
+
+```json
+{ "id": "…", "enabled": true, "stationAbbr": "PZH",
+  "species": ["BIRCH", "GRASSES"], "minSeverity": "NONE",
+  "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+  "schedule": { "type": "daily", "at": "08:00" } }
+// or "schedule": { "type": "threshold", "from": "07:00", "until": "21:00" }
+```
+
+`schedule` is a `@Serializable sealed interface` (`ScheduleDto` on both sides) using the default
+`type` class discriminator — neither `Json` configures one. Days are `DayOfWeek` names, times `HH:mm`
+Swiss local time. The app keeps `minSeverity` a `String` on the wire, mapped through the same
+`toPollenSeverity` / `toWireName` pair as measurement severities.
+
+#### Persistence
+
+Devices and alarms are the first state the backend must not lose, so the server is no longer
+stateless: **its database file has to be kept across restarts and deployments.** SQLite through
+JetBrains Exposed's DSL (`exposed-core`, `exposed-jdbc`, `org.xerial:sqlite-jdbc`). Exposed is
+pinned to **0.61.x**: 1.x is built against Kotlin 2.2+ and would put that stdlib under our 2.1
+compiler — revisit with the Kotlin bump.
+
+- `alarm/store/PollenInfoDatabase` opens it: `fromEnvironment()` reads `POLLENINFO_DB` (default
+  `./data/polleninfo.db`, relative to the working directory — `server/` under `:server:run`) and
+  creates the directory; `file(path)` for a given path; `inMemory()` for tests and routing defaults
+  (a shared-cache memory database kept alive by one held connection, since Exposed closes its
+  connection after every transaction).
+- **Every connection** runs `PRAGMA foreign_keys = ON` (SQLite defaults it off per connection) and a
+  busy timeout. Isolation is `SERIALIZABLE`, one of the two SQLite supports.
+- The schema is `SchemaUtils.create` on start. There is no migration tool: changing an existing
+  table needs one first.
+- Tables: `devices(id PK, fcm_token NULL, created_at)` and `alarms(id PK, device_id → devices,
+  enabled, station_abbr, species, min_severity, days, type, at_time, from_time, until_time,
+  created_at)`. Sets are comma-separated enum names, times `HH:mm`, so the file reads well in
+  `sqlite3`.
+- Store interfaces are `suspend`; the Exposed implementations run each transaction on
+  `Dispatchers.IO`. `configureRouting`'s store defaults share one private in-memory database, never
+  the production file, so `PollenRoutesTest` and `RoutingTest` need no database setup.
 
 #### `GET /pollen/stations/{abbr}/measurements`
 
@@ -816,8 +930,9 @@ still parses to a reading covering all seven taxa, and that each file holds the 
 directory it sits in. That is what keeps the parser honest against the real column layout, and what
 catches a re-download filed into the wrong station's directory.
 
-Production wiring lives in `configureRouting`'s defaults: it builds the `HttpClient(CIO)`, installs
-a 15-second request/connect timeout on it, and closes it on `ApplicationStopped`. Tests pass their
+Production wiring lives in `meteoSwissMeasurementService`, which `Application.module()` calls (and
+which is also `configureRouting`'s default): it builds the `HttpClient(CIO)`, installs a 15-second
+request/connect timeout on it, and closes it on `ApplicationStopped`. Tests pass their
 own `MeasurementService` and never construct that client. This outbound leg is why `:server` has
 `ktor-client-core` + `ktor-client-cio` on `implementation` (CIO because the server needs no
 platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
@@ -828,6 +943,11 @@ platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
 | ----------------------------- | ----------------------------------------------------------- |
 | `composeApp/src/commonTest`   | `kotlin("test")`, `kotlinx-coroutines-test`, `ktor-client-mock` |
 | `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation`, `ktor-client-mock` |
+
+Store tests (`ExposedStoresTest`) run against `PollenInfoDatabase.inMemory()` or a temp file, never
+the real one; `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly
+(`Database.insertAlarm`) until the API can create them. `AlarmRoutesTest` hands its own stores to
+`configureRouting(database = …, devices = …, alarms = …)`.
 
 Rules of the road:
 

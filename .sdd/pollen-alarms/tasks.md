@@ -78,54 +78,54 @@ the server side are listed.
 
 ### Implementation steps
 
-- [ ] Remove `google-services.json` from the root `.gitignore` and commit `composeApp/google-services.json`; add `data/` to `.gitignore`
-- [ ] Server database:
+- [x] Remove `google-services.json` from the root `.gitignore` and commit `composeApp/google-services.json`; add `data/` to `.gitignore`
+- [x] Server database:
   - add Exposed and sqlite-jdbc to the version catalog
   - database setup reads `POLLENINFO_DB` (default `./data/polleninfo.db`), creates the directory, sets `PRAGMA foreign_keys=ON` on every connection, and creates the schema on start
   - add the `devices` and `alarms` tables
-- [ ] Server: `DeviceStore` (`register`, `exists`) and `AlarmStore.list(deviceId)` with Exposed implementations; the server-side `Alarm` / `AlarmSchedule` domain and wire DTOs, including the polymorphic `schedule` (the default `type` discriminator)
-- [ ] Server wiring:
+- [x] Server: `DeviceStore` (`register`, `exists`) and `AlarmStore.list(deviceId)` with Exposed implementations; the server-side `Alarm` / `AlarmSchedule` domain and wire DTOs, including the polymorphic `schedule` (the default `type` discriminator)
+- [x] Server wiring:
   - move `MeasurementService` construction out of `configureRouting` into `Application.module()`, which also builds the database and stores
   - pass them into `configureRouting(...)` with test-friendly defaults
   - `PollenRoutesTest` and `RoutingTest` stay unchanged
-- [ ] Server endpoints:
+- [x] Server endpoints:
   - `POST /devices` → `201 {deviceId}`: 128 bits from `SecureRandom`, base64url without padding
   - `GET /devices/{id}/alarms`: `404` for an unknown device
-- [ ] App: Firebase setup (google-services plugin, BoM, `firebase-messaging` in `androidMain`); a `PushTokenProvider` with an Android Firebase implementation and an iOS "unavailable" implementation, bound in `platformModule`
-- [ ] App data layer:
+- [x] App: Firebase setup (google-services plugin, BoM, `firebase-messaging` in `androidMain`); a `PushTokenProvider` with an Android Firebase implementation and an iOS "unavailable" implementation, bound in `platformModule`
+- [x] App data layer:
   - a logic-free stored `deviceId` preference, with a fake
   - `AlarmApiService`, DTOs and mapper
   - `AlarmRepository(Impl)` with a lazy `ensureRegistered()`, a typed `PushUnavailable` failure, and a shared "re-register once and retry on unknown-device `404`" wrapper used by every call
-- [ ] App: `AlarmsViewModel` loads on the first `ENABLED`, with Loading / Content / Error / Retry and pull-to-refresh with `isRefreshing`; list rows show the station name and a placeholder summary
-- [ ] Update CLAUDE.md: server persistence and the database file, the device endpoints, the Firebase setup, and the Google Play services exception (push only; location stays Play-free)
+- [x] App: `AlarmsViewModel` loads on the first `ENABLED`, with Loading / Content / Error / Retry and pull-to-refresh with `isRefreshing`; list rows show the station name and a placeholder summary
+- [x] Update CLAUDE.md: server persistence and the database file, the device endpoints, the Firebase setup, and the Google Play services exception (push only; location stays Play-free)
 
 ### Acceptance criteria
 
-- [ ] `ExposedStoresTest`: a registered device exists; an unknown device's alarm list is distinguishable from an empty list; alarms are listed in creation order; data survives closing and reopening a file-backed database
-- [ ] `AlarmRoutesTest`: `POST /devices` returns `201` with a 22-character id; `GET /devices/{id}/alarms` returns `200 []` for a new device and `404` for an unknown one; an alarm of each `schedule` variant serialises with `"type": "daily"` / `"threshold"`
-- [ ] `AlarmRepositoryImplTest` (real client via MockEngine):
+- [x] `ExposedStoresTest`: a registered device exists; an unknown device's alarm list is distinguishable from an empty list; alarms are listed in creation order; data survives closing and reopening a file-backed database
+- [x] `AlarmRoutesTest`: `POST /devices` returns `201` with a 22-character id; `GET /devices/{id}/alarms` returns `200 []` for a new device and `404` for an unknown one; an alarm of each `schedule` variant serialises with `"type": "daily"` / `"threshold"`
+- [x] `AlarmRepositoryImplTest` (real client via MockEngine):
   - it registers once and reuses the stored id
   - an unavailable token fails with `PushUnavailable` and makes no request
   - a `404` clears the id, re-registers once and retries
   - both `schedule` variants round-trip through DTO and mapper
-- [ ] `AlarmsViewModelTest`:
+- [x] `AlarmsViewModelTest`:
   - `PermissionRequired` makes no repository call
   - `ENABLED` → `Loading` → `Content`
   - a failing load → `Error`, and retry → `Content`
   - a refresh keeps the previous alarms with `isRefreshing = true` (observed with a gated fake)
   - `PushUnavailable` → `Error` with the push-unavailable flag
-- [ ] Manual, emulator against `./gradlew :server:run`:
+- [x] Manual, emulator against `./gradlew :server:run`:
   - granting permission creates one row in `devices`
   - after a server restart the tab loads without re-registering
   - revoking and then re-enabling notifications shows the same list
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] `git ls-files` lists `composeApp/google-services.json` and lists no service-account key, `*.db` file or `data/` content
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] `git ls-files` lists `composeApp/google-services.json` and lists no service-account key, `*.db` file or `data/` content
+- [x] No backtick test name contains a comma
 
 ## Task [03-create-daily-report]
 

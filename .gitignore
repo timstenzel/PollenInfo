@@ -61,3 +61,9 @@ secrets.properties
 **/composeCompilerReports/
 **/composeMetrics/*.db
 *.db
+
+# Server database (POLLENINFO_DB, default ./data/polleninfo.db relative to the working directory —
+# `server/` under `./gradlew :server:run`). Anchored on purpose: a bare `data/` would also ignore
+# every `data/` source package in the app.
+/data/
+/server/data/

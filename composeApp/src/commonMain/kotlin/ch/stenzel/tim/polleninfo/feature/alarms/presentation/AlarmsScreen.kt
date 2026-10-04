@@ -1,5 +1,15 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,6 +78,8 @@ fun AlarmsScreen(viewModel: AlarmsViewModel = koinViewModel()) {
             }
         },
         onOpenSettings = controller::openSettings,
+        onRefresh = viewModel::refresh,
+        onRetry = viewModel::retry,
     )
 }
 
@@ -77,23 +89,48 @@ private fun AlarmsContent(
     uiState: AlarmsUiState,
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Alarms") }) },
     ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)
+        val modifier = Modifier.fillMaxSize().padding(padding)
+        val messageModifier = modifier.padding(24.dp)
         when (uiState) {
             // Reading the permission is near-instant; a spinner would only flash.
-            AlarmsUiState.Loading -> Unit
+            AlarmsUiState.CheckingPermission -> Unit
 
             is AlarmsUiState.PermissionRequired -> PermissionRequiredView(
                 state = uiState.state,
                 onRequestPermission = onRequestPermission,
                 onOpenSettings = onOpenSettings,
-                modifier = modifier,
+                modifier = messageModifier,
             )
 
-            AlarmsUiState.Content -> EmptyAlarmsView(modifier)
+            AlarmsUiState.Loading -> Box(messageModifier, contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+
+            // The alarms stay composed while a refresh runs; only the indicator is added.
+            is AlarmsUiState.Content -> PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = onRefresh,
+                modifier = modifier,
+            ) {
+                if (uiState.alarms.isEmpty()) {
+                    // Scrollable so the pull gesture has something to drag.
+                    EmptyAlarmsView(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp))
+                } else {
+                    AlarmList(uiState.alarms, Modifier.fillMaxSize())
+                }
+            }
+
+            is AlarmsUiState.Error -> if (uiState.pushUnavailable) {
+                PushUnavailableView(messageModifier)
+            } else {
+                ErrorView(uiState.message, onRetry, messageModifier)
+            }
         }
     }
 }
@@ -134,8 +171,44 @@ private fun EmptyAlarmsView(modifier: Modifier) {
             "reaches a level you choose.",
         modifier = modifier,
     ) {
-        // Creating alarms needs the backend's alarm store, which does not exist yet.
+        // Creating alarms arrives with the alarm editor.
         Button(onClick = {}, enabled = false) { Text("Create alarm") }
+    }
+}
+
+@Composable
+private fun AlarmList(alarms: List<AlarmListItem>, modifier: Modifier) {
+    LazyColumn(modifier = modifier) {
+        items(alarms, key = { it.alarm.id }) { item ->
+            ListItem(
+                headlineContent = { Text(item.stationName) },
+                supportingContent = { Text(item.summary) },
+            )
+            HorizontalDivider()
+        }
+    }
+}
+
+@Composable
+private fun PushUnavailableView(modifier: Modifier) {
+    CenteredMessage(
+        icon = Icons.Default.NotificationsOff,
+        title = "Push notifications aren't available on this device yet",
+        body = "Pollen alarms arrive as push notifications, which PollenInfo cannot receive on " +
+            "this device so far.",
+        modifier = modifier,
+    ) {}
+}
+
+@Composable
+private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier) {
+    CenteredMessage(
+        icon = Icons.Default.ErrorOutline,
+        title = "Your alarms could not be loaded.",
+        body = message,
+        modifier = modifier,
+    ) {
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
 

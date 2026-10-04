@@ -12,6 +12,12 @@ navigationCompose = "2.9.0"
 datastore = "1.1.7"
 androidxActivity = "1.9.3"
 androidxCore = "1.13.1"
+# Pinned below 1.x: Exposed 1.x is built against Kotlin 2.2+ and pulls that stdlib onto a Kotlin 2.1
+# compiler. 0.61 is the last line built against 2.0. Revisit together with the Kotlin bump.
+exposed = "0.61.0"
+sqliteJdbc = "3.53.4.0"
+firebaseBom = "34.14.1"
+googleServices = "4.4.4"
 
 [libraries]
 # Ktor Client
@@ -57,6 +63,15 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 
+# Server persistence — alarms and device registrations in SQLite
+exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
+exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+
+# Firebase (android only) — the FCM token for push notifications
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+
 # Test
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
@@ -70,3 +85,4 @@ composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "k
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
