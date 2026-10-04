@@ -12,7 +12,8 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
  * happens to be publishing today.
  *
  * [failure], when set, is thrown instead of returning bytes, so the "the measurements could not be
- * obtained" path can be driven without an unreachable host. [requested] records what was asked for,
+ * obtained" path can be driven without an unreachable host. [failures] does the same for single
+ * stations, so one station can fail while the others answer. [requested] records what was asked for,
  * so a caller can assert the station reached the service unchanged.
  */
 class FakePollenService(
@@ -20,11 +21,15 @@ class FakePollenService(
     var failure: Exception? = null,
 ) : PollenService {
 
+    /** Thrown for these stations only, ahead of [failure]. */
+    val failures = mutableMapOf<PollenStation, Exception>()
+
     /** Every station asked for, in order. */
     val requested = mutableListOf<PollenStation>()
 
     override suspend fun hourlyNow(station: PollenStation): ByteArray {
         requested += station
+        failures[station]?.let { throw it }
         failure?.let { throw it }
         return bytes
     }

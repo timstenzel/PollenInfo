@@ -18,6 +18,9 @@ exposed = "0.61.0"
 sqliteJdbc = "3.53.4.0"
 firebaseBom = "34.14.1"
 googleServices = "4.4.4"
+googleAuth = "1.54.0"
+# 1.5.x is the line built for slf4j 2.0, which is what Ktor brings.
+logback = "1.5.38"
 
 [libraries]
 # Ktor Client
@@ -35,6 +38,7 @@ ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor"
 ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
 ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", version.ref = "ktor" }
 ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 # Koin
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
@@ -67,6 +71,9 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+
+# Server push — an OAuth access token for the FCM HTTP v1 API from a service-account key
+google-auth-oauth2 = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuth" }
 
 # Firebase (android only) — the FCM token for push notifications
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }

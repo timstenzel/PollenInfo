@@ -1,0 +1,135 @@
+package ch.stenzel.tim.polleninfo.server.alarm.domain
+
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.CacheResult
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.SpeciesMeasurement
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.StationMeasurement
+import java.time.Duration
+import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+
+/**
+ * A reading this old or older is not current. It must stay equal to the app's `STALE_AFTER`
+ * (`core/measurement/domain/model/ReadingAge.kt`): a notification that calls a reading current while
+ * the app warns that the same reading is not would be two answers to one question.
+ */
+val READING_STALE_AFTER: Duration = Duration.ofHours(3)
+
+/**
+ * When an alarm is due and what it says. Pure — no clock, no I/O, no logging — so every rule is
+ * tested with an explicit `now`. Times are compared in [ALARM_ZONE] whatever zone `now` comes in.
+ */
+object AlarmRules {
+
+    /** True when [alarm] is an enabled daily report whose day and minute [now] is. */
+    fun isDailyDue(alarm: Alarm, now: ZonedDateTime): Boolean {
+        val schedule = alarm.schedule as? AlarmSchedule.Daily ?: return false
+        val local = now.withZoneSameInstant(ALARM_ZONE)
+        return alarm.enabled &&
+            local.dayOfWeek in alarm.days &&
+            local.toLocalTime().truncatedTo(ChronoUnit.MINUTES) == schedule.at
+    }
+
+    /**
+     * The daily report to send at [now], or `null` when there is none.
+     *
+     * - Not due ([isDailyDue]) → `null`.
+     * - A current reading → sent when "Any" is chosen or at least one selected type has reached the
+     *   minimum; `null` otherwise.
+     * - No current reading (an old one, or none at all) → for "Any", a message saying so and how old
+     *   the latest reading is; `null` with a minimum, which must not be judged on old data.
+     */
+    fun evaluateDaily(
+        alarm: Alarm,
+        now: ZonedDateTime,
+        reading: CacheResult<StationMeasurement>,
+    ): PushMessage? {
+        if (!isDailyDue(alarm, now)) return null
+        val local = now.withZoneSameInstant(ALARM_ZONE)
+        val measurement = when (reading) {
+            is CacheResult.Fresh -> reading.value
+            is CacheResult.Stale -> reading.value
+            is CacheResult.Failed -> null
+        }
+        val anySeverity = alarm.minSeverity == PollenSeverity.NONE
+
+        if (measurement == null || !isCurrent(measurement.measuredAt, local)) {
+            if (!anySeverity) return null
+            val body = if (measurement == null) {
+                unavailableBody(alarm.station)
+            } else {
+                noCurrentReadingBody(alarm.station, measurement.measuredAt, local)
+            }
+            return dailyMessage(alarm, body)
+        }
+
+        val selected = measurement.species.filter { it.species in alarm.species && it.severity != null }
+        if (!anySeverity && selected.none { it.severity!!.atLeast(alarm.minSeverity) }) return null
+        return dailyMessage(alarm, readingBody(selected))
+    }
+
+    /**
+     * Current means younger than [READING_STALE_AFTER] **and** from today in [ALARM_ZONE], so a
+     * reading from shortly before midnight never stands in for today's.
+     */
+    fun isCurrent(measuredAt: Instant, now: ZonedDateTime): Boolean =
+        Duration.between(measuredAt, now.toInstant()) < READING_STALE_AFTER &&
+            measuredAt.atZone(ALARM_ZONE).toLocalDate() == now.withZoneSameInstant(ALARM_ZONE).toLocalDate()
+
+    fun title(station: PollenStation): String = "Pollen in ${station.displayName}"
+
+    /**
+     * Worst first, then in [PollenSpecies] declaration order — the order the app's
+     * `GetStationMeasurementUseCase` displays a station in.
+     */
+    private fun readingBody(selected: List<SpeciesMeasurement>): String = when {
+        selected.isEmpty() -> NO_READING_FOR_SELECTION
+        selected.all { it.severity == PollenSeverity.NONE } -> NO_POLLEN
+        else -> selected
+            .sortedWith(compareByDescending<SpeciesMeasurement> { it.severity }.thenBy { it.species.ordinal })
+            .joinToString(" · ") { "${it.species.displayName}: ${it.severity!!.label()}" }
+    }
+
+    private fun noCurrentReadingBody(station: PollenStation, measuredAt: Instant, now: ZonedDateTime): String {
+        val latest = measuredAt.atZone(ALARM_ZONE)
+        val latestText = when (latest.toLocalDate()) {
+            now.toLocalDate() -> latest.format(TIME)
+            now.toLocalDate().minusDays(1) -> "${latest.format(TIME)} yesterday"
+            else -> latest.format(DATE)
+        }
+        return "No current reading for ${station.displayName}. Latest from $latestText."
+    }
+
+    private fun unavailableBody(station: PollenStation) =
+        "No current reading for ${station.displayName}. Readings are currently unavailable."
+
+    private fun dailyMessage(alarm: Alarm, body: String) = PushMessage(
+        title = title(alarm.station),
+        body = body,
+        channel = PushChannel.DAILY_REPORT,
+        data = mapOf(DATA_STATION to alarm.station.abbr, DATA_ALARM to alarm.id.value),
+    )
+
+    /** The app's wording (`PollenSeverity.label()`), so a notification and the screen agree. */
+    private fun PollenSeverity.label(): String = when (this) {
+        PollenSeverity.NONE -> "None"
+        PollenSeverity.LOW -> "Low"
+        PollenSeverity.MODERATE -> "Moderate"
+        PollenSeverity.HIGH -> "High"
+        PollenSeverity.VERY_HIGH -> "Very high"
+    }
+
+    const val DATA_STATION = "stationAbbr"
+    const val DATA_ALARM = "alarmId"
+
+    const val NO_POLLEN = "No pollen of your selected types."
+    const val NO_READING_FOR_SELECTION = "No reading for your selected types."
+
+    private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
+    private val DATE = DateTimeFormatter.ofPattern("d MMMM", Locale.ENGLISH)
+}

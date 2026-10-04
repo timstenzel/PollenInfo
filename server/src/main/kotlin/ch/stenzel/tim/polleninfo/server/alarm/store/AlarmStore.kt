@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.selectAll
@@ -35,7 +36,16 @@ interface AlarmStore {
 
     /** Stores [spec] as a new alarm of the device, under a fresh id. */
     suspend fun create(deviceId: DeviceId, spec: AlarmSpec): CreateResult
+
+    /**
+     * Every enabled alarm whose device has a push token, with that token — everything the scheduler
+     * can deliver, and nothing it cannot.
+     */
+    suspend fun enabledWithDeliverableDevice(): List<AlarmWithToken>
 }
+
+/** An alarm with the push token its notifications go to. */
+data class AlarmWithToken(val alarm: Alarm, val fcmToken: String)
 
 sealed interface CreateResult {
     data class Created(val alarm: Alarm) : CreateResult
@@ -69,6 +79,16 @@ class ExposedAlarmStore(
                 it[createdAt] = nextCreatedAt(deviceId)
             }
             CreateResult.Created(alarm)
+        }
+    }
+
+    override suspend fun enabledWithDeliverableDevice(): List<AlarmWithToken> = withContext(Dispatchers.IO) {
+        transaction(database) {
+            (AlarmsTable innerJoin DevicesTable)
+                .selectAll()
+                .where { (AlarmsTable.enabled eq true) and DevicesTable.fcmToken.isNotNull() }
+                .orderBy(AlarmsTable.createdAt to SortOrder.ASC, AlarmsTable.id to SortOrder.ASC)
+                .map { AlarmWithToken(it.toAlarm(), checkNotNull(it[DevicesTable.fcmToken])) }
         }
     }
 

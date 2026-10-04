@@ -34,5 +34,25 @@
             </intent-filter>
         </activity>
 
+        <!-- Shows pollen alarms that arrive while the app is in the foreground. -->
+        <service
+            android:name=".core.push.PollenFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+          For alarms that arrive in the background, which the system shows by itself: the status-bar
+          icon, and the channel for a message that names none (the backend always names one).
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="daily_report" />
+
     </application>
 </manifest>

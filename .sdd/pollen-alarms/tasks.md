@@ -202,47 +202,47 @@ Only stations with enabled alarms are fetched, through the existing 30-minute ca
 
 ### Implementation steps
 
-- [ ] Server: `ALARM_ZONE`; the 3-hour freshness constant, whose KDoc references the app's `STALE_AFTER`; `PushMessage` with a channel and data (`stationAbbr`, `alarmId`)
-- [ ] Server: `AlarmRules.evaluateDaily` (pure) and the message text, including the stale-time forms `HH:mm`, `HH:mm yesterday` and `d MMMM`
-- [ ] Server push senders:
+- [x] Server: `ALARM_ZONE`; the 3-hour freshness constant, whose KDoc references the app's `STALE_AFTER`; `PushMessage` with a channel and data (`stationAbbr`, `alarmId`)
+- [x] Server: `AlarmRules.evaluateDaily` (pure) and the message text, including the stale-time forms `HH:mm`, `HH:mm yesterday` and `d MMMM`
+- [x] Server push senders:
   - `PushSender` / `PushResult`
   - `FcmPushSender`: Ktor CIO client with a timeout, HTTP v1, an injected access-token lambda
   - `LoggingPushSender`
   - credentials come from `FCM_CREDENTIALS` via `google-auth-library`, and the project id from the key file
-- [ ] Server scheduler:
+- [x] Server scheduler:
   - `AlarmStore.enabledWithDeliverableDevice()`
   - `AlarmScheduler.tick()`, sharing the routes' `MeasurementService`, with each station isolated in `supervisorScope`
   - the minute loop launched in `Application.module()`: exception-safe, cancelled on `ApplicationStopped`
-- [ ] App: create the `daily_report` ("Daily reports") and `threshold_alert` ("Threshold alerts") channels in `PollenInfoApplication`; register `PollenFirebaseMessagingService` in the manifest, posting foreground messages on their channel
-- [ ] Update CLAUDE.md: the architecture diagram and the "Fetching is on demand" section (the scheduler for alarm stations), push delivery, and `FCM_CREDENTIALS`
+- [x] App: create the `daily_report` ("Daily reports") and `threshold_alert` ("Threshold alerts") channels in `PollenInfoApplication`; register `PollenFirebaseMessagingService` in the manifest, posting foreground messages on their channel
+- [x] Update CLAUDE.md: the architecture diagram and the "Fetching is on demand" section (the scheduler for alarm stations), push delivery, and `FCM_CREDENTIALS`
 
 ### Acceptance criteria
 
-- [ ] `AlarmRulesTest` (daily timing): due at the exact minute and not one minute either side; an excluded day → null; a disabled alarm → null; an 08:00 alarm fires at 08:00 local time on both DST changeover days
-- [ ] `AlarmRulesTest` (daily content and staleness):
+- [x] `AlarmRulesTest` (daily timing): due at the exact minute and not one minute either side; an excluded day → null; a disabled alarm → null; an 08:00 alarm fires at 08:00 local time on both DST changeover days
+- [x] `AlarmRulesTest` (daily content and staleness):
   - filter met → sent; filter not met → null; Any → always sent
   - a stale reading → the "no current reading" text for Any (pinned in each of the three latest-time forms), and null when filtered
   - a failed reading → "unavailable" for Any
   - the body is worst-first; all-NONE gives the "No pollen of your selected types." body; the title is "Pollen in <station>"
-- [ ] `FcmPushSenderTest` (MockEngine):
+- [x] `FcmPushSenderTest` (MockEngine):
   - checks the request URL, the bearer header and the body (token, notification, `channel_id`, data)
   - `200` → `Sent`; `404 UNREGISTERED` and `400 INVALID_ARGUMENT` → `Unregistered`; `500` and a timeout → `Failed`
-- [ ] `AlarmSchedulerTest` (`MutableClock`, in-memory stores, `FakePollenService`, `FakePushSender`):
+- [x] `AlarmSchedulerTest` (`MutableClock`, in-memory stores, `FakePollenService`, `FakePushSender`):
   - a daily report is sent once at its minute and not at the next tick
   - a station without alarms is never requested
   - many ticks within 30 minutes cause one upstream fetch per station
   - nothing is sent after the clock jumps past the time
   - one station's upstream failure doesn't stop another station's report
-- [ ] Manual: with credentials configured, a daily report set for the next minute arrives on the emulator with the app killed, on the "Daily reports" channel; tapping it opens the app
-- [ ] Manual: without `FCM_CREDENTIALS`, the server starts with a warning and logs the report at its minute
+- [ ] ~~Manual: with credentials configured, a daily report set for the next minute arrives on the emulator with the app killed, on the "Daily reports" channel; tapping it opens the app~~ *(skipped: no Firebase service-account key is available here (`FCM_CREDENTIALS` unset, none on disk), so nothing can actually be sent through FCM. Supporting evidence: the FCM request shape is pinned by `FcmPushSenderTest`; on the emulator, `dumpsys notification` shows `daily_report` ("Daily reports") and `threshold_alert` ("Threshold alerts") created at app start; the merged debug manifest contains the messaging service and `default_notification_icon`)*
+- [x] Manual: without `FCM_CREDENTIALS`, the server starts with a warning and logs the report at its minute *(18:37:24 `WARN FCM_CREDENTIALS is not set: push notifications are logged, not sent`; an Any report for PZH at 18:39 was logged at 18:39:00.322 on `daily_report`, "Pollen in Zürich — No pollen of your selected types.", data `stationAbbr`/`alarmId`. Required adding `logback-classic`: the server had no SLF4J backend, so every log line was being dropped)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No test sleeps or contacts Google/FCM or MeteoSwiss
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No test sleeps or contacts Google/FCM or MeteoSwiss
+- [x] No backtick test name contains a comma
 
 ## Task [05-threshold-alerts]
 

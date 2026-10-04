@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Status-bar icon for pollen alarms: the launcher's pollen grain (ic_launcher_foreground), cropped
+  to the grain and drawn in a single colour. Android uses only the alpha of a notification icon, so
+  the three pores are cut out of the body (evenOdd) rather than painted in a second colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="68"
+    android:viewportHeight="68">
+
+    <group android:translateX="-20" android:translateY="-20">
+        <group android:pivotX="54" android:pivotY="54" android:rotation="0">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="60">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="120">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="180">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="240">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="300">
+            <path android:fillColor="#FFFFFF" android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+        </group>
+
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M54,35 A19,19 0 1,0 54,73 A19,19 0 1,0 54,35 Z
+                M69,51 A3,3 0 1,0 69,57 A3,3 0 1,0 69,51 Z
+                M46.5,64 A3,3 0 1,0 46.5,70 A3,3 0 1,0 46.5,64 Z
+                M46.5,38 A3,3 0 1,0 46.5,44 A3,3 0 1,0 46.5,38 Z" />
+    </group>
+</vector>

@@ -6,17 +6,19 @@ plus a Ktor backend that owns all contact with the MeteoSwiss public API.
 ## Architecture
 
 ```
-┌─────────────────────┐        REST         ┌──────────────┐  on-demand CSV fetch  ┌───────────────────┐
-│ composeApp          │ ──────────────────> │  server      │ ────────────────────> │ MeteoSwiss OGD    │
-│ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │   30-min TTL cache    │ pollen (public)   │
-└─────────────────────┘   JSON              └──────────────┘                       └───────────────────┘
-         ▲                                        │
-         └──────────── push (FCM / APNS) ─────────┘
+┌─────────────────────┐        REST         ┌──────────────┐  CSV fetch, on demand ┌───────────────────┐
+│ composeApp          │ ──────────────────> │  server      │  + alarm stations     │ MeteoSwiss OGD    │
+│ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │ ────────────────────> │ pollen (public)   │
+└─────────────────────┘   JSON              │  SQLite      │   30-min TTL cache    └───────────────────┘
+         ▲                                  │  scheduler   │
+         │                                  └──────────────┘
+         │                                        │ FCM HTTP v1 (Android only)
+         └──────────── push notification ─────────┘
 ```
 
-**Fetching is on demand, not scheduled.** A request for a station's measurements fetches that
+**Fetching is on demand, plus a scheduler for alarm stations.** A request for a station's measurements fetches that
 station's current-day CSV only if the server has no reading for it younger than **30 minutes**
-(`MeasurementService.CACHE_TTL`); nothing is polled on a timer. The upstream file gains a row
+(`MeasurementService.CACHE_TTL`). The upstream file gains a row
 roughly hourly, so a new row is picked up within half an hour of publication, and any number of
 people looking at one station cost one upstream request per period. Simultaneous first requests for
 a station share a single fetch.
@@ -26,17 +28,20 @@ never re-stamped — and the app's stale-age warning makes its age visible. With
 the request fails (`502`). No maximum age is applied to a retained reading; that is presentation
 policy and lives in the app's warning, so the two must stay together.
 
-This means no scheduler lifecycle, no cold-start "the first poll failed" state, and no traffic for
-the fourteen stations nobody is looking at. **A scheduled poll becomes the right shape once push
-notifications need severities for stations nobody has open** — the cache is the seam it would fill.
+The one timer is the **alarm scheduler** (see "Alarm delivery"): once a minute it reads a station
+only when one of that station's enabled alarms is due, and it reads through the **same**
+`MeasurementService`, so alarms and app users together still cost at most one upstream request per
+station per cache period. A station with no due alarm and nobody looking at it costs nothing. There
+is still no cold-start poll and no "the first poll failed" state: a scheduler fetch is just another
+caller of the cache.
 
 **The apps never call the MeteoSwiss API directly.** All upstream fetching, parsing and severity
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
 station metadata and threshold logic in one place and off the devices.
 
-Push notifications are being built (see "Alarms"). So far the Android app obtains an FCM token and
-registers the device with the backend, which keeps devices and alarms in SQLite (see "Persistence");
-nothing is sent yet — the outbound leg to FCM arrives with the alarm scheduler. iOS has no push leg.
+Push notifications are being built (see "Alarms"). The Android app obtains an FCM token and
+registers the device with the backend, which keeps devices and alarms in SQLite (see "Persistence")
+and delivers due daily reports through FCM (see "Alarm delivery"). iOS has no push leg.
 
 ### Modules
 
@@ -61,7 +66,7 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 | Server unit tests               | `./gradlew :server:test`                    |
 | All unit tests we can run here  | `./gradlew :composeApp:testDebugUnitTest :server:test` |
 | Verify iOS sources compile      | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
-| Run the backend on :8080        | `./gradlew :server:run`                     |
+| Run the backend on :8080        | `./gradlew :server:run` (push is logged unless `FCM_CREDENTIALS` is set) |
 | Android debug APK               | `./gradlew :composeApp:assembleDebug`       |
 
 Notes:
@@ -663,9 +668,9 @@ Nothing else knows about the tab. Update the order and name assertions in
 #### Alarms
 
 The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far the permission gate, the backend-loaded list and creating daily reports exist** (see "Alarm
-editor" below) — threshold alerts, editing, pausing and deleting are not built yet, and nothing is
-sent.
+far the permission gate, the backend-loaded list, creating daily reports and delivering them
+exist** (see "Alarm editor" below and "Alarm delivery" under the server) — threshold alerts,
+editing, pausing and deleting are not built yet.
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
@@ -789,7 +794,17 @@ without them is out of scope, and location deliberately stays on the platform pr
   `UnavailablePushTokenProvider`. A *failed* token task (no Play services, no network) is thrown,
   not `Unavailable`, so the screen offers Retry — `Unavailable` is reserved for "this platform cannot
   receive push".
-- The server's service-account key (for sending) is never committed; it arrives with sending.
+- **Receiving.** `PollenInfoApplication` creates the two channels on every start —
+  `daily_report` ("Daily reports") and `threshold_alert` ("Threshold alerts"), default importance,
+  `core/push/NotificationChannels.kt` — before any push can arrive, since FCM may start the process
+  with no activity. Their ids are the server's `PushChannel` ids. In the background the system shows
+  a notification message itself, on the channel the message names, with `ic_notification` (the
+  manifest's `default_notification_icon`) and a tap that opens the launcher activity. In the
+  foreground FCM shows nothing, so `PollenFirebaseMessagingService.onMessageReceived` posts it on the
+  same channel with a tap that opens `MainActivity` — the two cases look the same. The service, the
+  channels and the icon are checked by hand.
+- **Sending** needs a Firebase service-account key for the server, passed as a file path in
+  `FCM_CREDENTIALS`. It is **never committed** (see "Alarm delivery").
 
 ### The startup gate
 
@@ -837,7 +852,8 @@ Ktor plugin configuration is split into `plugins/` extension functions on `Appli
 (`configureSerialization`, `configureLogging`, `configureRouting`) and composed in
 `Application.module()`, which also builds the long-lived collaborators once — the
 `MeasurementService` (via `meteoSwissMeasurementService`), the database and the stores — and passes
-them into `configureRouting(...)`. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
+them into `configureRouting(...)`, then starts the alarm scheduler with the same
+`MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
 ```
@@ -850,8 +866,11 @@ server/src/main/kotlin/.../server/
 │   ├── model/          Wire DTOs (@Serializable)
 │   └── PollenRoutes.kt
 └── alarm/
-    ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId
+    ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId,
+    │                   ALARM_ZONE, AlarmRules, PushMessage / PushChannel, AlarmValidation
     ├── store/          DeviceStore, AlarmStore (+ Exposed implementations), tables, PollenInfoDatabase
+    ├── push/           PushSender, FcmPushSender, LoggingPushSender, pushSenderFromEnvironment
+    ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
     └── AlarmRoutes.kt
 ```
@@ -932,6 +951,68 @@ compiler — revisit with the Kotlin bump.
 - Store interfaces are `suspend`; the Exposed implementations run each transaction on
   `Dispatchers.IO`. `configureRouting`'s store defaults share one private in-memory database, never
   the production file, so `PollenRoutesTest` and `RoutingTest` need no database setup.
+
+#### Alarm delivery
+
+`alarm/scheduler/AlarmScheduler.tick()` runs at the start of every minute
+(`launchAlarmScheduler` in `Application.module()`: a coroutine on the application scope that waits
+for the next whole minute, logs and survives a failing tick, and is cancelled on
+`ApplicationStopped`). The loop holds no logic; `tick()` is the tested surface.
+
+Each tick takes the current minute in `ALARM_ZONE` (`Europe/Zurich` — every alarm day and time is
+Swiss time, and `java.time` handles daylight saving), loads `AlarmStore.enabledWithDeliverableDevice()`
+(enabled alarms whose device has a push token), keeps the ones due **this minute**, groups them by
+station and reads each such station **once** through the routes' shared `MeasurementService`.
+Stations run in parallel children of a `supervisorScope`, each with its own `try`, so one station's
+failure — upstream or delivery — never stops another's reports. A second tick within the same minute
+does nothing. **There is no catch-up**: a minute the scheduler did not run in (backend down, clock
+jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
+
+**The rules are `alarm/domain/AlarmRules`** — pure, with `now` passed in, no clock, I/O or logging:
+
+- **Due** (`isDailyDue`): enabled, today's weekday selected, and the local time truncated to the
+  minute equals `at`.
+- **Current reading** (`isCurrent`): younger than `READING_STALE_AFTER` (3 hours — it must equal the
+  app's `STALE_AFTER`) **and** from today's Swiss date. Judged on `measuredAt`, so a `Fresh` cache
+  result for a file that stopped updating is not current either.
+- **Current** → sent if the minimum is "Any" (`NONE`) or at least one selected type has reached it;
+  otherwise nothing. Body: the selected types that have a reading, worst first, then in
+  `PollenSpecies` order — "Grasses: High · Birch: Moderate", words as the app's
+  `PollenSeverity.label()`. All of them at `NONE` → "No pollen of your selected types."; none of them
+  reported by the station → "No reading for your selected types."
+- **Not current** → with a minimum, nothing (never judged on old data). With "Any": "No current
+  reading for Zürich. Latest from 06:00." (`HH:mm` today, `HH:mm yesterday`, else `d MMMM`), or
+  "…Readings are currently unavailable." when there is no reading at all.
+- Title "Pollen in <station>"; channel `PushChannel.DAILY_REPORT`; data `stationAbbr` and `alarmId`,
+  so opening a station from a notification can be added without a backend change.
+
+**Sending** is `alarm/push/PushSender` → `PushResult` `Sent` | `Unregistered` | `Failed(cause)`; it
+never throws for a delivery failure.
+
+- `FcmPushSender(client, projectId, accessToken, baseUrl)` — FCM HTTP v1, one
+  `POST /v1/projects/{projectId}/messages:send` with `token`, `notification{title, body}`,
+  `android.notification.channel_id` and `data`, encoded by the sender itself so the shape does not
+  depend on the client's plugins. `404` with `UNREGISTERED`, or `400` with `INVALID_ARGUMENT`, is
+  `Unregistered`; any other non-2xx, a timeout or a transport error is `Failed`. The access token is
+  an injected `suspend () -> String`, so `FcmPushSenderTest` never touches Google.
+- `pushSenderFromEnvironment()` (`PushWiring.kt`) builds it when **`FCM_CREDENTIALS`** names a
+  service-account key: `google-auth-library-oauth2-http` turns the key into a token with the
+  `firebase.messaging` scope (refreshed when it expires), the project id comes from the key file, and
+  the `HttpClient(CIO)` has a 15-second timeout and closes on `ApplicationStopped`. A configured key
+  that cannot be read fails startup rather than silently logging.
+- Without `FCM_CREDENTIALS` the server starts with a warning and uses `LoggingPushSender`, which logs
+  the token's last six characters and the message and reports `Sent`. **The key is never
+  committed.**
+- So far `Unregistered` and `Failed` are only logged; a daily report is not retried within its
+  minute.
+
+The server logs through `logback-classic` (`server/src/main/resources/logback.xml`, INFO); without
+an SLF4J backend every log line, including the logged pushes, would be dropped.
+
+`AlarmSchedulerTest` runs `tick()` against an in-memory database, `MeasurementService` over
+`FakePollenService` (whose `failures` map fails single stations), `FakePushSender` and
+`MutableClock`. `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers), content
+and every staleness form.
 
 #### `GET /pollen/stations/{abbr}/measurements`
 

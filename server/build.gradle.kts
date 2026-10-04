@@ -22,6 +22,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
+    // The SLF4J backend. Without one every log line — the scheduler's, the push fallback's, call
+    // logging — is silently dropped.
+    runtimeOnly(libs.logback.classic)
+
     // Outbound leg to the MeteoSwiss OGD file service. CIO because the server has no other engine
     // requirement and it pulls in no platform HTTP stack.
     implementation(libs.ktor.client.core)
@@ -31,6 +35,10 @@ dependencies {
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.sqlite.jdbc)
+
+    // Push: the FCM HTTP v1 call goes through the Ktor client above; this library only turns the
+    // service-account key into an access token.
+    implementation(libs.google.auth.oauth2)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)

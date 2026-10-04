@@ -167,6 +167,29 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `enabled alarms are deliverable with their device's token`() = runTest {
+        val mine = devices.register("token-mine")
+        val theirs = devices.register("token-theirs")
+        val myAlarm = dailyAlarm(mine)
+        val theirAlarm = dailyAlarm(theirs)
+        database.insertAlarm(myAlarm, createdAtMillis = 1)
+        database.insertAlarm(theirAlarm, createdAtMillis = 2)
+
+        assertEquals(
+            listOf(AlarmWithToken(myAlarm, "token-mine"), AlarmWithToken(theirAlarm, "token-theirs")),
+            alarms.enabledWithDeliverableDevice(),
+        )
+    }
+
+    @Test
+    fun `a disabled alarm is not deliverable`() = runTest {
+        val id = devices.register("token-1")
+        database.insertAlarm(dailyAlarm(id).copy(enabled = false), createdAtMillis = 1)
+
+        assertEquals(emptyList(), alarms.enabledWithDeliverableDevice())
+    }
+
+    @Test
     fun `data survives closing and reopening a file backed database`() = runTest {
         val path = tempDir.resolve("nested/dir/polleninfo.db")
         val first = PollenInfoDatabase.file(path)

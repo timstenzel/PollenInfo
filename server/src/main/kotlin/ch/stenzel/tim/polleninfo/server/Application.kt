@@ -1,5 +1,8 @@
 package ch.stenzel.tim.polleninfo.server
 
+import ch.stenzel.tim.polleninfo.server.alarm.push.pushSenderFromEnvironment
+import ch.stenzel.tim.polleninfo.server.alarm.scheduler.AlarmScheduler
+import ch.stenzel.tim.polleninfo.server.alarm.scheduler.launchAlarmScheduler
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
@@ -12,6 +15,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import java.time.Clock
 
 fun main() {
     embeddedServer(
@@ -24,7 +28,7 @@ fun main() {
 
 /**
  * Builds every long-lived collaborator once. The [MeasurementService] is built here rather than
- * inside routing so that the reading cache can be shared with whatever else needs readings.
+ * inside routing so that the routes and the alarm scheduler share one reading cache.
  */
 fun Application.module() {
     configureSerialization()
@@ -35,11 +39,24 @@ fun Application.module() {
     val database = PollenInfoDatabase.fromEnvironment()
     log.info("Alarm database: ${database.url}")
 
+    val alarms = ExposedAlarmStore(database)
+
     configureRouting(
         thresholds = thresholds,
         measurementService = measurementService,
         database = database,
         devices = ExposedDeviceStore(database),
-        alarms = ExposedAlarmStore(database),
+        alarms = alarms,
+    )
+
+    val clock = Clock.systemUTC()
+    launchAlarmScheduler(
+        scheduler = AlarmScheduler(
+            alarms = alarms,
+            measurements = measurementService,
+            push = pushSenderFromEnvironment(),
+            clock = clock,
+        ),
+        clock = clock,
     )
 }
