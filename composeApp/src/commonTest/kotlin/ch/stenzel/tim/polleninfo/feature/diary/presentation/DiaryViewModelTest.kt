@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalDate
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -132,5 +133,79 @@ class DiaryViewModelTest {
 
         assertIs<DiaryUiState.Error>(viewModel.uiState.value)
         assertTrue(historyRepository.requested.isEmpty())
+    }
+
+    @Test
+    fun `selecting a week keeps the previous history while it loads and then replaces it`() = runTest {
+        val month = stationHistory(days = 30)
+        val week = stationHistory(from = LocalDate(2026, 9, 27), days = 7)
+        historyRepository.result = Result.Success(month)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.gate = CompletableDeferred()
+        historyRepository.result = Result.Success(week)
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        runCurrent()
+
+        val loading = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertTrue(loading.isLoading)
+        assertEquals(month, loading.history)
+        assertEquals(HistoryRange.WEEK, loading.range)
+        // The chart stays laid out for the history it still shows.
+        assertEquals(HistoryRange.MONTH, loading.historyRange)
+
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+
+        val loaded = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertFalse(loaded.isLoading)
+        assertEquals(week, loaded.history)
+        assertEquals(HistoryRange.WEEK, loaded.range)
+        assertEquals(HistoryRange.WEEK, loaded.historyRange)
+        assertEquals(listOf("PZH" to HistoryRange.MONTH, "PZH" to HistoryRange.WEEK), historyRepository.requested)
+    }
+
+    @Test
+    fun `selecting the range already shown requests nothing`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onRangeSelected(HistoryRange.MONTH)
+        advanceUntilIdle()
+
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+        assertFalse(assertIs<DiaryUiState.Content>(viewModel.uiState.value).isLoading)
+    }
+
+    @Test
+    fun `a failed range change is Error and Retry loads the chosen range`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        advanceUntilIdle()
+        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+
+        historyRepository.result = Result.Success(stationHistory(days = 365))
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals(HistoryRange.YEAR, content.range)
+        assertEquals(HistoryRange.YEAR, content.historyRange)
+        assertEquals(HistoryRange.YEAR, historyRepository.requested.last().second)
+    }
+
+    @Test
+    fun `selecting a range never writes the home station`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        advanceUntilIdle()
+
+        assertTrue(selectedStationRepository.writes.isEmpty())
     }
 }

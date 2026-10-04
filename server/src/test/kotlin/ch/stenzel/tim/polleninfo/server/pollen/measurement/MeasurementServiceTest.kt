@@ -225,6 +225,9 @@ class MeasurementServiceTest {
 
                 override suspend fun dailyRecent(station: PollenStation): ByteArray =
                     error("not used by MeasurementService")
+
+                override suspend fun dailyHistorical(station: PollenStation): ByteArray =
+                    error("not used by MeasurementService")
             }
             val gatedService = MeasurementService(
                 gated,

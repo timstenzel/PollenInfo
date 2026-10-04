@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.diary.chart
 
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryDay
+import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import kotlinx.datetime.LocalDate
 
@@ -34,15 +35,14 @@ data class DiaryChartGeometry(
  * - **y** is the severity level, `NONE` = 0 … `VERY_HIGH` = 4, inverted so a higher point is
  *   always worse: `VERY_HIGH` at the top (0), `NONE` at the bottom ([height]).
  * - One line per id in [speciesIds], in that order; a species with no value on a day has a gap there.
- * - A date tick every [dateTickEvery] days, counted back from the last day so yesterday is always
- *   labelled.
+ * - Date ticks thinned to what fits the [range] ([dateTickIndices]).
  */
 fun diaryChartGeometry(
     days: List<HistoryDay>,
     speciesIds: List<String>,
+    range: HistoryRange,
     width: Float,
     height: Float,
-    dateTickEvery: Int = 7,
 ): DiaryChartGeometry {
     fun xOf(index: Int): Float = if (days.size <= 1) width / 2 else width * index / (days.size - 1)
 
@@ -65,10 +65,22 @@ fun diaryChartGeometry(
     return DiaryChartGeometry(
         lines = lines,
         levelTicks = PollenSeverity.entries.map { LevelTick(it, levelY(it, height)) },
-        dateTicks = days.indices
-            .filter { (days.lastIndex - it) % dateTickEvery == 0 }
-            .map { DateTick(days[it].date, xOf(it)) },
+        dateTicks = dateTickIndices(days, range).map { DateTick(days[it].date, xOf(it)) },
     )
+}
+
+/**
+ * Which days get a date label, by range:
+ *
+ * - **Week** — every day; seven labels fit.
+ * - **Month** — every seventh day, counted back from the last so yesterday is always labelled.
+ * - **Year** — the first of each month; a weekly label would be fifty-odd and unreadable, and month
+ *   starts are what a year is read by.
+ */
+private fun dateTickIndices(days: List<HistoryDay>, range: HistoryRange): List<Int> = when (range) {
+    HistoryRange.WEEK -> days.indices.toList()
+    HistoryRange.MONTH -> days.indices.filter { (days.lastIndex - it) % 7 == 0 }
+    HistoryRange.YEAR -> days.indices.filter { days[it].date.dayOfMonth == 1 }
 }
 
 /** The height of [level] in a plot [height] px tall — higher means worse. */

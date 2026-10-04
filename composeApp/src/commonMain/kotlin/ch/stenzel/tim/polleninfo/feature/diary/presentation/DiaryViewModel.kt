@@ -19,6 +19,9 @@ import kotlinx.coroutines.launch
  *
  * Opens on the stored home station over [HistoryRange.MONTH]. The home station is **read**, once,
  * and never written: whatever the diary shows later must not change what Home shows.
+ *
+ * Choosing another range keeps the current graph on screen, with `isLoading`, until the new history
+ * arrives; a failed load is [DiaryUiState.Error], whose Retry loads the chosen range again.
  */
 class DiaryViewModel(
     private val selectedStationRepository: SelectedStationRepository,
@@ -31,7 +34,8 @@ class DiaryViewModel(
     /** The station on screen; `null` until the stored home station has been read. */
     private var station: SelectedStation? = null
 
-    private val range = HistoryRange.MONTH
+    /** The selected period; kept here rather than only in `Content`, so Retry from Error resumes it. */
+    private var range = HistoryRange.MONTH
 
     /** Every load starts by cancelling this, so an older answer can never replace a newer one. */
     private var loadJob: Job? = null
@@ -43,9 +47,18 @@ class DiaryViewModel(
     /** Leaves [DiaryUiState.Error] by loading again from scratch. */
     fun retry() = load()
 
+    /** Loads [range]'s history; the selected range again does nothing. */
+    fun onRangeSelected(range: HistoryRange) {
+        if (range == this.range) return
+        this.range = range
+        load()
+    }
+
     private fun load() {
         loadJob?.cancel()
-        _uiState.value = DiaryUiState.Loading
+        val range = range
+        val previous = _uiState.value as? DiaryUiState.Content
+        _uiState.value = previous?.copy(range = range, isLoading = true) ?: DiaryUiState.Loading
         loadJob = viewModelScope.launch {
             val station = station ?: selectedStationRepository.selectedStation.first()?.also { station = it }
             if (station == null) {
@@ -58,6 +71,7 @@ class DiaryViewModel(
                     stationAbbr = station.abbr,
                     stationName = station.name,
                     range = range,
+                    historyRange = range,
                     history = result.data,
                     speciesIds = result.data.days.firstOrNull()?.levels?.keys?.toList().orEmpty(),
                 )

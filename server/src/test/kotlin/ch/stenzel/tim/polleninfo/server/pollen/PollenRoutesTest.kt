@@ -392,4 +392,42 @@ class PollenRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(25, response.body<StationHistoryDto>().days.last().species.single { it.id == "GRASSES" }.concentration)
     }
+
+    @Test
+    fun `history for a week returns seven days ending yesterday`() = testApplication {
+        installApp()
+
+        val history = jsonClient().get("/pollen/stations/PZH/history?range=week").body<StationHistoryDto>()
+
+        assertEquals("week", history.range)
+        assertEquals("2026-09-27", history.from)
+        assertEquals("2026-10-03", history.until)
+        assertEquals(7, history.days.size)
+    }
+
+    @Test
+    fun `history for a year returns 365 days ending yesterday`() = testApplication {
+        installApp()
+
+        val history = jsonClient().get("/pollen/stations/PZH/history?range=year").body<StationHistoryDto>()
+
+        assertEquals("year", history.range)
+        assertEquals("2025-10-04", history.from)
+        assertEquals("2026-10-03", history.until)
+        assertEquals(365, history.days.size)
+        assertEquals(LocalDate.of(2025, 10, 4), LocalDate.parse(history.days.first().date))
+        assertEquals(LocalDate.of(2026, 10, 3), LocalDate.parse(history.days.last().date))
+    }
+
+    @Test
+    fun `a year is 502 when the earlier years fail with nothing retained even though this year answers`() =
+        testApplication {
+            pollenService.dailyHistoricalFailure = IOException("upstream down")
+            installApp()
+            val client = jsonClient()
+
+            assertEquals(HttpStatusCode.BadGateway, client.get("/pollen/stations/PZH/history?range=year").status)
+            // The month does not need the earlier years and still answers.
+            assertEquals(HttpStatusCode.OK, client.get("/pollen/stations/PZH/history?range=month").status)
+        }
 }

@@ -45,6 +45,12 @@ enum class PollenStation(
     /** Path of this station's year-to-date daily CSV, relative to the OGD pollen base URL. */
     val dailyRecentPath: String get() = pathFor(granularity = "d", frequency = "recent")
 
+    /**
+     * Path of this station's daily CSV for every earlier year, ending 31 December of last year,
+     * relative to the OGD pollen base URL.
+     */
+    val dailyHistoricalPath: String get() = pathFor(granularity = "d", frequency = "historical")
+
     private fun pathFor(granularity: String, frequency: String): String {
         val id = abbr.lowercase()
         return "$id/ogd-pollen_${id}_${granularity}_$frequency.csv"

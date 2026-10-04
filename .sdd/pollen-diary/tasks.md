@@ -65,27 +65,27 @@ chart's x-axis labels and its spoken description adapt to the range.
 
 ### Implementation steps
 
-- [ ] Server: `PollenStation.dailyHistoricalPath`; `PollenService.dailyHistorical(station)` in `MeteoSwissPollenService`, `FakePollenService` (per-file bytes/failure/record from 01) and the anonymous `PollenService` in `MeasurementServiceTest`. Add a verbatim `d_historical` fixture.
-- [ ] Server: second `TtlCache` (24 h) in `HistoryService`; fetch `d_historical` only when the window starts before 1 January of the current Swiss year; merge with recent winning on overlap; stale on failure; `Failed` with nothing retained → `502`.
-- [ ] App: range `SingleChoiceSegmentedButtonRow` (Week / Month / Year) in `DiaryScreen` → `DiaryViewModel.onRangeSelected`; a change keeps the current graph with a loading indicator until the new history arrives.
-- [ ] App: x-tick thinning per range in `DiaryChartGeometry` (week: every day; month: ~weekly; year: month starts); range-aware chart description.
-- [ ] CLAUDE.md: ranges, the `d_historical` file, both cache TTLs.
+- [x] Server: `PollenStation.dailyHistoricalPath`; `PollenService.dailyHistorical(station)` in `MeteoSwissPollenService`, `FakePollenService` (per-file bytes/failure/record from 01) and the anonymous `PollenService` in `MeasurementServiceTest`. Add a verbatim `d_historical` fixture.
+- [x] Server: second `TtlCache` (24 h) in `HistoryService`; fetch `d_historical` only when the window starts before 1 January of the current Swiss year; merge with recent winning on overlap; stale on failure; `Failed` with nothing retained → `502`.
+- [x] App: range `SingleChoiceSegmentedButtonRow` (Week / Month / Year) in `DiaryScreen` → `DiaryViewModel.onRangeSelected`; a change keeps the current graph with a loading indicator until the new history arrives.
+- [x] App: x-tick thinning per range in `DiaryChartGeometry` (week: every day; month: ~weekly; year: month starts); range-aware chart description.
+- [x] CLAUDE.md: ranges, the `d_historical` file, both cache TTLs.
 
 ### Acceptance criteria
 
-- [ ] `range=week` and `range=year` return 7 and 365 days ending yesterday; `HistoryWindowTest` pins the window at 1 January and across a leap day; `PollenStationTest` pins `dailyHistoricalPath`, and the fixture sits at that path.
-- [ ] `HistoryServiceTest`: a year window in October requests `d_historical` and returns values for dates before 1 January; a week or month window wholly inside the current year never requests it (per-file request record); on a date present in both files the `d_recent` value wins.
-- [ ] `HistoryServiceTest`: `d_historical` is not re-fetched within 24 hours and is after; a failed `d_historical` fetch with a retained copy still yields a result; with nothing retained the year request fails even though `d_recent` succeeds (route test: `502`).
-- [ ] `DiaryViewModelTest`: selecting `WEEK` while the load is gated keeps the previous history in `Content` with `isLoading = true`, then replaces it.
-- [ ] `DiaryChartGeometryTest` pins x-tick count and positions for each range; the chart-description test pins the wording for week, month and year.
+- [x] `range=week` and `range=year` return 7 and 365 days ending yesterday; `HistoryWindowTest` pins the window at 1 January and across a leap day; `PollenStationTest` pins `dailyHistoricalPath`, and the fixture sits at that path.
+- [x] `HistoryServiceTest`: a year window in October requests `d_historical` and returns values for dates before 1 January; a week or month window wholly inside the current year never requests it (per-file request record); on a date present in both files the `d_recent` value wins.
+- [x] `HistoryServiceTest`: `d_historical` is not re-fetched within 24 hours and is after; a failed `d_historical` fetch with a retained copy still yields a result; with nothing retained the year request fails even though `d_recent` succeeds (route test: `502`).
+- [x] `DiaryViewModelTest`: selecting `WEEK` while the load is gated keeps the previous history in `Content` with `isLoading = true`, then replaces it.
+- [x] `DiaryChartGeometryTest` pins x-tick count and positions for each range; the chart-description test pins the wording for week, month and year.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] No new compiler warnings compared with `main`.
-- [ ] No JVM-only API in `commonMain` and no comma in backtick test names.
-- [ ] CLAUDE.md updated as listed in the steps.
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] No new compiler warnings compared with `main`.
+- [x] No JVM-only API in `commonMain` and no comma in backtick test names.
+- [x] CLAUDE.md updated as listed in the steps.
 
 ---
 

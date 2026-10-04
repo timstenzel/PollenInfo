@@ -16,6 +16,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -25,11 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The Diary tab: the daily pollen levels at the home station over the last 30 days.
+ * The Diary tab: the daily pollen levels at the home station over the last week, month or year.
  *
  * Scrolls as a whole and has no pull-to-refresh. The note that the diary is no diagnosis is part of
  * every state with a graph, tied to the explanatory line by its asterisk.
@@ -38,27 +42,33 @@ import org.koin.compose.viewmodel.koinViewModel
 fun DiaryScreen(viewModel: DiaryViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    DiaryContent(uiState = uiState, onRetry = viewModel::retry)
+    DiaryContent(uiState = uiState, onRangeSelected = viewModel::onRangeSelected, onRetry = viewModel::retry)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DiaryContent(uiState: DiaryUiState, onRetry: () -> Unit) {
+private fun DiaryContent(
+    uiState: DiaryUiState,
+    onRangeSelected: (HistoryRange) -> Unit,
+    onRetry: () -> Unit,
+) {
     Scaffold(topBar = { TopAppBar(title = { Text("Diary") }) }) { padding ->
         val modifier = Modifier.fillMaxSize().padding(padding)
         when (uiState) {
             is DiaryUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
-            is DiaryUiState.Content -> DiaryView(uiState, modifier)
+            is DiaryUiState.Content -> DiaryView(uiState, onRangeSelected, modifier)
             is DiaryUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
         }
     }
 }
 
 @Composable
-private fun DiaryView(content: DiaryUiState.Content, modifier: Modifier) {
+private fun DiaryView(content: DiaryUiState.Content, onRangeSelected: (HistoryRange) -> Unit, modifier: Modifier) {
     Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text(text = content.stationName, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(16.dp))
+        RangeSelector(selected = content.range, onSelected = onRangeSelected)
+        Spacer(Modifier.height(16.dp))
         Text(
             text = "Compare how you felt with the pollen levels at a station.*",
             style = MaterialTheme.typography.bodyMedium,
@@ -72,7 +82,7 @@ private fun DiaryView(content: DiaryUiState.Content, modifier: Modifier) {
         DiaryChart(
             days = content.history.days,
             speciesIds = content.speciesIds,
-            range = content.range,
+            range = content.historyRange,
         )
         Spacer(Modifier.height(24.dp))
         Text(
@@ -81,6 +91,28 @@ private fun DiaryView(content: DiaryUiState.Content, modifier: Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RangeSelector(selected: HistoryRange, onSelected: (HistoryRange) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        HistoryRange.entries.forEachIndexed { index, range ->
+            SegmentedButton(
+                selected = range == selected,
+                onClick = { onSelected(range) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = HistoryRange.entries.size),
+            ) {
+                Text(range.label())
+            }
+        }
+    }
+}
+
+private fun HistoryRange.label(): String = when (this) {
+    HistoryRange.WEEK -> "Week"
+    HistoryRange.MONTH -> "Month"
+    HistoryRange.YEAR -> "Year"
 }
 
 @Composable

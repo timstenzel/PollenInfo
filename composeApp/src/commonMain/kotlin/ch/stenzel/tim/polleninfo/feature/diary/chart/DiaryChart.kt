@@ -28,7 +28,8 @@ import kotlinx.datetime.format.char
 
 /**
  * The diary graph: one line per species in its palette colour, on the severity scale (None at the
- * bottom, Very high at the top), labelled with severity words on the left and dates below.
+ * bottom, Very high at the top), labelled with severity words on the left and dates below — "4 Sep"
+ * for a week or a month, the month alone ("Oct") for a year, whose ticks are month starts.
  *
  * Drawn on a plain canvas from [diaryChartGeometry], which holds every layout rule. The whole chart
  * is one accessibility node announced with [diaryChartDescription]; the checkboxes below it are
@@ -61,7 +62,8 @@ fun DiaryChart(
         val plotWidth = size.width - gutterStart - END_PADDING.toPx()
         val plotHeight = size.height - top - dateLabelHeight - LABEL_GAP.toPx()
 
-        val geometry = diaryChartGeometry(days, speciesIds, plotWidth, plotHeight)
+        val geometry = diaryChartGeometry(days, speciesIds, range, plotWidth, plotHeight)
+        val dateFormat = if (range == HistoryRange.YEAR) MONTH_TICK_FORMAT else DATE_TICK_FORMAT
         fun at(x: Float, y: Float) = Offset(gutterStart + x, top + y)
 
         geometry.levelTicks.forEach { tick ->
@@ -71,7 +73,7 @@ fun DiaryChart(
         }
 
         geometry.dateTicks.forEach { tick ->
-            val label = textMeasurer.measure(DATE_TICK_FORMAT.format(tick.date), labelStyle)
+            val label = textMeasurer.measure(dateFormat.format(tick.date), labelStyle)
             val x = (gutterStart + tick.x - label.size.width / 2f)
                 .coerceIn(gutterStart, size.width - label.size.width)
             drawText(label, topLeft = Offset(x, top + plotHeight + LABEL_GAP.toPx()))
@@ -107,5 +109,10 @@ private val SPECIES_LINE_WIDTH = 2.dp
 private val DATE_TICK_FORMAT = LocalDate.Format {
     dayOfMonth(Padding.NONE)
     char(' ')
+    monthName(MonthNames.ENGLISH_ABBREVIATED)
+}
+
+/** "Oct". */
+private val MONTH_TICK_FORMAT = LocalDate.Format {
     monthName(MonthNames.ENGLISH_ABBREVIATED)
 }

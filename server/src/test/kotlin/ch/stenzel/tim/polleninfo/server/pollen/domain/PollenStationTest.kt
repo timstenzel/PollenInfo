@@ -49,6 +49,7 @@ class PollenStationTest {
         assertEquals("pzh/ogd-pollen_pzh_h_now.csv", PollenStation.ZUERICH.hourlyNowPath)
         assertEquals("pzh/ogd-pollen_pzh_h_recent.csv", PollenStation.ZUERICH.hourlyRecentPath)
         assertEquals("pzh/ogd-pollen_pzh_d_recent.csv", PollenStation.ZUERICH.dailyRecentPath)
+        assertEquals("pzh/ogd-pollen_pzh_d_historical.csv", PollenStation.ZUERICH.dailyHistoricalPath)
     }
 
     @Test

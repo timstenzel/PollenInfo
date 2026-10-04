@@ -36,9 +36,10 @@ station per cache period. A station with no due alarm and nobody looking at it c
 is still no cold-start poll and no "the first poll failed" state: a scheduler fetch is just another
 caller of the cache.
 
-The Diary's **pollen history** is a second, separate cache on the same terms: a station's daily file
-is fetched on demand and kept for **3 hours** (`HistoryService.RECENT_TTL`), with the same
-stale-on-failure rule. The scheduler does not use it. See
+The Diary's **pollen history** is a second, separate cache on the same terms: a station's
+year-to-date daily file is fetched on demand and kept for **3 hours** (`HistoryService.RECENT_TTL`),
+and its file of earlier years — needed only for a year that reaches back across 1 January — for
+**24 hours** (`HistoryService.HISTORICAL_TTL`), each with the same stale-on-failure rule. The scheduler does not use it. See
 "`GET /pollen/stations/{abbr}/history`".
 
 **The apps never call the MeteoSwiss API directly.** All upstream fetching, parsing and severity
@@ -108,6 +109,7 @@ Timestamps are `dd.MM.yyyy HH:mm` in **UTC**.
 | `<abbr>/ogd-pollen_<abbr>_h_now.csv`                 | **Hourly, current day** — fetched for measurements and alarms |
 | `<abbr>/ogd-pollen_<abbr>_h_recent.csv`              | Hourly, year to date                        |
 | `<abbr>/ogd-pollen_<abbr>_d_recent.csv`              | **Daily averages, year to date**, one row per day up to yesterday — fetched for the history |
+| `<abbr>/ogd-pollen_<abbr>_d_historical.csv`          | **Daily averages, every earlier year**, ending 31 December of last year (~560 KB for PZH) — fetched for a year-long history |
 
 `<abbr>` is the lowercase station abbreviation, e.g. `pzh/ogd-pollen_pzh_h_now.csv`.
 
@@ -693,26 +695,36 @@ Nothing else knows about the tab. Update the order and name assertions in
 
 #### Diary
 
-The third tab, `feature/diary`: the daily pollen levels at the user's home station over the 30 days
-ending yesterday, as one line per pollen type, under the line "Compare how you felt with the pollen
+The third tab, `feature/diary`: the daily pollen levels at the user's home station over the last
+week, month or year ending yesterday, as one line per pollen type, under the line "Compare how you felt with the pollen
 levels at a station.\*" and above the note "\* This is not a medical diagnosis. If you suspect a
 pollen allergy, please see a doctor." The screen scrolls as a whole and has no pull-to-refresh.
 
 `DiaryViewModel(selectedStationRepository, stationHistoryRepository)` reads the stored home station
-**once** and never writes it, then loads `GET /pollen/stations/{abbr}/history?range=month` through
-`StationHistoryRepository`: `Loading` → `Content(stationAbbr, stationName, range, history,
-speciesIds, isLoading)` | `Error(message)` with Retry. `speciesIds` are the ids the history reports,
-in the backend's order. No stored station is an `Error`, never a spinner.
+**once** and never writes it, then loads `GET /pollen/stations/{abbr}/history?range=…` through
+`StationHistoryRepository`: `Loading` → `Content(stationAbbr, stationName, range, historyRange,
+history, speciesIds, isLoading)` | `Error(message)` with Retry. `speciesIds` are the ids the history
+reports, in the backend's order. No stored station is an `Error`, never a spinner.
+
+**Ranges.** A `SingleChoiceSegmentedButtonRow` (Week / Month / Year) under the station name calls
+`onRangeSelected(range)`; it opens on `MONTH`, and the range already selected does nothing. A change
+keeps the current graph on screen with `isLoading` (a linear indicator above the chart, its slot
+always reserved) until the new history arrives. `range` is the selection and moves at once;
+`historyRange` is what `history` covers, and the chart is laid out and announced for that, so the two
+differ only while loading. The chosen range is a ViewModel field, so a failed load's `Error` and its
+Retry load it again.
 
 **The chart.** `DiaryChartGeometry` (`chart/`, pure, no Compose import) lays the history out for a
 plot of a given size: x by day index (first day at the left edge, last at the right), y by severity
 with `NONE` at the bottom and `VERY_HIGH` at the top, so higher is always worse; each species is a
 list of polylines split at every day without a value — a single known day between gaps survives as
 a one-point run, drawn as a dot — so the chart never bridges a day it does not know; one grid line
-per severity; a date label every 7 days counted back from yesterday. `DiaryChart` draws it on a
-canvas — severity words on the left, "4 Sep" dates below, 2 dp lines in each species' palette
-colour — and is one `clearAndSetSemantics` node announced as `diaryChartDescription(...)`: "Graph of
-your diary and 7 pollen types, last 30 days".
+per severity; date labels thinned per range — every day for a week, every 7th day counted back from
+yesterday for a month, the first of each month for a year. `DiaryChart` draws it on a canvas —
+severity words on the left, dates below ("4 Sep"; the month alone, "Oct", for a year), 2 dp lines in
+each species' palette colour — and is one `clearAndSetSemantics` node announced as
+`diaryChartDescription(...)`: "Graph of your diary and 7 pollen types, last 30 days" ("last 7 days",
+"last 12 months" for the other ranges).
 
 **Species colours** are `SpeciesPalette.kt` in `:theme` — 7 categorical colours, each with an
 explicit light and dark value and its WCAG contrast against `surfaceLight` / `surfaceDark` recorded
@@ -1239,22 +1251,24 @@ load, so an earlier reading still covers it; `Failed.cause` is then a `NoUsableR
 the route maps to `404` rather than `502`.
 
 `PollenService` has exactly one production implementation, **`MeteoSwissPollenService`** — it
-fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` (`hourlyNow`) and
-`BASE_URL/<abbr>/ogd-pollen_<abbr>_d_recent.csv` (`dailyRecent`) over HTTP, takes its `HttpClient` and base
+fetches `BASE_URL/<abbr>/ogd-pollen_<abbr>_h_now.csv` (`hourlyNow`),
+`BASE_URL/<abbr>/ogd-pollen_<abbr>_d_recent.csv` (`dailyRecent`) and
+`BASE_URL/<abbr>/ogd-pollen_<abbr>_d_historical.csv` (`dailyHistorical`) over HTTP, takes its `HttpClient` and base
 address as constructor parameters (the `StationApiService(client, baseUrl)` precedent, so tests
 drive it with `MockEngine`), and throws on any non-2xx rather than letting an error body reach the
 parser as if it were a file. The only other implementation is `FakePollenService` in
 `server/src/test` — programmable bytes, a settable failure and a record of what was requested,
 which is how band boundaries and the "no usable row" case get driven. The hourly file has `bytes` /
 `failure` / `failures` / `requested`; each daily file has its own set (`dailyRecentBytes`,
-`dailyRecentFailure`, `dailyRecentRequested`), so one file can fail while the other answers.
+`dailyRecentFailure`, `dailyRecentRequested`, and the same three `dailyHistorical…`), so one file
+can fail while another answers, and a test can see which file a caller asked for.
 `hourlyCsv(...)` and `dailyCsv(...)` build files in the published shape.
 
 Verbatim downloads of all 15 published files live in `server/src/test/resources/fixtures/
 ogd-pollen/`, laid out under the same relative paths the service serves them from. They are test
 resources rather than main ones — they must not ship in the server jar — and no class wraps them:
-`PollenCsvParserTest` reads them directly by `PollenStation.hourlyNowPath` (and Zürich's daily file by
-`dailyRecentPath`) and asserts every one
+`PollenCsvParserTest` reads them directly by `PollenStation.hourlyNowPath` (and Zürich's two daily
+files by `dailyRecentPath` and `dailyHistoricalPath`) and asserts every one
 still parses to a reading covering all seven taxa, and that each file holds the abbreviation of the
 directory it sits in. That is what keeps the parser honest against the real column layout, and what
 catches a re-download filed into the wrong station's directory.
@@ -1293,14 +1307,27 @@ platform HTTP stack) and `ktor-client-mock` on `testImplementation`.
 | Unknown abbr (case-insensitive) | `404` |
 | Upstream fetch failed, nothing retained | `502` |
 
-Behind it is `pollen/history/HistoryService(pollenService, thresholds, clock)`: a `TtlCache` of the
-*parsed* daily rows (`PollenCsvParser.parseDaily` — d0 columns only, `null` for an empty cell or a
-missing column, all-`null` rows kept, unparseable dates skipped), per station, for
-`RECENT_TTL` = 3 hours; classification per request. On a failed reload the retained rows are served
-(dates they do not reach yet come back empty); with nothing retained the result is `Failed`.
+Behind it is `pollen/history/HistoryService(pollenService, thresholds, clock)`: two `TtlCache`s of
+the *parsed* daily rows (`PollenCsvParser.parseDaily` — d0 columns only, `null` for an empty cell or
+a missing column, all-`null` rows kept, unparseable dates skipped), per station, with
+classification per request:
+
+- **`d_recent`**, year to date, read for every request and kept for `RECENT_TTL` = 3 hours.
+- **`d_historical`**, every earlier year, read **only when the window starts before 1 January** of
+  the current Swiss year — a year always, a week or month only in early January — and kept for
+  `HISTORICAL_TTL` = 24 hours, since it changes once a year. Only rows from 1 January of last year
+  on are kept (no window reaches further), so the decades of earlier data never sit in memory.
+- On a date both files hold, **`d_recent` wins**.
+
+Each file follows the stale rule on its own: on a failed reload its retained rows are served (dates
+they do not reach yet come back empty) and the result is `Stale`. If a file the window needs has
+failed with nothing retained, the whole result is `Failed` (`502`) — even when the other answered,
+since a year with a silent hole where last year should be would read as a clean season.
 `pollen/` declares its own `ErrorDto` for the `400` body, the same shape as the alarm routes'.
-`HistoryServiceTest` pins the Swiss-midnight edge, gap filling, the TTL from both sides, stale
-serving and classification at a band edge.
+`HistoryServiceTest` pins the Swiss-midnight edge, gap filling, both TTLs from both sides, when
+`d_historical` is and is not read (a month starting on 1 January versus on 31 December), the
+overlap rule, stale serving per file and classification at a band edge; `HistoryWindowTest` pins the
+windows at 1 January and across a leap day.
 
 ## Testing
 

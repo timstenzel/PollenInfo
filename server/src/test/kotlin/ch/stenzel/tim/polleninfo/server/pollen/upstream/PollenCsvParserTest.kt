@@ -188,6 +188,33 @@ class PollenCsvParserTest {
     }
 
     @Test
+    fun `the published daily historical sample parses every earlier year up to 31 December`() {
+        val days = PollenCsvParser.parseDaily(publishedDailyHistorical(PollenStation.ZUERICH))
+
+        // The verbatim download reaches back to the manual measurements of 1981 and ends on the
+        // last day before the year-to-date file takes over.
+        assertEquals(LocalDate.of(1981, 4, 30), days.keys.min())
+        assertEquals(LocalDate.of(2025, 12, 31), days.keys.max())
+        assertTrue(days.values.all { it.keys == PollenSpecies.entries.toSet() })
+    }
+
+    @Test
+    fun `the historical sample is filed under its own station's daily historical path`() {
+        val firstDataRow = decodePublished(publishedDailyHistorical(PollenStation.ZUERICH))
+            .lineSequence().drop(1).first()
+
+        assertTrue(firstDataRow.startsWith("PZH;"))
+    }
+
+    @Test
+    fun `historical values are read from the d0 columns and not from d1`() {
+        // In the verbatim sample, 10 April 2025 has birch 231 in `kabetud0` and 241 in `kabetud1`.
+        val days = PollenCsvParser.parseDaily(publishedDailyHistorical(PollenStation.ZUERICH))
+
+        assertEquals(231, days.getValue(LocalDate.of(2025, 4, 10))[PollenSpecies.BIRCH])
+    }
+
+    @Test
     fun `a d1 column ahead of its d0 column does not take its place`() {
         val bytes = latin1(
             "station_abbr;reference_timestamp;khpoacd1;khpoacd0",
@@ -272,6 +299,12 @@ class PollenCsvParserTest {
         checkNotNull(
             javaClass.classLoader.getResourceAsStream("$PUBLISHED_SAMPLES/${station.dailyRecentPath}"),
         ) { "no checked-in sample at ${station.dailyRecentPath}" }
+            .use { it.readBytes() }
+
+    private fun publishedDailyHistorical(station: PollenStation): ByteArray =
+        checkNotNull(
+            javaClass.classLoader.getResourceAsStream("$PUBLISHED_SAMPLES/${station.dailyHistoricalPath}"),
+        ) { "no checked-in sample at ${station.dailyHistoricalPath}" }
             .use { it.readBytes() }
 
     /**

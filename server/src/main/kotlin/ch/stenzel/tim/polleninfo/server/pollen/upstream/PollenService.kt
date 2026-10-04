@@ -24,4 +24,7 @@ interface PollenService {
 
     /** Bytes of [station]'s year-to-date daily CSV, one row per day up to yesterday. */
     suspend fun dailyRecent(station: PollenStation): ByteArray
+
+    /** Bytes of [station]'s daily CSV for every earlier year, ending 31 December of last year. */
+    suspend fun dailyHistorical(station: PollenStation): ByteArray
 }

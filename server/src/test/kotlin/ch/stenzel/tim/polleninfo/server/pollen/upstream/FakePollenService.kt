@@ -24,6 +24,7 @@ class FakePollenService(
     var bytes: ByteArray = hourlyCsv(),
     var failure: Exception? = null,
     var dailyRecentBytes: ByteArray = dailyCsv(),
+    var dailyHistoricalBytes: ByteArray = dailyCsv(),
 ) : PollenService {
 
     /** Thrown by [dailyRecent] instead of returning [dailyRecentBytes]. */
@@ -31,6 +32,12 @@ class FakePollenService(
 
     /** Every station whose daily recent file was asked for, in order. */
     val dailyRecentRequested = mutableListOf<PollenStation>()
+
+    /** Thrown by [dailyHistorical] instead of returning [dailyHistoricalBytes]. */
+    var dailyHistoricalFailure: Exception? = null
+
+    /** Every station whose daily historical file was asked for, in order. */
+    val dailyHistoricalRequested = mutableListOf<PollenStation>()
 
     /** Thrown for these stations only, ahead of [failure]. */
     val failures = mutableMapOf<PollenStation, Exception>()
@@ -49,6 +56,12 @@ class FakePollenService(
         dailyRecentRequested += station
         dailyRecentFailure?.let { throw it }
         return dailyRecentBytes
+    }
+
+    override suspend fun dailyHistorical(station: PollenStation): ByteArray {
+        dailyHistoricalRequested += station
+        dailyHistoricalFailure?.let { throw it }
+        return dailyHistoricalBytes
     }
 }
 
