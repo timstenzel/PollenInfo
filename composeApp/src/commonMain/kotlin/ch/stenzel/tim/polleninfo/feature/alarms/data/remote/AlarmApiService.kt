@@ -5,11 +5,14 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ErrorDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceRequestDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceResponseDto
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
@@ -45,6 +48,30 @@ class AlarmApiService(
             contentType(ContentType.Application.Json)
             setBody(input)
         }.checkedForDevice().body()
+
+    suspend fun updateAlarm(deviceId: String, alarmId: String, input: AlarmInputDto): AlarmDto =
+        client.put("$baseUrl/devices/$deviceId/alarms/$alarmId") {
+            contentType(ContentType.Application.Json)
+            setBody(input)
+        }.checkedForAlarm(deviceId).body()
+
+    suspend fun deleteAlarm(deviceId: String, alarmId: String) {
+        client.delete("$baseUrl/devices/$deviceId/alarms/$alarmId").checkedForAlarm(deviceId)
+    }
+
+    /**
+     * On a single alarm's path the backend answers `404` alike for an unknown device and for an alarm
+     * the device does not have, so the alarm's id reveals nothing to anyone else. The two need
+     * different handling here — re-registering because of an alarm deleted elsewhere would cut this
+     * install off from all its other alarms — so a `404` asks the device's list which one it was.
+     */
+    private suspend fun HttpResponse.checkedForAlarm(deviceId: String): HttpResponse {
+        if (status == HttpStatusCode.NotFound) {
+            getAlarms(deviceId) // Throws UnknownDeviceException if it is the device that is unknown.
+            throw AlarmNotFoundException()
+        }
+        return checkedForDevice()
+    }
 
     /** A `400` from an alarm path carries the backend's reason, which becomes [InvalidAlarmException]. */
     private suspend fun HttpResponse.checkedForDevice(): HttpResponse {

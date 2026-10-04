@@ -21,8 +21,11 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -406,5 +409,62 @@ class AlarmsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, alarms.callCount)
+    }
+
+    // --- Pause switch ---
+
+    private fun AlarmsViewModel.enabledOf(id: String): Boolean =
+        assertIs<AlarmsUiState.Content>(uiState.value).alarms.single { it.alarm.id == id }.alarm.enabled
+
+    /** Collects every event the ViewModel sends for the rest of the test. */
+    private fun TestScope.collectEvents(viewModel: AlarmsViewModel): List<AlarmsEvent> {
+        val events = mutableListOf<AlarmsEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.toList(events) }
+        return events
+    }
+
+    @Test
+    fun `toggling updates the row immediately and stores the whole alarm`() = runTest {
+        val viewModel = loadedViewModel(listOf(dailyAlarm(), thresholdAlarm()))
+        alarms.updateGate = CompletableDeferred()
+
+        viewModel.onEnabledToggled("daily-1", enabled = false)
+        runCurrent()
+
+        assertFalse(viewModel.enabledOf("daily-1"))
+        assertEquals(listOf("daily-1" to dailyAlarm().copy(enabled = false).toDraft()), alarms.updates)
+
+        alarms.updateGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.enabledOf("daily-1"))
+        assertFalse(viewModel.enabledOf("threshold-1"))
+    }
+
+    @Test
+    fun `a failing toggle reverts the row and emits exactly one error event`() = runTest {
+        val viewModel = loadedViewModel(listOf(thresholdAlarm()))
+        val events = collectEvents(viewModel)
+        alarms.updateGate = CompletableDeferred()
+        alarms.updateResult = Result.Failure(RuntimeException("offline"))
+
+        viewModel.onEnabledToggled("threshold-1", enabled = true)
+        runCurrent()
+        assertTrue(viewModel.enabledOf("threshold-1"))
+
+        alarms.updateGate!!.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.enabledOf("threshold-1"))
+        assertEquals(listOf<AlarmsEvent>(AlarmsEvent.ToggleFailed("The alarm could not be switched on")), events)
+    }
+
+    @Test
+    fun `toggling to the state the alarm is already in does nothing`() = runTest {
+        val viewModel = loadedViewModel(listOf(dailyAlarm()))
+
+        viewModel.onEnabledToggled("daily-1", enabled = true)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), alarms.updates)
     }
 }

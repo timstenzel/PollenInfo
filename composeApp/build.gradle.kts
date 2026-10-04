@@ -43,6 +43,9 @@ kotlin {
             // material3's own dependencies and then fails to link for iOS, so the Android build
             // alone does not catch its absence — verified against compileKotlinIosSimulatorArm64.
             implementation(compose.materialIconsExtended)
+            // The multiplatform `BackHandler`, so the alarm editor's system back can ask about
+            // unsaved changes on both platforms. Not part of the `compose.*` accessors.
+            implementation(libs.compose.ui.backhandler)
 
             implementation(libs.navigation.compose)
 

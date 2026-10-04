@@ -314,29 +314,29 @@ notification record.
 
 ### Implementation steps
 
-- [ ] Server: `PUT` and `DELETE /devices/{id}/alarms/{alarmId}` with ownership checks (`404`) and the validation reused; `AlarmStore.update` / `delete`; an update doesn't reset the notification log
-- [ ] App: repository `alarm(id)`, `update` and `delete`, through the shared re-register wrapper; `AlarmFormState` built from an existing alarm, with `typeLocked`
-- [ ] App: `AlarmEditorViewModel` edit mode (Loading → Editing / Error); delete confirmation; the discard dialog only when dirty; `Done` after delete
-- [ ] App: tapping a row opens `Screen.AlarmEditor(id)`; each row has a `Switch` that toggles optimistically via a full `PUT`, with a one-shot error event that reverts it
-- [ ] Update CLAUDE.md: the full alarm API table
+- [x] Server: `PUT` and `DELETE /devices/{id}/alarms/{alarmId}` with ownership checks (`404`) and the validation reused; `AlarmStore.update` / `delete`; an update doesn't reset the notification log
+- [x] App: repository `alarm(id)`, `update` and `delete`, through the shared re-register wrapper; `AlarmFormState` built from an existing alarm, with `typeLocked`
+- [x] App: `AlarmEditorViewModel` edit mode (Loading → Editing / Error); delete confirmation; the discard dialog only when dirty; `Done` after delete
+- [x] App: tapping a row opens `Screen.AlarmEditor(id)`; each row has a `Switch` that toggles optimistically via a full `PUT`, with a one-shot error event that reverts it
+- [x] Update CLAUDE.md: the full alarm API table
 
 ### Acceptance criteria
 
-- [ ] `AlarmRoutesTest`: `PUT` returns the updated alarm; `DELETE` → `204` and the alarm is gone from `GET`; another device's alarm id → `404` on `PUT` and on `DELETE`; an invalid `PUT` → `400`
-- [ ] `ExposedStoresTest`: updating or deleting another device's alarm returns not-found
-- [ ] `AlarmSchedulerTest`: a disabled alarm sends nothing; updating an alarm after it notified about Birch today doesn't resend Birch, while a newly added qualifying species is sent
-- [ ] App repository and editor tests:
+- [x] `AlarmRoutesTest`: `PUT` returns the updated alarm; `DELETE` → `204` and the alarm is gone from `GET`; another device's alarm id → `404` on `PUT` and on `DELETE`; an invalid `PUT` → `400`
+- [x] `ExposedStoresTest`: updating or deleting another device's alarm returns not-found
+- [x] `AlarmSchedulerTest`: a disabled alarm sends nothing; updating an alarm after it notified about Birch today doesn't resend Birch, while a newly added qualifying species is sent
+- [x] App repository and editor tests:
   - `AlarmRepositoryImplTest`: update and delete re-register once and retry on an unknown-device `404`
   - `AlarmEditorViewModelTest`: edit mode loads the alarm with the type locked; back without changes emits `Done` with no dialog, and with changes shows the discard dialog; delete requires confirmation and then emits `Done`; a failed edit load → `Error`
-- [ ] `AlarmsViewModelTest`: toggling updates the row immediately; a failing toggle reverts it and emits exactly one error event
-- [ ] Manual: TalkBack announces the row switch's state, and the delete action and its confirmation
+- [x] `AlarmsViewModelTest`: toggling updates the row immediately; a failing toggle reverts it and emits exactly one error event
+- [ ] ~~Manual: TalkBack announces the row switch's state, and the delete action and its confirmation~~ *(skipped: needs a person listening to TalkBack on a device; the semantics — switch named "Alarm for <station>" with its checked state, "Delete alarm" button, "Delete alarm?" dialog — are in code but unheard)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No backtick test name contains a comma
 
 ## Task [07-ten-alarm-limit]
 

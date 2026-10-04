@@ -14,6 +14,11 @@ import kotlinx.datetime.LocalTime
 class AlarmFormState private constructor(
     private val draft: AlarmDraft,
     private val initial: AlarmDraft,
+    /**
+     * True when editing an existing alarm: its type is what the alarm *is*, so [withType] changes
+     * nothing. A different type is a new alarm.
+     */
+    val typeLocked: Boolean,
 ) {
 
     val stationAbbr: String get() = draft.stationAbbr
@@ -68,10 +73,10 @@ class AlarmFormState private constructor(
     /**
      * Switches between a daily report and a threshold alert. The severity and the time fields mean
      * something different in each, so both go back to the new type's defaults; choosing the current
-     * type changes nothing.
+     * type changes nothing, and neither does any choice while [typeLocked].
      */
     fun withType(type: AlarmType): AlarmFormState {
-        if (type == this.type) return this
+        if (type == this.type || typeLocked) return this
         return edit {
             when (type) {
                 AlarmType.DAILY -> copy(
@@ -100,14 +105,15 @@ class AlarmFormState private constructor(
         return edit { copy(schedule = schedule.change()) }
     }
 
-    private inline fun edit(change: AlarmDraft.() -> AlarmDraft) = AlarmFormState(draft.change(), initial)
+    private inline fun edit(change: AlarmDraft.() -> AlarmDraft) = AlarmFormState(draft.change(), initial, typeLocked)
 
     override fun equals(other: Any?): Boolean =
-        other is AlarmFormState && draft == other.draft && initial == other.initial
+        other is AlarmFormState && draft == other.draft && initial == other.initial &&
+            typeLocked == other.typeLocked
 
-    override fun hashCode(): Int = 31 * draft.hashCode() + initial.hashCode()
+    override fun hashCode(): Int = 31 * (31 * draft.hashCode() + initial.hashCode()) + typeLocked.hashCode()
 
-    override fun toString(): String = "AlarmFormState(draft=$draft, initial=$initial)"
+    override fun toString(): String = "AlarmFormState(draft=$draft, initial=$initial, typeLocked=$typeLocked)"
 
     companion object {
         val DEFAULT_DAILY_TIME = LocalTime(8, 0)
@@ -130,7 +136,16 @@ class AlarmFormState private constructor(
                 days = DayOfWeek.entries.toSet(),
                 schedule = AlarmSchedule.Daily(DEFAULT_DAILY_TIME),
             )
-            return AlarmFormState(draft, initial = draft)
+            return AlarmFormState(draft, initial = draft, typeLocked = false)
+        }
+
+        /**
+         * [alarm] opened for editing: every field as stored, its type locked. Whether it is paused
+         * is kept as it is — the list's switch owns that — so saving an edit never resumes it.
+         */
+        fun fromAlarm(alarm: Alarm): AlarmFormState {
+            val draft = alarm.toDraft()
+            return AlarmFormState(draft, initial = draft, typeLocked = true)
         }
     }
 }

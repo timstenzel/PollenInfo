@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.server.alarm.scheduler
 
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.PushChannel
 import ch.stenzel.tim.polleninfo.server.alarm.push.PushResult
@@ -346,5 +347,42 @@ class AlarmSchedulerTest {
 
         assertEquals(setOf("token-daily", "token-threshold"), push.sent.map { it.token }.toSet())
         assertEquals(listOf(PollenStation.ZUERICH), pollen.requested)
+    }
+
+    // --- edits through the store ---
+
+    /** [alarm] as the spec a `PUT` would carry, with [change] applied. */
+    private fun Alarm.asSpec(change: AlarmSpec.() -> AlarmSpec = { this }) =
+        AlarmSpec(enabled, station, species, minSeverity, days, schedule).change()
+
+    @Test
+    fun `a paused alarm sends nothing`() = runTest {
+        val device = dailyReport("token-daily")
+        val daily = alarms.list(device)!!.single()
+        val threshold = thresholdAlert("token-threshold")
+        alarms.update(device, daily.id, daily.asSpec { copy(enabled = false) })
+        alarms.update(threshold.deviceId, threshold.id, threshold.asSpec { copy(enabled = false) })
+
+        scheduler().tick()
+
+        assertEquals(emptyList(), push.sent)
+        assertEquals(emptyList(), pollen.requested)
+    }
+
+    @Test
+    fun `an edit keeps today's record and a newly added qualifying species still fires`() = runTest {
+        publish("03.08.2026 05:00", mapOf(PollenSpecies.BIRCH to 100, PollenSpecies.GRASSES to 25))
+        val alarm = thresholdAlert("token-1", species = setOf(PollenSpecies.BIRCH))
+        val scheduler = scheduler()
+        scheduler.tick()
+        assertEquals("Birch: High", push.sent.single().message.body)
+
+        alarms.update(alarm.deviceId, alarm.id, alarm.asSpec { copy(species = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES)) })
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+
+        assertEquals(listOf("Birch: High", "Grasses: High"), push.sent.map { it.message.body })
     }
 }

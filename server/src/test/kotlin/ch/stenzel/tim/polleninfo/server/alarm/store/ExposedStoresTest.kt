@@ -166,6 +166,64 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `an update replaces the settings and keeps the id and the list position`() = runTest {
+        val id = devices.register("token-1")
+        val first = assertIs<CreateResult.Created>(alarms.create(id, dailySpec(LocalTime.of(6, 0)))).alarm
+        val second = assertIs<CreateResult.Created>(alarms.create(id, dailySpec(LocalTime.of(7, 0)))).alarm
+        val changed = dailySpec(LocalTime.of(9, 30)).copy(enabled = false, station = PollenStation.LUGANO)
+
+        val updated = alarms.update(id, first.id, changed)
+
+        assertEquals(changed.toAlarm(first.id, id), updated)
+        assertEquals(listOf(changed.toAlarm(first.id, id), second), alarms.list(id))
+    }
+
+    @Test
+    fun `updating another device's alarm returns not found and changes nothing`() = runTest {
+        val mine = devices.register("token-1")
+        val theirs = devices.register("token-2")
+        val theirAlarm = dailyAlarm(theirs)
+        database.insertAlarm(theirAlarm, createdAtMillis = 1)
+
+        assertNull(alarms.update(mine, theirAlarm.id, dailySpec()))
+        assertEquals(listOf(theirAlarm), alarms.list(theirs))
+    }
+
+    @Test
+    fun `updating an unknown alarm returns not found`() = runTest {
+        val id = devices.register("token-1")
+
+        assertNull(alarms.update(id, AlarmId("never-created"), dailySpec()))
+        assertEquals(emptyList(), alarms.list(id))
+    }
+
+    @Test
+    fun `a deleted alarm is gone from the list`() = runTest {
+        val id = devices.register("token-1")
+        val alarm = dailyAlarm(id)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+
+        assertTrue(alarms.delete(id, alarm.id))
+        assertEquals(emptyList(), alarms.list(id))
+    }
+
+    @Test
+    fun `deleting another device's alarm returns not found and keeps it`() = runTest {
+        val mine = devices.register("token-1")
+        val theirs = devices.register("token-2")
+        val theirAlarm = dailyAlarm(theirs)
+        database.insertAlarm(theirAlarm, createdAtMillis = 1)
+
+        assertFalse(alarms.delete(mine, theirAlarm.id))
+        assertEquals(listOf(theirAlarm), alarms.list(theirs))
+    }
+
+    @Test
+    fun `deleting an unknown alarm returns not found`() = runTest {
+        assertFalse(alarms.delete(devices.register("token-1"), AlarmId("never-created")))
+    }
+
+    @Test
     fun `an alarm for an unregistered device is refused because foreign keys are enforced`() {
         assertFailsWith<ExposedSQLException> {
             database.insertAlarm(dailyAlarm(DeviceId("never-registered")), createdAtMillis = 1)
@@ -286,6 +344,38 @@ class ExposedStoresTest {
         transaction(database) { AlarmsTable.deleteWhere { AlarmsTable.id eq id.value } }
 
         assertEquals(0L, transaction(database) { NotificationLogTable.selectAll().count() })
+    }
+
+    @Test
+    fun `deleting an alarm through the store removes its log rows`() = runTest {
+        val device = devices.register("token-1")
+        val alarm = thresholdAlarm(device)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+        log.record(alarm.id, setOf(PollenSpecies.BIRCH), today)
+
+        alarms.delete(device, alarm.id)
+
+        assertEquals(0L, transaction(database) { NotificationLogTable.selectAll().count() })
+    }
+
+    @Test
+    fun `updating an alarm keeps its log rows`() = runTest {
+        val device = devices.register("token-1")
+        val alarm = thresholdAlarm(device)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+        log.record(alarm.id, setOf(PollenSpecies.BIRCH), today)
+        val spec = AlarmSpec(
+            enabled = true,
+            station = alarm.station,
+            species = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES),
+            minSeverity = alarm.minSeverity,
+            days = alarm.days,
+            schedule = alarm.schedule,
+        )
+
+        alarms.update(device, alarm.id, spec)
+
+        assertEquals(setOf(PollenSpecies.BIRCH), log.notifiedSpecies(alarm.id, today))
     }
 
     @Test

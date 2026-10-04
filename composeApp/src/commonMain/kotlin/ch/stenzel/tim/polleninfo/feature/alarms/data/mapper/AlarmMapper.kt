@@ -25,14 +25,7 @@ fun AlarmDto.toDomain() = Alarm(
 fun List<AlarmDto>.toDomain(): List<Alarm> = map { it.toDomain() }
 
 /** The request body that would store [this] alarm as it is; its id travels in the path. */
-fun Alarm.toInputDto() = AlarmDraft(
-    enabled = enabled,
-    stationAbbr = stationAbbr,
-    species = species,
-    minSeverity = minSeverity,
-    days = days,
-    schedule = schedule,
-).toInputDto()
+fun Alarm.toInputDto() = toDraft().toInputDto()
 
 /** The body of a create. Sets are sent sorted, so the same alarm always reads the same on the wire. */
 fun AlarmDraft.toInputDto() = AlarmInputDto(

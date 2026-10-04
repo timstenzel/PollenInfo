@@ -12,3 +12,9 @@ class PushUnavailableException : Exception("Push notifications aren't available 
  * the two sides disagree on a rule; [message] is the backend's explanation.
  */
 class InvalidAlarmException(message: String) : Exception(message)
+
+/**
+ * This device has no alarm with the requested id — it was deleted, from this install or before the
+ * list was last loaded.
+ */
+class AlarmNotFoundException : Exception("This alarm no longer exists")

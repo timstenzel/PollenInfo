@@ -19,7 +19,17 @@ data class Alarm(
     val minSeverity: PollenSeverity,
     val days: Set<DayOfWeek>,
     val schedule: AlarmSchedule,
-)
+) {
+    /** Everything but the id: what an update sends to store this alarm as it is. */
+    fun toDraft() = AlarmDraft(
+        enabled = enabled,
+        stationAbbr = stationAbbr,
+        species = species,
+        minSeverity = minSeverity,
+        days = days,
+        schedule = schedule,
+    )
+}
 
 sealed interface AlarmSchedule {
 

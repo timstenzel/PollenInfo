@@ -16,14 +16,18 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.statements.UpdateBuilder
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
 /** Every device's alarms. A device only ever sees its own. */
 interface AlarmStore {
@@ -36,6 +40,16 @@ interface AlarmStore {
 
     /** Stores [spec] as a new alarm of the device, under a fresh id. */
     suspend fun create(deviceId: DeviceId, spec: AlarmSpec): CreateResult
+
+    /**
+     * Replaces the alarm's settings with [spec], keeping its id and creation time. `null` if the
+     * device has no alarm [alarmId] — whether it does not exist or belongs to another device, which a
+     * caller must not be able to tell apart.
+     */
+    suspend fun update(deviceId: DeviceId, alarmId: AlarmId, spec: AlarmSpec): Alarm?
+
+    /** Deletes the alarm and its notification log; `false` if the device has no alarm [alarmId]. */
+    suspend fun delete(deviceId: DeviceId, alarmId: AlarmId): Boolean
 
     /**
      * Every enabled alarm whose device has a push token, with that token — everything the scheduler
@@ -82,6 +96,22 @@ class ExposedAlarmStore(
         }
     }
 
+    override suspend fun update(deviceId: DeviceId, alarmId: AlarmId, spec: AlarmSpec): Alarm? =
+        withContext(Dispatchers.IO) {
+            val alarm = spec.toAlarm(alarmId, deviceId)
+            transaction(database) {
+                // The notification log is left alone: it is keyed per type, so an edit neither repeats
+                // a notification sent earlier today nor holds back a newly selected type.
+                val updated = AlarmsTable.update({ ownedBy(deviceId, alarmId) }) { it.setAlarm(alarm) }
+                if (updated == 0) null else alarm
+            }
+        }
+
+    override suspend fun delete(deviceId: DeviceId, alarmId: AlarmId): Boolean = withContext(Dispatchers.IO) {
+        // The notification log goes with the alarm through its ON DELETE CASCADE.
+        transaction(database) { AlarmsTable.deleteWhere { ownedBy(deviceId, alarmId) } > 0 }
+    }
+
     override suspend fun enabledWithDeliverableDevice(): List<AlarmWithToken> = withContext(Dispatchers.IO) {
         transaction(database) {
             (AlarmsTable innerJoin DevicesTable)
@@ -106,7 +136,10 @@ class ExposedAlarmStore(
     }
 }
 
-/** Writes every column of [alarm] but its creation time; shared by inserts and, later, updates. */
+private fun ownedBy(deviceId: DeviceId, alarmId: AlarmId): Op<Boolean> =
+    (AlarmsTable.id eq alarmId.value) and (AlarmsTable.deviceId eq deviceId.value)
+
+/** Writes every column of [alarm] but its creation time; shared by inserts and updates. */
 internal fun UpdateBuilder<*>.setAlarm(alarm: Alarm) {
     this[AlarmsTable.id] = alarm.id.value
     this[AlarmsTable.deviceId] = alarm.deviceId.value

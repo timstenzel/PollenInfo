@@ -13,6 +13,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmDto
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
@@ -77,13 +78,32 @@ class AlarmRepositoryImplTest {
         return AlarmRepositoryImpl(api, registration, pushTokens)
     }
 
-    /** A backend that issues `device-N` ids and lists [alarmsJson] for the devices it knows. */
+    /**
+     * A backend that issues `device-N` ids and lists [alarmsJson] for the devices it knows. Any known
+     * device can update or delete the alarms in [alarmIds]; anything else is a `404`, as on the real
+     * backend.
+     */
     private fun backend(
         knownDevices: MutableSet<String> = mutableSetOf(),
         alarmsJson: String = "[]",
+        alarmIds: Set<String> = setOf("daily-1"),
     ): suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData = { request ->
         val path = request.url.encodedPath
+        val alarmPath = Regex("/devices/([^/]+)/alarms/([^/]+)").matchEntire(path)
         when {
+            alarmPath != null -> {
+                val (deviceId, alarmId) = alarmPath.destructured
+                when {
+                    deviceId !in knownDevices || alarmId !in alarmIds -> respondError(HttpStatusCode.NotFound)
+                    request.method == HttpMethod.Put -> {
+                        val input = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+                        val updated = JsonObject(mapOf("id" to JsonPrimitive(alarmId)) + input)
+                        respond(updated.toString(), HttpStatusCode.OK, jsonHeaders)
+                    }
+                    request.method == HttpMethod.Delete -> respond("", HttpStatusCode.NoContent)
+                    else -> respondError(HttpStatusCode.MethodNotAllowed)
+                }
+            }
             request.method == HttpMethod.Post && path == "/devices" -> {
                 val id = "device-${knownDevices.size + 1}"
                 knownDevices += id
@@ -330,5 +350,112 @@ class AlarmRepositoryImplTest {
         val repository = repository(backend(alarmsJson = "[${dailyJson.replace("\"NONE\"", "\"EXTREME\"")}]"))
 
         assertIs<Result.Failure>(repository.alarms())
+    }
+
+    // --- single alarms ---
+
+    @Test
+    fun `alarm finds the alarm in the device's list`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmsJson = "[$dailyJson, $thresholdJson]"))
+
+        assertEquals(thresholdAlarm(), assertIs<Result.Success<Alarm>>(repository.alarm("threshold-1")).data)
+    }
+
+    @Test
+    fun `alarm fails with AlarmNotFound for an id the device does not have`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmsJson = "[$dailyJson]"))
+
+        val failure = assertIs<Result.Failure>(repository.alarm("gone"))
+
+        assertIs<AlarmNotFoundException>(failure.exception)
+    }
+
+    @Test
+    fun `update puts the draft and returns the stored alarm`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+
+        val updated = assertIs<Result.Success<Alarm>>(repository.update("daily-1", draft)).data
+
+        assertEquals("daily-1", updated.id)
+        assertEquals(draft.schedule, updated.schedule)
+        assertEquals(listOf("PUT /devices/device-1/alarms/daily-1"), recorded.map { it.describe() })
+        assertEquals(
+            Json.parseToJsonElement(draft.toInputDto().let { Json.encodeToString(it) }),
+            Json.parseToJsonElement((recorded.single().body as TextContent).text),
+        )
+    }
+
+    @Test
+    fun `update re-registers once and retries on an unknown-device 404`() = runTest {
+        registration.store("forgotten")
+        val repository = repository(backend())
+
+        assertIs<Result.Success<Alarm>>(repository.update("daily-1", draft))
+        assertEquals(
+            listOf(
+                "PUT /devices/forgotten/alarms/daily-1",
+                "GET /devices/forgotten/alarms",
+                "POST /devices",
+                "PUT /devices/device-1/alarms/daily-1",
+            ),
+            recorded.map { it.describe() },
+        )
+        assertEquals(1, registration.clearCount)
+    }
+
+    @Test
+    fun `delete sends a DELETE and succeeds on 204`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+
+        assertIs<Result.Success<Unit>>(repository.delete("daily-1"))
+        assertEquals(listOf("DELETE /devices/device-1/alarms/daily-1"), recorded.map { it.describe() })
+    }
+
+    @Test
+    fun `delete re-registers once and retries on an unknown-device 404`() = runTest {
+        registration.store("forgotten")
+        val repository = repository(backend())
+
+        assertIs<Result.Success<Unit>>(repository.delete("daily-1"))
+        assertEquals(
+            listOf(
+                "DELETE /devices/forgotten/alarms/daily-1",
+                "GET /devices/forgotten/alarms",
+                "POST /devices",
+                "DELETE /devices/device-1/alarms/daily-1",
+            ),
+            recorded.map { it.describe() },
+        )
+        assertEquals(1, registration.clearCount)
+    }
+
+    @Test
+    fun `a 404 for an alarm the known device does not have fails without re-registering`() = runTest {
+        registration.store("device-1")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmIds = emptySet()))
+
+        val updateFailure = assertIs<Result.Failure>(repository.update("gone", draft))
+        val deleteFailure = assertIs<Result.Failure>(repository.delete("gone"))
+
+        assertIs<AlarmNotFoundException>(updateFailure.exception)
+        assertIs<AlarmNotFoundException>(deleteFailure.exception)
+        assertEquals(0, registration.clearCount)
+        assertEquals(0, recorded.count { it.method == HttpMethod.Post })
+    }
+
+    @Test
+    fun `a 400 on update fails with InvalidAlarm carrying the backend's reason`() = runTest {
+        registration.store("device-1")
+        val repository = repository {
+            respond("""{"error":"Select at least one day"}""", HttpStatusCode.BadRequest, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.update("daily-1", draft))
+
+        assertEquals("Select at least one day", assertIs<InvalidAlarmException>(failure.exception).message)
     }
 }

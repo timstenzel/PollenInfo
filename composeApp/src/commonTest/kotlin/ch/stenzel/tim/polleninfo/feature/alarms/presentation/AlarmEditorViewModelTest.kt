@@ -9,9 +9,11 @@ import ch.stenzel.tim.polleninfo.core.species.allSpecies
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.allStations
 import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
+import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
+import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -54,7 +56,7 @@ class AlarmEditorViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = AlarmEditorViewModel(stations, species, home, alarms)
+    private fun viewModel(alarmId: String? = null) = AlarmEditorViewModel(alarmId, stations, species, home, alarms)
 
     private fun TestScope.loadedViewModel(): AlarmEditorViewModel = viewModel().also { advanceUntilIdle() }
 
@@ -271,5 +273,212 @@ class AlarmEditorViewModelTest {
         assertTrue(alarms.createdDrafts.isEmpty())
         viewModel.onWindowEndSelected(LocalTime(7, 1))
         assertTrue(viewModel.editing().canSave)
+    }
+
+    // --- Leaving ---
+
+    @Test
+    fun `back without changes emits Done with no dialog`() = runTest {
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+
+        viewModel.onBack()
+        advanceUntilIdle()
+
+        assertEquals(listOf<AlarmEditorEvent>(AlarmEditorEvent.Done), events)
+        assertFalse(viewModel.editing().showDiscardDialog)
+    }
+
+    @Test
+    fun `back with changes shows the discard dialog and emits nothing`() = runTest {
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+        viewModel.onDayToggled(DayOfWeek.SUNDAY)
+
+        viewModel.onBack()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.editing().showDiscardDialog)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `discarding emits Done without saving`() = runTest {
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+        viewModel.onDayToggled(DayOfWeek.SUNDAY)
+        viewModel.onBack()
+
+        viewModel.onDiscardConfirmed()
+        advanceUntilIdle()
+
+        assertEquals(listOf<AlarmEditorEvent>(AlarmEditorEvent.Done), events)
+        assertEquals(emptyList(), alarms.createdDrafts)
+    }
+
+    @Test
+    fun `keep editing closes the dialog and keeps the change`() = runTest {
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+        viewModel.onDayToggled(DayOfWeek.SUNDAY)
+        viewModel.onBack()
+
+        viewModel.onDiscardDismissed()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.editing().showDiscardDialog)
+        assertFalse(DayOfWeek.SUNDAY in viewModel.editing().form.days)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `back from a failed load emits Done`() = runTest {
+        stations.result = Result.Failure(RuntimeException("offline"))
+        val viewModel = loadedViewModel()
+        val events = collectEvents(viewModel)
+
+        viewModel.onBack()
+        advanceUntilIdle()
+
+        assertEquals(listOf<AlarmEditorEvent>(AlarmEditorEvent.Done), events)
+    }
+
+    // --- Editing an existing alarm ---
+
+    @Test
+    fun `edit mode starts in Loading and opens the alarm with its type locked`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm(), thresholdAlarm()))
+        val viewModel = viewModel(alarmId = "threshold-1")
+        assertEquals(AlarmEditorUiState.Loading, viewModel.uiState.value)
+
+        advanceUntilIdle()
+
+        val editing = viewModel.editing()
+        assertEquals(AlarmFormState.fromAlarm(thresholdAlarm()), editing.form)
+        assertTrue(editing.form.typeLocked)
+        assertTrue(editing.canDelete)
+        assertEquals(allStations, editing.stations)
+    }
+
+    @Test
+    fun `a new alarm cannot be deleted`() = runTest {
+        val viewModel = loadedViewModel()
+
+        viewModel.onDeleteRequested()
+
+        assertFalse(viewModel.editing().canDelete)
+        assertFalse(viewModel.editing().showDeleteDialog)
+    }
+
+    @Test
+    fun `the type of an existing alarm cannot be switched`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+
+        viewModel.onTypeSelected(AlarmType.THRESHOLD)
+
+        assertEquals(AlarmType.DAILY, viewModel.editing().form.type)
+        assertFalse(viewModel.editing().form.isDirty)
+    }
+
+    @Test
+    fun `a failed edit load shows Error`() = runTest {
+        alarms.alarmResult = Result.Failure(RuntimeException("This alarm no longer exists"))
+
+        val viewModel = viewModel(alarmId = "gone").also { advanceUntilIdle() }
+
+        assertEquals(AlarmEditorUiState.Error("This alarm no longer exists"), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `saving an edit updates the alarm and emits Done`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        val events = collectEvents(viewModel)
+        viewModel.onTimeSelected(LocalTime(6, 45))
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        val (id, draft) = alarms.updates.single()
+        assertEquals("daily-1", id)
+        assertEquals(dailyAlarm(at = LocalTime(6, 45)).toDraft(), draft)
+        assertEquals(emptyList(), alarms.createdDrafts)
+        assertEquals(listOf<AlarmEditorEvent>(AlarmEditorEvent.Done), events)
+    }
+
+    @Test
+    fun `back with changes to an existing alarm shows the discard dialog`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        viewModel.onStationSelected("PBE")
+
+        viewModel.onBack()
+
+        assertTrue(viewModel.editing().showDiscardDialog)
+    }
+
+    // --- Deleting ---
+
+    @Test
+    fun `delete asks for confirmation before deleting`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        val events = collectEvents(viewModel)
+
+        viewModel.onDeleteRequested()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.editing().showDeleteDialog)
+        assertEquals(emptyList(), alarms.deletedIds)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `confirming the delete deletes the alarm and emits Done exactly once`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        val events = collectEvents(viewModel)
+        viewModel.onDeleteRequested()
+
+        viewModel.onDeleteConfirmed()
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        assertEquals(listOf("daily-1"), alarms.deletedIds)
+        assertEquals(listOf<AlarmEditorEvent>(AlarmEditorEvent.Done), events)
+    }
+
+    @Test
+    fun `cancelling the delete keeps the editor open`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        val events = collectEvents(viewModel)
+        viewModel.onDeleteRequested()
+
+        viewModel.onDeleteDismissed()
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.editing().showDeleteDialog)
+        assertEquals(emptyList(), alarms.deletedIds)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `a failed delete stays in the editor with an error`() = runTest {
+        alarms.result = Result.Success(listOf(dailyAlarm()))
+        alarms.deleteResult = Result.Failure(RuntimeException("offline"))
+        val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
+        val events = collectEvents(viewModel)
+        viewModel.onDeleteRequested()
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        val editing = viewModel.editing()
+        assertFalse(editing.isDeleting)
+        assertEquals("offline", editing.saveError)
+        assertEquals(emptyList(), events)
     }
 }

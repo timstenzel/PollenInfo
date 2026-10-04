@@ -25,14 +25,17 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 /**
- * Creates an alarm. The stations and pollen types are loaded together, and the form opens on the
- * defaults of [AlarmFormState.newDailyReport] with the home station preselected; the type toggle
- * turns it into a threshold alert.
+ * Creates an alarm, or edits alarm [alarmId]. The stations and pollen types — and when editing, the
+ * alarm — are loaded together. A new alarm opens on the defaults of
+ * [AlarmFormState.newDailyReport] with the home station preselected, and the type toggle turns it
+ * into a threshold alert; an existing one opens as stored, its type locked, and can be deleted.
  *
  * Every rule about the fields lives in [AlarmFormState]; this class only applies the user's changes
- * to it and runs the save.
+ * to it and runs the save or the delete. Leaving goes through [onBack], so unsaved changes are never
+ * dropped without asking.
  */
 class AlarmEditorViewModel(
+    private val alarmId: String?,
     private val stationRepository: StationRepository,
     private val speciesRepository: SpeciesRepository,
     private val selectedStationRepository: SelectedStationRepository,
@@ -76,10 +79,54 @@ class AlarmEditorViewModel(
         _uiState.value = editing.copy(isSaving = true, saveError = null)
 
         viewModelScope.launch {
-            when (val result = alarmRepository.create(editing.form.toDraft())) {
+            val draft = editing.form.toDraft()
+            val result = if (alarmId == null) alarmRepository.create(draft) else alarmRepository.update(alarmId, draft)
+            when (result) {
                 is Result.Success -> _events.send(AlarmEditorEvent.Done)
                 is Result.Failure -> updateEditing {
                     copy(isSaving = false, saveError = result.exception.message ?: DEFAULT_SAVE_ERROR)
+                }
+            }
+        }
+    }
+
+    /**
+     * The back arrow and the system back. Unsaved changes ask first; anything else — no changes, or
+     * a screen that never got as far as the form — leaves at once.
+     */
+    fun onBack() {
+        val editing = _uiState.value as? AlarmEditorUiState.Editing
+        if (editing != null && editing.form.isDirty && !editing.isBusy) {
+            _uiState.value = editing.copy(showDiscardDialog = true)
+        } else {
+            _events.trySend(AlarmEditorEvent.Done)
+        }
+    }
+
+    fun onDiscardConfirmed() {
+        updateEditing { copy(showDiscardDialog = false) }
+        _events.trySend(AlarmEditorEvent.Done)
+    }
+
+    fun onDiscardDismissed() = updateEditing { copy(showDiscardDialog = false) }
+
+    /** Asks for confirmation; only an existing alarm can be deleted. */
+    fun onDeleteRequested() = updateEditing {
+        if (canDelete && !isBusy) copy(showDeleteDialog = true) else this
+    }
+
+    fun onDeleteDismissed() = updateEditing { copy(showDeleteDialog = false) }
+
+    fun onDeleteConfirmed() {
+        val editing = _uiState.value as? AlarmEditorUiState.Editing ?: return
+        if (alarmId == null || !editing.showDeleteDialog || editing.isBusy) return
+        _uiState.value = editing.copy(showDeleteDialog = false, isDeleting = true, saveError = null)
+
+        viewModelScope.launch {
+            when (val result = alarmRepository.delete(alarmId)) {
+                is Result.Success -> _events.send(AlarmEditorEvent.Done)
+                is Result.Failure -> updateEditing {
+                    copy(isDeleting = false, saveError = result.exception.message ?: DEFAULT_DELETE_ERROR)
                 }
             }
         }
@@ -92,6 +139,7 @@ class AlarmEditorViewModel(
         loadJob = viewModelScope.launch {
             val stations = async { stationRepository.getStations() }
             val species = async { speciesRepository.getSpecies() }
+            val alarm = alarmId?.let { id -> async { alarmRepository.alarm(id) } }
             val home = selectedStationRepository.selectedStation.first()
 
             val stationList = when (val result = stations.await()) {
@@ -102,15 +150,24 @@ class AlarmEditorViewModel(
                 is Result.Success -> result.data
                 is Result.Failure -> return@launch fail(result.exception)
             }
-            // Past the startup gate a home station always exists; the fallback covers a stored
-            // station the list no longer contains rather than leaving the dropdown empty.
-            val station = stationList.firstOrNull { it.abbr == home?.abbr } ?: stationList.firstOrNull()
-                ?: return@launch fail(IllegalStateException("No stations available"))
+            val form = if (alarm != null) {
+                when (val result = alarm.await()) {
+                    is Result.Success -> AlarmFormState.fromAlarm(result.data)
+                    is Result.Failure -> return@launch fail(result.exception)
+                }
+            } else {
+                // Past the startup gate a home station always exists; the fallback covers a stored
+                // station the list no longer contains rather than leaving the dropdown empty.
+                val station = stationList.firstOrNull { it.abbr == home?.abbr } ?: stationList.firstOrNull()
+                    ?: return@launch fail(IllegalStateException("No stations available"))
+                AlarmFormState.newDailyReport(station.abbr, speciesList.map { it.id })
+            }
 
             _uiState.value = AlarmEditorUiState.Editing(
-                form = AlarmFormState.newDailyReport(station.abbr, speciesList.map { it.id }),
+                form = form,
                 stations = stationList,
                 species = speciesList,
+                canDelete = alarmId != null,
             )
         }
     }
@@ -120,11 +177,11 @@ class AlarmEditorViewModel(
     }
 
     /**
-     * Ignored while a save runs: the save sends the form as it was when tapped, and a change made
-     * meanwhile would be lost silently when the editor closes.
+     * Ignored while a save or delete runs: the save sends the form as it was when tapped, and a
+     * change made meanwhile would be lost silently when the editor closes.
      */
     private fun editForm(change: AlarmFormState.() -> AlarmFormState) = updateEditing {
-        if (isSaving) this else copy(form = form.change())
+        if (isBusy) this else copy(form = form.change())
     }
 
     private fun updateEditing(change: AlarmEditorUiState.Editing.() -> AlarmEditorUiState.Editing) {
@@ -134,5 +191,6 @@ class AlarmEditorViewModel(
     private companion object {
         const val DEFAULT_LOAD_ERROR = "An unexpected error occurred"
         const val DEFAULT_SAVE_ERROR = "The alarm could not be saved"
+        const val DEFAULT_DELETE_ERROR = "The alarm could not be deleted"
     }
 }

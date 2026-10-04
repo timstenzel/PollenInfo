@@ -11,11 +11,14 @@ import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableExce
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -38,6 +41,9 @@ class AlarmsViewModel(
 
     private val _uiState = MutableStateFlow<AlarmsUiState>(AlarmsUiState.CheckingPermission)
     val uiState: StateFlow<AlarmsUiState> = _uiState.asStateFlow()
+
+    private val _events = Channel<AlarmsEvent>(Channel.BUFFERED)
+    val events: Flow<AlarmsEvent> = _events.receiveAsFlow()
 
     /**
      * The flag the platform controller needs to classify the permission. `null` until it has been
@@ -104,6 +110,39 @@ class AlarmsViewModel(
                 publish()
             }
         }
+    }
+
+    /**
+     * The row's switch. The row shows [enabled] at once and the alarm is stored with it through a
+     * full update; if that fails, the switch goes back and [AlarmsEvent.ToggleFailed] says why.
+     */
+    fun onEnabledToggled(alarmId: String, enabled: Boolean) {
+        val item = (listState as? AlarmsUiState.Content)?.alarms?.firstOrNull { it.alarm.id == alarmId } ?: return
+        if (item.alarm.enabled == enabled) return
+        val toggled = item.alarm.copy(enabled = enabled)
+        setEnabled(alarmId, enabled)
+
+        viewModelScope.launch {
+            val result = alarmRepository.update(alarmId, toggled.toDraft())
+            if (result is Result.Failure) {
+                setEnabled(alarmId, !enabled)
+                _events.send(
+                    AlarmsEvent.ToggleFailed(
+                        if (enabled) "The alarm could not be switched on" else "The alarm could not be switched off",
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun setEnabled(alarmId: String, enabled: Boolean) {
+        val current = listState as? AlarmsUiState.Content ?: return
+        listState = current.copy(
+            alarms = current.alarms.map { item ->
+                if (item.alarm.id == alarmId) item.copy(alarm = item.alarm.copy(enabled = enabled)) else item
+            },
+        )
+        publish()
     }
 
     private fun load(keepAlarms: Boolean) {

@@ -13,8 +13,10 @@ import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -298,5 +300,111 @@ class AlarmRoutesTest {
         val body = client.get("/devices/$mine/alarms").bodyAsText()
 
         assertEquals(JsonArray(emptyList()), Json.parseToJsonElement(body))
+    }
+
+    private suspend fun ApplicationTestBuilder.putAlarm(deviceId: String, alarmId: String, body: String) =
+        client.put("/devices/$deviceId/alarms/$alarmId") {
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+    private suspend fun ApplicationTestBuilder.createdId(deviceId: String): String =
+        Json.parseToJsonElement(postAlarm(deviceId, validDailyJson).bodyAsText()).jsonObject
+            .getValue("id").jsonPrimitive.content
+
+    @Test
+    fun `PUT returns 200 with the updated alarm and the next GET lists it`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val alarmId = createdId(deviceId)
+        val changed = validDailyJson.replace("true", "false").replace("07:30", "18:15")
+
+        val response = putAlarm(deviceId, alarmId, changed)
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val updated = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(alarmId, updated.getValue("id").jsonPrimitive.content)
+        assertEquals(Json.parseToJsonElement(changed).jsonObject, JsonObject(updated - "id"))
+        val listed = Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText())
+        assertEquals(JsonArray(listOf(updated)), listed)
+    }
+
+    @Test
+    fun `an invalid PUT returns 400 with an error message and changes nothing`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val alarmId = createdId(deviceId)
+        val before = client.get("/devices/$deviceId/alarms").bodyAsText()
+
+        val response = putAlarm(deviceId, alarmId, validDailyJson.replace("[\"SATURDAY\", \"SUNDAY\"]", "[]"))
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val error = Json.parseToJsonElement(response.bodyAsText()).jsonObject.getValue("error")
+        assertEquals("Select at least one day", error.jsonPrimitive.content)
+        assertEquals(before, client.get("/devices/$deviceId/alarms").bodyAsText())
+    }
+
+    @Test
+    fun `a malformed PUT returns 400`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        assertEquals(HttpStatusCode.BadRequest, putAlarm(deviceId, createdId(deviceId), """{"stationAbbr":"PZH"}""").status)
+    }
+
+    @Test
+    fun `PUT on another device's alarm returns 404 and leaves it unchanged`() = testApplication {
+        installApp()
+        val owner = register()
+        val alarmId = createdId(owner)
+        val before = client.get("/devices/$owner/alarms").bodyAsText()
+
+        val response = putAlarm(register(), alarmId, validDailyJson.replace("07:30", "18:15"))
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertEquals(before, client.get("/devices/$owner/alarms").bodyAsText())
+    }
+
+    @Test
+    fun `PUT on an unknown alarm or for an unknown device returns 404`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val alarmId = createdId(deviceId)
+
+        assertEquals(HttpStatusCode.NotFound, putAlarm(deviceId, "never-created", validDailyJson).status)
+        assertEquals(HttpStatusCode.NotFound, putAlarm("never-registered", alarmId, validDailyJson).status)
+    }
+
+    @Test
+    fun `DELETE returns 204 and the alarm is gone from GET`() = testApplication {
+        installApp()
+        val deviceId = register()
+        val alarmId = createdId(deviceId)
+
+        val response = client.delete("/devices/$deviceId/alarms/$alarmId")
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+        assertEquals(JsonArray(emptyList()), Json.parseToJsonElement(client.get("/devices/$deviceId/alarms").bodyAsText()))
+        assertEquals(HttpStatusCode.NotFound, client.delete("/devices/$deviceId/alarms/$alarmId").status)
+    }
+
+    @Test
+    fun `DELETE on another device's alarm returns 404 and keeps it`() = testApplication {
+        installApp()
+        val owner = register()
+        val alarmId = createdId(owner)
+
+        val response = client.delete("/devices/${register()}/alarms/$alarmId")
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertEquals(1, Json.parseToJsonElement(client.get("/devices/$owner/alarms").bodyAsText()).jsonArray.size)
+    }
+
+    @Test
+    fun `DELETE for an unknown device returns 404`() = testApplication {
+        installApp()
+        val alarmId = createdId(register())
+
+        assertEquals(HttpStatusCode.NotFound, client.delete("/devices/never-registered/alarms/$alarmId").status)
     }
 }

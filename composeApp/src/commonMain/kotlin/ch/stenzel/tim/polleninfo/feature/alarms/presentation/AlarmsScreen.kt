@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,9 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -36,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -56,6 +62,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun AlarmsScreen(
     onCreateAlarm: () -> Unit,
+    onEditAlarm: (alarmId: String) -> Unit,
     viewModel: AlarmsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -65,6 +72,15 @@ fun AlarmsScreen(
     // Bumped when the prompt is answered. The answer usually arrives with a resume anyway, but iOS
     // shows its prompt as an alert without leaving the screen, so the re-read cannot rely on that.
     var promptAnswers by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is AlarmsEvent.ToggleFailed -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
 
     LaunchedEffect(lifecycle, controller, askedBefore, promptAnswers) {
         // Not classified against a guess: an unread flag would show "Allow notifications" for a
@@ -91,6 +107,9 @@ fun AlarmsScreen(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retry,
         onCreateAlarm = onCreateAlarm,
+        onEditAlarm = onEditAlarm,
+        onEnabledToggled = viewModel::onEnabledToggled,
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -103,9 +122,13 @@ private fun AlarmsContent(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onCreateAlarm: () -> Unit,
+    onEditAlarm: (alarmId: String) -> Unit,
+    onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
+    snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Alarms") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             // The empty state has its own, more prominent button.
             if (uiState is AlarmsUiState.Content && uiState.alarms.isNotEmpty()) {
@@ -147,7 +170,7 @@ private fun AlarmsContent(
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
                     )
                 } else {
-                    AlarmList(uiState.alarms, Modifier.fillMaxSize())
+                    AlarmList(uiState.alarms, onEditAlarm, onEnabledToggled, Modifier.fillMaxSize())
                 }
             }
 
@@ -200,14 +223,32 @@ private fun EmptyAlarmsView(onCreateAlarm: () -> Unit, modifier: Modifier) {
     }
 }
 
+/**
+ * Tapping a row opens it in the editor; its switch pauses or resumes it. The switch is a focus stop
+ * of its own, named after the row's station so a screen reader says what it switches.
+ */
 @Composable
-private fun AlarmList(alarms: List<AlarmListItem>, modifier: Modifier) {
+private fun AlarmList(
+    alarms: List<AlarmListItem>,
+    onEditAlarm: (alarmId: String) -> Unit,
+    onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
+    modifier: Modifier,
+) {
     // Room below the last row, so the create button never covers it.
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp)) {
         items(alarms, key = { it.alarm.id }) { item ->
+            val enabled = item.alarm.enabled
             ListItem(
                 headlineContent = { Text(item.stationName) },
-                supportingContent = { Text(item.summary) },
+                supportingContent = { Text(if (enabled) item.summary else "Paused · ${item.summary}") },
+                trailingContent = {
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { onEnabledToggled(item.alarm.id, it) },
+                        modifier = Modifier.semantics { contentDescription = "Alarm for ${item.stationName}" },
+                    )
+                },
+                modifier = Modifier.clickable(onClickLabel = "Edit alarm") { onEditAlarm(item.alarm.id) },
             )
             HorizontalDivider()
         }

@@ -2,6 +2,8 @@ package ch.stenzel.tim.polleninfo.feature.alarms.domain.model
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
+import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
+import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -233,5 +235,44 @@ class AlarmFormStateTest {
 
         assertEquals(PollenSeverity.MODERATE, draft.minSeverity)
         assertEquals(AlarmSchedule.Threshold(LocalTime(7, 0), LocalTime(19, 0)), draft.schedule)
+    }
+
+    // --- Editing an existing alarm ---
+
+    @Test
+    fun `an existing alarm opens with every field as stored and is not dirty`() {
+        val form = AlarmFormState.fromAlarm(thresholdAlarm())
+
+        assertEquals(thresholdAlarm().toDraft(), form.toDraft())
+        assertEquals(AlarmType.THRESHOLD, form.type)
+        assertFalse(form.isDirty)
+    }
+
+    @Test
+    fun `an existing alarm has its type locked and a new one does not`() {
+        assertTrue(AlarmFormState.fromAlarm(dailyAlarm()).typeLocked)
+        assertFalse(newForm.typeLocked)
+    }
+
+    @Test
+    fun `switching type on an existing alarm changes nothing`() {
+        val form = AlarmFormState.fromAlarm(dailyAlarm())
+
+        assertEquals(form, form.withType(AlarmType.THRESHOLD))
+    }
+
+    @Test
+    fun `an edit keeps the alarm paused`() {
+        val form = AlarmFormState.fromAlarm(thresholdAlarm()).withWindowEnd(LocalTime(20, 0))
+
+        assertFalse(form.toDraft().enabled)
+        assertTrue(form.isDirty)
+    }
+
+    @Test
+    fun `an edited alarm is not dirty after the change is undone`() {
+        val form = AlarmFormState.fromAlarm(dailyAlarm()).toggleDay(DayOfWeek.MONDAY).toggleDay(DayOfWeek.MONDAY)
+
+        assertFalse(form.isDirty)
     }
 }

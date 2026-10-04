@@ -2,8 +2,10 @@ package ch.stenzel.tim.polleninfo.server.alarm
 
 import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_TIME_FORMAT
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmInput
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmValidation
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.ScheduleInput
@@ -18,12 +20,15 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.CreateResult
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
 /**
@@ -59,21 +64,57 @@ fun Route.alarmRoutes(devices: DeviceStore, alarms: AlarmStore) {
         post("/{deviceId}/alarms") {
             val deviceId = call.parameters["deviceId"]?.let(::DeviceId)
                 ?: return@post call.respond(HttpStatusCode.BadRequest)
-            // As for registration: a malformed body is the client's error, not a 500.
-            val input = try {
-                call.receive<AlarmInputDto>()
-            } catch (e: BadRequestException) {
-                return@post call.respond(HttpStatusCode.BadRequest, ErrorDto("Malformed alarm"))
-            }
-            val spec = when (val result = AlarmValidation.validate(input.toDomain())) {
-                is ValidationResult.Valid -> result.spec
-                is ValidationResult.Invalid ->
-                    return@post call.respond(HttpStatusCode.BadRequest, ErrorDto(result.message))
-            }
+            val spec = call.receiveAlarmSpec() ?: return@post
             when (val result = alarms.create(deviceId, spec)) {
                 is CreateResult.Created -> call.respond(HttpStatusCode.Created, result.alarm.toDto())
                 CreateResult.UnknownDevice -> call.respond(HttpStatusCode.NotFound)
             }
+        }
+
+        // An unknown device, an unknown alarm and another device's alarm are all the same 404, so an
+        // alarm id reveals nothing to a device it does not belong to.
+        put("/{deviceId}/alarms/{alarmId}") {
+            val deviceId = call.parameters["deviceId"]?.let(::DeviceId)
+                ?: return@put call.respond(HttpStatusCode.BadRequest)
+            val alarmId = call.parameters["alarmId"]?.let(::AlarmId)
+                ?: return@put call.respond(HttpStatusCode.BadRequest)
+            val spec = call.receiveAlarmSpec() ?: return@put
+            val updated = alarms.update(deviceId, alarmId, spec)
+                ?: return@put call.respond(HttpStatusCode.NotFound)
+            call.respond(updated.toDto())
+        }
+
+        delete("/{deviceId}/alarms/{alarmId}") {
+            val deviceId = call.parameters["deviceId"]?.let(::DeviceId)
+                ?: return@delete call.respond(HttpStatusCode.BadRequest)
+            val alarmId = call.parameters["alarmId"]?.let(::AlarmId)
+                ?: return@delete call.respond(HttpStatusCode.BadRequest)
+            if (alarms.delete(deviceId, alarmId)) {
+                call.respond(HttpStatusCode.NoContent)
+            } else {
+                call.respond(HttpStatusCode.NotFound)
+            }
+        }
+    }
+}
+
+/**
+ * The request body as a valid [AlarmSpec], or `null` once a `400 {error}` has been sent. Validation
+ * comes before any store lookup, so an invalid body for an unknown device or alarm is a `400`.
+ */
+private suspend fun ApplicationCall.receiveAlarmSpec(): AlarmSpec? {
+    // As for registration: a malformed body is the client's error, not a 500.
+    val input = try {
+        receive<AlarmInputDto>()
+    } catch (e: BadRequestException) {
+        respond(HttpStatusCode.BadRequest, ErrorDto("Malformed alarm"))
+        return null
+    }
+    return when (val result = AlarmValidation.validate(input.toDomain())) {
+        is ValidationResult.Valid -> result.spec
+        is ValidationResult.Invalid -> {
+            respond(HttpStatusCode.BadRequest, ErrorDto(result.message))
+            null
         }
     }
 }

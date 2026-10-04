@@ -81,7 +81,7 @@ val presentationModule = module {
     viewModel { HomeViewModel(get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
-    viewModel { AlarmEditorViewModel(get(), get(), get(), get()) }
+    viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorScreen
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsScreen
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsScreen
@@ -102,12 +103,17 @@ private fun AppNavHost(
         }
 
         composable<Screen.Alarms> {
-            AlarmsScreen(onCreateAlarm = { navController.navigate(Screen.AlarmEditor()) })
+            AlarmsScreen(
+                onCreateAlarm = { navController.navigate(Screen.AlarmEditor()) },
+                onEditAlarm = { id -> navController.navigate(Screen.AlarmEditor(id)) },
+            )
         }
 
-        // Every editor is a new alarm so far; opening an existing one arrives with editing.
-        composable<Screen.AlarmEditor> {
-            AlarmEditorScreen(onDone = { navController.popBackStack() })
+        composable<Screen.AlarmEditor> { entry ->
+            AlarmEditorScreen(
+                alarmId = entry.toRoute<Screen.AlarmEditor>().alarmId,
+                onDone = { navController.popBackStack() },
+            )
         }
 
         composable<Screen.Feature5> {

@@ -13,9 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +47,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -60,17 +64,24 @@ import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 /**
- * Creates a daily report or a threshold alert. Shown without the bottom bar — it is a task with a clear way back, not a
- * tab. [onDone] leaves the editor, after a save or when the user goes back.
+ * Creates a daily report or a threshold alert, or edits alarm [alarmId]. Shown without the bottom
+ * bar — it is a task with a clear way back, not a tab. [onDone] leaves the editor, after a save or a
+ * delete, or when the user goes back without unsaved changes or chooses to discard them.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun AlarmEditorScreen(
+    alarmId: String?,
     onDone: () -> Unit,
-    viewModel: AlarmEditorViewModel = koinViewModel(),
+    viewModel: AlarmEditorViewModel = koinViewModel(parameters = { parametersOf(alarmId) }),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // The system back asks about unsaved changes just as the top bar's arrow does.
+    BackHandler(onBack = viewModel::onBack)
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -82,7 +93,8 @@ fun AlarmEditorScreen(
 
     AlarmEditorContent(
         uiState = uiState,
-        onBack = onDone,
+        title = if (alarmId == null) "New alarm" else "Edit alarm",
+        onBack = viewModel::onBack,
         onRetry = viewModel::retry,
         onStationSelected = viewModel::onStationSelected,
         onSpeciesToggled = viewModel::onSpeciesToggled,
@@ -93,6 +105,11 @@ fun AlarmEditorScreen(
         onWindowStartSelected = viewModel::onWindowStartSelected,
         onWindowEndSelected = viewModel::onWindowEndSelected,
         onSave = viewModel::save,
+        onDiscardConfirmed = viewModel::onDiscardConfirmed,
+        onDiscardDismissed = viewModel::onDiscardDismissed,
+        onDeleteRequested = viewModel::onDeleteRequested,
+        onDeleteConfirmed = viewModel::onDeleteConfirmed,
+        onDeleteDismissed = viewModel::onDeleteDismissed,
     )
 }
 
@@ -100,6 +117,7 @@ fun AlarmEditorScreen(
 @Composable
 private fun AlarmEditorContent(
     uiState: AlarmEditorUiState,
+    title: String,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onStationSelected: (String) -> Unit,
@@ -111,11 +129,16 @@ private fun AlarmEditorContent(
     onWindowStartSelected: (LocalTime) -> Unit,
     onWindowEndSelected: (LocalTime) -> Unit,
     onSave: () -> Unit,
+    onDiscardConfirmed: () -> Unit,
+    onDiscardDismissed: () -> Unit,
+    onDeleteRequested: () -> Unit,
+    onDeleteConfirmed: () -> Unit,
+    onDeleteDismissed: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New alarm") },
+                title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -160,7 +183,34 @@ private fun AlarmEditorContent(
                 onWindowStartSelected = onWindowStartSelected,
                 onWindowEndSelected = onWindowEndSelected,
                 onSave = onSave,
+                onDeleteRequested = onDeleteRequested,
                 modifier = modifier,
+            )
+        }
+    }
+
+    if (uiState is AlarmEditorUiState.Editing) {
+        if (uiState.showDiscardDialog) {
+            AlertDialog(
+                onDismissRequest = onDiscardDismissed,
+                title = { Text("Discard changes?") },
+                text = { Text("Your changes to this alarm will not be saved.") },
+                confirmButton = { TextButton(onClick = onDiscardConfirmed) { Text("Discard") } },
+                dismissButton = { TextButton(onClick = onDiscardDismissed) { Text("Keep editing") } },
+            )
+        }
+        if (uiState.showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = onDeleteDismissed,
+                title = { Text("Delete alarm?") },
+                text = { Text("You will no longer get notifications from this alarm.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = onDeleteConfirmed,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = onDeleteDismissed) { Text("Cancel") } },
             )
         }
     }
@@ -178,15 +228,17 @@ private fun EditingForm(
     onWindowStartSelected: (LocalTime) -> Unit,
     onWindowEndSelected: (LocalTime) -> Unit,
     onSave: () -> Unit,
+    onDeleteRequested: () -> Unit,
     modifier: Modifier,
 ) {
     val form = state.form
-    val enabled = !state.isSaving
+    val enabled = !state.isBusy
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TypeToggle(selected = form.type, enabled = enabled, onTypeSelected = onTypeSelected)
+        // Locked when editing: still shown, so the alarm's type is visible, but not changeable.
+        TypeToggle(selected = form.type, enabled = enabled && !form.typeLocked, onTypeSelected = onTypeSelected)
         Text(
             when (form.type) {
                 AlarmType.DAILY -> "A summary of the selected pollen types at one time on the chosen days."
@@ -311,6 +363,25 @@ private fun EditingForm(
                 }
             } else {
                 Text("Save")
+            }
+        }
+
+        if (state.canDelete) {
+            OutlinedButton(
+                onClick = onDeleteRequested,
+                enabled = !state.isBusy,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                if (state.isDeleting) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Deleting…")
+                    }
+                } else {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Delete alarm", modifier = Modifier.padding(start = 8.dp))
+                }
             }
         }
     }

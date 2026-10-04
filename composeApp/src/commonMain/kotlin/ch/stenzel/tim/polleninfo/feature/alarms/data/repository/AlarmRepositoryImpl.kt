@@ -11,6 +11,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.UnknownDeviceException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlinx.coroutines.flow.first
@@ -37,6 +38,20 @@ class AlarmRepositoryImpl(
 
     override suspend fun create(draft: AlarmDraft): Result<Alarm> = safeCall {
         withDevice { deviceId -> api.createAlarm(deviceId, draft.toInputDto()).toDomain() }
+    }
+
+    /** There is no single-alarm endpoint; the list is small and is what the backend offers. */
+    override suspend fun alarm(id: String): Result<Alarm> = safeCall {
+        withDevice { deviceId -> api.getAlarms(deviceId).firstOrNull { it.id == id }?.toDomain() }
+            ?: throw AlarmNotFoundException()
+    }
+
+    override suspend fun update(id: String, draft: AlarmDraft): Result<Alarm> = safeCall {
+        withDevice { deviceId -> api.updateAlarm(deviceId, id, draft.toInputDto()).toDomain() }
+    }
+
+    override suspend fun delete(id: String): Result<Unit> = safeCall {
+        withDevice { deviceId -> api.deleteAlarm(deviceId, id) }
     }
 
     private suspend fun <T> withDevice(call: suspend (deviceId: String) -> T): T {

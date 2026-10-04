@@ -24,8 +24,8 @@ sealed interface Screen {
     data object Alarms : Screen
 
     /**
-     * Creates an alarm — and, once editing arrives, opens the one with [alarmId]. Not a tab, so the
-     * bottom bar is hidden on it.
+     * Creates an alarm, or edits the one with [alarmId]. Not a tab, so the bottom bar is hidden on
+     * it.
      */
     @Serializable
     data class AlarmEditor(val alarmId: String? = null) : Screen

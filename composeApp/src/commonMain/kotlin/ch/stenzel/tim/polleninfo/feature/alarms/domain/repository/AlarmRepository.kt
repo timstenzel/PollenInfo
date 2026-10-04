@@ -22,4 +22,19 @@ interface AlarmRepository {
      * [InvalidAlarmException][ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException].
      */
     suspend fun create(draft: AlarmDraft): Result<Alarm>
+
+    /**
+     * One of the device's alarms. One that does not exist (any more) fails with
+     * [AlarmNotFoundException][ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException].
+     */
+    suspend fun alarm(id: String): Result<Alarm>
+
+    /**
+     * Replaces the settings of alarm [id] with [draft] and returns it as the backend stored it. Fails
+     * like [create], and like [alarm] for an alarm that no longer exists.
+     */
+    suspend fun update(id: String, draft: AlarmDraft): Result<Alarm>
+
+    /** Deletes alarm [id]. Fails like [alarm] for an alarm that no longer exists. */
+    suspend fun delete(id: String): Result<Unit>
 }

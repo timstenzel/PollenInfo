@@ -669,9 +669,9 @@ Nothing else knows about the tab. Update the order and name assertions in
 #### Alarms
 
 The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far the permission gate, the backend-loaded list, creating daily reports and threshold alerts, and
-delivering both exist** (see "Alarm editor" below and "Alarm delivery" under the server) — editing,
-pausing and deleting are not built yet.
+far the permission gate, the backend-loaded list, creating, editing, pausing and deleting daily
+reports and threshold alerts, and delivering both exist** (see "Alarm editor" below and "Alarm
+delivery" under the server).
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
@@ -699,7 +699,16 @@ Birch, Grasses ≥ High" — the same three parts for both types: types in displ
 when every one is selected), the minimum only when it is not "Any", and days collapsed by
 `daysSummary` — "Every day", runs of three or more as a range ("Mon–Fri"), shorter runs listed
 ("Sat, Sun"). Severity words come from `PollenSeverity.label()`; `minimumLabel()` calls `NONE`
-"Any". It sits in `presentation/`, not `domain/`, because it is wording.
+"Any". It sits in `presentation/`, not `domain/`, because it is wording. A paused alarm's summary is
+prefixed "Paused · ".
+
+**Tapping a row** opens `Screen.AlarmEditor(id)` (`onEditAlarm`). **Its `Switch` pauses or resumes
+the alarm optimistically**: `AlarmsViewModel.onEnabledToggled(id, enabled)` flips the row at once and
+stores the whole alarm with the new flag through `AlarmRepository.update` (a full `PUT`). If that
+fails the row flips back and `AlarmsEvent.ToggleFailed(message)` — a buffered `Channel`, as for any
+one-shot event — shows a snackbar once. The switch is its own focus stop, named "Alarm for
+<station>", so TalkBack reads its on/off state with what it switches; the row's click label is "Edit
+alarm".
 
 **`onResume()` reloads quietly.** The screen calls it on every `RESUMED`, right after handing over
 the permission — so back from the editor, from another tab or from another app. With a list on
@@ -709,7 +718,8 @@ load, while any load runs, or without permission it does nothing. "Create alarm"
 button and, once there are alarms, an extended FAB; the list has bottom padding so the FAB never
 covers the last row.
 
-**`AlarmRepositoryImpl` registers lazily.** Every call goes through one `withDevice { }` wrapper:
+**`AlarmRepositoryImpl` registers lazily.** Every call — `alarms`, `alarm(id)`, `create`, `update`,
+`delete` — goes through one `withDevice { }` wrapper:
 with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
 before any request), `POST /devices`, and stores the issued id. If a device call answers `404`
 (`UnknownDeviceException` from `AlarmApiService` — the backend lost its database, say) it clears the
@@ -717,6 +727,13 @@ id, registers once and retries once; a second `404` is a `Failure`. Registration
 `Mutex`, and a re-registration that finds a newer id already stored uses it instead of replacing it
 again, so concurrent calls never register twice. `AlarmApiService` checks status codes itself rather
 than letting `body()` read an error response as data.
+
+On a single alarm's path (`PUT` / `DELETE …/alarms/{alarmId}`) the backend answers the **same**
+`404` for an unknown device and for an alarm the device does not have. Treating the latter as an
+unknown device would re-register and cut the install off from all its other alarms, so on that `404`
+`AlarmApiService` asks the device's list: a `404` there is `UnknownDeviceException` (re-register as
+above), otherwise it is `AlarmNotFoundException`, a plain `Failure`. `alarm(id)` has no endpoint of its
+own — it is the device's list, filtered — and fails with `AlarmNotFoundException` too.
 
 `core/notifications/` holds the platform side. `NotificationPermissionState` is `ENABLED`,
 `CAN_REQUEST` (button "Allow notifications", the system prompt) or `MUST_OPEN_SETTINGS` (button
@@ -742,21 +759,35 @@ prompts with an alert that does not pause the screen. It waits until `AlarmsView
 (`null` until read) is known, so the wrong button never flashes. Answering the prompt calls
 `onPermissionRequested()`, which sets the flag through `NotificationPermissionPreferences`.
 
-`AlarmsViewModelTest` covers the mapping, the flag, the list cycle and `onResume`
-(`FakeAlarmRepository.gate` holds a load in flight). `AlarmRepositoryImplTest` drives registration, the `404` retry and both
-`schedule` variants through `MockEngine`, with `FakePushTokenProvider` and
+`AlarmsViewModelTest` covers the mapping, the flag, the list cycle, `onResume` and the optimistic
+switch (`FakeAlarmRepository.gate` holds a load in flight, `updateGate` an update).
+`AlarmRepositoryImplTest` drives registration, the `404` retry for every call, the unknown-alarm
+`404` that must not re-register, and both `schedule` variants through `MockEngine`, with `FakePushTokenProvider` and
 `FakeDeviceRegistrationRepository`. The permission controllers and `FirebasePushTokenProvider` are
 checked by hand.
 
 ##### Alarm editor
 
 `Screen.AlarmEditor(alarmId: String? = null)` — not a tab, so the bottom bar is hidden on it. The
-list's "Create alarm" navigates to it, and its `onDone` (`popBackStack`) runs on the top bar's back
-arrow and on `AlarmEditorEvent.Done`, sent on a buffered `Channel` after a successful save. Every
-editor is a new alarm so far; `alarmId` is reserved for editing and not read yet.
+list's "Create alarm" navigates to it without an id, a tapped row with that alarm's id
+(`toRoute` in `AppNavigation`, handed to the ViewModel through Koin's `parametersOf`). Its `onDone`
+(`popBackStack`) runs on `AlarmEditorEvent.Done`, sent on a buffered `Channel` after a successful
+save or delete, and when leaving is allowed.
 
-`AlarmEditorViewModel` loads the stations and the pollen types in parallel (`Error` with Retry if
-either fails) and opens `Editing(form, stations, species, isSaving, saveError)` on
+**Leaving goes through `onBack()`** — the top bar's arrow and the system back alike (the
+multiplatform `BackHandler` from `org.jetbrains.compose.ui:ui-backhandler`, an explicit
+`commonMain` dependency). With unsaved changes (`form.isDirty`) it sets `showDiscardDialog` ("Discard
+changes?" — Discard → `Done`, Keep editing closes the dialog); without, or from `Loading` / `Error`,
+it sends `Done` at once.
+
+`AlarmEditorViewModel` loads the stations and the pollen types — and when editing, the alarm
+(`AlarmRepository.alarm(id)`) — in parallel (`Error` with Retry if any fails) and opens
+`Editing(form, stations, species, canDelete, isSaving, isDeleting, saveError, showDiscardDialog,
+showDeleteDialog)`. An existing alarm opens on `AlarmFormState.fromAlarm(alarm)`: every field as
+stored, `typeLocked` (the type toggle is shown disabled and `withType` changes nothing) and its
+paused state kept, since the list's switch owns that. Save then calls `update(id, draft)`, and "Delete
+alarm" (existing alarms only, `canDelete`) asks first (`showDeleteDialog`); confirming deletes and
+sends `Done`, a failed delete stays with its message in `saveError`. A new alarm opens on
 `AlarmFormState.newDailyReport(home, speciesIds)`: the stored home station (the first station if it
 is no longer listed), every pollen type, every day, "Any", 08:00. Choosing another station never
 touches the stored home station.
@@ -769,8 +800,9 @@ compares against the state the editor opened with (so an undone change is not a 
 schedule; `withType` switches it and resets what means something different in each — daily is "Any"
 at 08:00, threshold is High from 07:00 to 21:00 — keeping station, types and days. `severityOptions`
 is Any … Very high for a daily report and Low … Very high for a threshold alert. `withTime` only
-applies to a daily report, `withWindowStart` / `withWindowEnd` only to a threshold alert. `Editing.canSave` is `isValid && !isSaving`;
-`save()` is ignored otherwise, and so are field changes while a save runs — the save sends the form
+applies to a daily report, `withWindowStart` / `withWindowEnd` only to a threshold alert. `Editing.canSave` is `isValid && !isBusy`
+(`isBusy` = saving or deleting); `save()` is ignored otherwise, and so are field changes while a save
+or delete runs — the save sends the form
 as it was when tapped. A failed save keeps the form and shows its message as `saveError` until the
 next attempt. A backend `400` arrives as `InvalidAlarmException` with the server's `error` text.
 
@@ -780,9 +812,10 @@ severity and days (day chips announce the full day name), then either a time but
 24-hour `TimePicker` in an `AlertDialog` and is announced as "Report time 08:00", or two of them for
 the window ("Window start 07:00", "Window end 21:00") with a hint while the end is not after the
 start, the hint "Times are Swiss time.", and Save with a progress indicator. Section titles are headings.
-`AlarmEditorViewModelTest` covers loading, both load errors, `isSaving` under a gated create
-(`FakeAlarmRepository.createGate`), `Done` exactly once and a failed save; the composable is checked
-by hand.
+`AlarmEditorViewModelTest` covers loading (new and edit), every load error, `isSaving` under a gated
+create (`FakeAlarmRepository.createGate`), `Done` exactly once, a failed save, the discard dialog
+only when dirty, the locked type, and delete only after confirmation; the composable is checked by
+hand.
 
 #### Firebase
 
@@ -901,6 +934,8 @@ independently of the domain.
 | POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
 | GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
 | POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device |
+| PUT    | `/devices/{deviceId}/alarms/{alarmId}`  | Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown device, unknown alarm or another device's alarm |
+| DELETE | `/devices/{deviceId}/alarms/{alarmId}`  | `204`; `404` as for `PUT` |
 
 #### Devices and alarms
 
@@ -936,6 +971,17 @@ looked up, so an invalid body for an unknown device is a `400`. `AlarmStore.crea
 `CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`); the id is a random UUID, and `created_at` is
 kept strictly increasing per device so two alarms created in the same millisecond still list in
 creation order.
+
+**Updating** (`PUT …/alarms/{alarmId}`) takes the same body through the same validation (shared
+`receiveAlarmSpec`, so again a `400` before any lookup) and replaces every field but the id and
+`created_at`, so an edited alarm keeps its place in the list. **Deleting** removes the alarm and,
+through `ON DELETE CASCADE`, its notification log. **A device can never touch another device's
+alarm**: `AlarmStore.update` returns `null` and `delete` `false` unless the alarm id *and* the device
+id match in one statement, and the route answers the same `404` for an unknown device, an unknown
+alarm and someone else's alarm, so an alarm id reveals nothing. **An update leaves the notification
+log alone**: it is keyed per type, so editing a threshold alert neither repeats a type it notified
+about today nor holds back a newly added one. Pausing is an update with `enabled = false`; the
+scheduler only ever loads enabled alarms.
 
 #### Persistence
 
