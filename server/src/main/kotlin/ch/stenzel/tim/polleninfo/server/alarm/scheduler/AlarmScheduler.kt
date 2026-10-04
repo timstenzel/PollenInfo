@@ -8,6 +8,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.push.PushResult
 import ch.stenzel.tim.polleninfo.server.alarm.push.PushSender
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmWithToken
+import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.NotificationLog
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.CacheResult
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory
  */
 class AlarmScheduler(
     private val alarms: AlarmStore,
+    private val devices: DeviceStore,
     private val log: NotificationLog,
     private val measurements: MeasurementService,
     private val push: PushSender,
@@ -107,10 +109,7 @@ class AlarmScheduler(
         val message = AlarmRules.evaluateDaily(alarm, now, reading) ?: return
         when (val result = push.send(token, message)) {
             PushResult.Sent -> logger.info("Sent daily report ${alarm.id.value} for ${alarm.station.abbr}")
-            // Dropping the token arrives with token lifecycle handling; until then it is retried
-            // at the alarm's next time.
-            PushResult.Unregistered ->
-                logger.warn("Daily report ${alarm.id.value}: push token no longer registered")
+            PushResult.Unregistered -> dropToken(alarm, token)
             is PushResult.Failed ->
                 logger.warn("Daily report ${alarm.id.value} for ${alarm.station.abbr} not delivered", result.cause)
         }
@@ -135,11 +134,21 @@ class AlarmScheduler(
                 log.record(alarm.id, outcome.species, today)
                 logger.info("Sent threshold alert ${alarm.id.value} for ${alarm.station.abbr}: ${outcome.species}")
             }
-            // Not recorded either way, so the next tick in the window tries again.
-            PushResult.Unregistered ->
-                logger.warn("Threshold alert ${alarm.id.value}: push token no longer registered")
+            // Not recorded either way: after a failure the next tick in the window tries again, and
+            // after a dropped token the alert picks up once the app sends a new one.
+            PushResult.Unregistered -> dropToken(alarm, token)
             is PushResult.Failed ->
                 logger.warn("Threshold alert ${alarm.id.value} for ${alarm.station.abbr} not delivered", result.cause)
         }
+    }
+
+    /**
+     * The push service no longer knows [token] — typically the app was uninstalled. The device and
+     * its alarms are kept, but without a token none of them is loaded again until the app sends a
+     * new one through `PUT /devices/{id}/token`.
+     */
+    private suspend fun dropToken(alarm: Alarm, token: String) {
+        logger.warn("Alarm ${alarm.id.value}: push token no longer registered, dropping it")
+        devices.clearToken(alarm.deviceId, token)
     }
 }

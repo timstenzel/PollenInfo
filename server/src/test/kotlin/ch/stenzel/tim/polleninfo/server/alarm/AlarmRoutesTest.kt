@@ -76,6 +76,49 @@ class AlarmRoutesTest {
     }
 
     @Test
+    fun `PUT token returns 204 for a known device and stores the new token`() = testApplication {
+        installApp()
+        val deviceId = register()
+        database.insertAlarm(dailyAlarm(DeviceId(deviceId)), createdAtMillis = 1)
+
+        val response = client.put("/devices/$deviceId/token") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"fcmToken":"token-2"}""")
+        }
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+        assertEquals(listOf("token-2"), alarms.enabledWithDeliverableDevice().map { it.fcmToken })
+    }
+
+    @Test
+    fun `PUT token returns 404 for an unknown device`() = testApplication {
+        installApp()
+
+        val response = client.put("/devices/never-registered/token") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"fcmToken":"token-2"}""")
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `PUT token with a blank or missing token returns 400`() = testApplication {
+        installApp()
+        val deviceId = register()
+
+        listOf("""{"fcmToken":" "}""", """{}""").forEach { body ->
+            val response = client.put("/devices/$deviceId/token") {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(Json.parseToJsonElement(response.bodyAsText()).jsonObject.containsKey("error"))
+        }
+    }
+
+    @Test
     fun `POST devices without a token returns 400 with an error message`() = testApplication {
         installApp()
 

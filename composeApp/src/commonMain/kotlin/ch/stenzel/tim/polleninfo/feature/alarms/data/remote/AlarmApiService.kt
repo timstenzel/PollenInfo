@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ErrorDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceRequestDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.RegisterDeviceResponseDto
+import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.UpdateTokenRequestDto
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
@@ -40,6 +41,16 @@ class AlarmApiService(
             contentType(ContentType.Application.Json)
             setBody(RegisterDeviceRequestDto(fcmToken))
         }.checked().body()
+
+    /** `404` is [UnknownDeviceException], as on every device path. */
+    suspend fun updateToken(deviceId: String, fcmToken: String) {
+        val response = client.put("$baseUrl/devices/$deviceId/token") {
+            contentType(ContentType.Application.Json)
+            setBody(UpdateTokenRequestDto(fcmToken))
+        }
+        if (response.status == HttpStatusCode.NotFound) throw UnknownDeviceException()
+        response.checked()
+    }
 
     suspend fun getAlarms(deviceId: String): List<AlarmDto> =
         client.get("$baseUrl/devices/$deviceId/alarms").checkedForDevice().body()

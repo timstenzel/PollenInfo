@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.feature.alarms.data.repository
 import ch.stenzel.tim.polleninfo.core.preferences.DeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.push.PushTokenProvider
 import ch.stenzel.tim.polleninfo.core.push.PushTokenResult
+import ch.stenzel.tim.polleninfo.core.push.PushTokenUpdater
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.safeCall
 import ch.stenzel.tim.polleninfo.feature.alarms.data.mapper.toDomain
@@ -22,12 +23,14 @@ import kotlinx.coroutines.sync.withLock
  * Registers lazily: no device id is requested until a call needs one, and the id is stored and
  * reused from then on. If the backend has forgotten the id, the call re-registers once and is
  * retried once; every call goes through [withDevice] so none can forget to.
+ *
+ * It is also the [PushTokenUpdater], since a rotated token belongs to the registration it keeps.
  */
 class AlarmRepositoryImpl(
     private val api: AlarmApiService,
     private val registration: DeviceRegistrationRepository,
     private val pushTokens: PushTokenProvider,
-) : AlarmRepository {
+) : AlarmRepository, PushTokenUpdater {
 
     /** Serialises registration, so two calls on a fresh install cannot register two devices. */
     private val registrationLock = Mutex()
@@ -52,6 +55,23 @@ class AlarmRepositoryImpl(
 
     override suspend fun delete(id: String): Result<Unit> = safeCall {
         withDevice { deviceId -> api.deleteAlarm(deviceId, id) }
+    }
+
+    /**
+     * Never registers: on an install that has not registered yet the first registration sends the
+     * token current then. The lock makes a rotation during that first registration wait for its id
+     * rather than be lost. If the backend no longer knows the id, the id is dropped, so the next
+     * alarm call registers afresh — with the current token.
+     */
+    override suspend fun updateToken(token: String): Result<Unit> = safeCall {
+        val deviceId = registrationLock.withLock { registration.deviceId.first() } ?: return@safeCall
+        try {
+            api.updateToken(deviceId, token)
+        } catch (e: UnknownDeviceException) {
+            registrationLock.withLock {
+                if (registration.deviceId.first() == deviceId) registration.clear().orThrow()
+            }
+        }
     }
 
     private suspend fun <T> withDevice(call: suspend (deviceId: String) -> T): T {

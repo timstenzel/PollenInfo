@@ -6,15 +6,28 @@ import java.time.Clock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
 /** The installs that have registered for alarms. */
 interface DeviceStore {
 
     /** Stores a new device with its push token and returns the id issued for it. */
     suspend fun register(fcmToken: String): DeviceId
+
+    /** Replaces the device's push token, as when FCM rotates it; `false` for an unknown device. */
+    suspend fun updateToken(id: DeviceId, fcmToken: String): Boolean
+
+    /**
+     * Drops the device's push token if it is still [fcmToken], keeping the device and its alarms, so
+     * the scheduler stops processing them until the app sends a new one. Conditional so that a token
+     * the push service rejected can never wipe a newer one the app sent in the meantime.
+     */
+    suspend fun clearToken(id: DeviceId, fcmToken: String)
 
     suspend fun exists(id: DeviceId): Boolean
 }
@@ -34,6 +47,24 @@ class ExposedDeviceStore(
             }
         }
         id
+    }
+
+    override suspend fun updateToken(id: DeviceId, fcmToken: String): Boolean = withContext(Dispatchers.IO) {
+        transaction(database) {
+            DevicesTable.update({ DevicesTable.id eq id.value }) {
+                it[DevicesTable.fcmToken] = fcmToken
+            } > 0
+        }
+    }
+
+    override suspend fun clearToken(id: DeviceId, fcmToken: String) {
+        withContext(Dispatchers.IO) {
+            transaction(database) {
+                DevicesTable.update({ (DevicesTable.id eq id.value) and (DevicesTable.fcmToken eq fcmToken) }) {
+                    it[DevicesTable.fcmToken] = null
+                }
+            }
+        }
     }
 
     override suspend fun exists(id: DeviceId): Boolean = withContext(Dispatchers.IO) {

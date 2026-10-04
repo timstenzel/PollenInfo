@@ -40,9 +40,11 @@ caller of the cache.
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
 station metadata and threshold logic in one place and off the devices.
 
-Push notifications are being built (see "Alarms"). The Android app obtains an FCM token and
-registers the device with the backend, which keeps devices and alarms in SQLite (see "Persistence")
-and delivers due daily reports through FCM (see "Alarm delivery"). iOS has no push leg.
+Push notifications deliver the user's alarms (see "Alarms"). The Android app obtains an FCM token,
+registers the device with the backend and sends it a new token whenever FCM rotates it; the backend
+keeps devices and alarms in SQLite (see "Persistence"), delivers daily reports and threshold alerts
+through FCM (see "Alarm delivery") and drops a token FCM reports as unregistered. iOS has no push
+leg.
 
 ### Modules
 
@@ -274,9 +276,10 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
 For a real feature that talks to our own backend, mirror one of the real slices instead — all
-are the same layering pointed at `:server` through `apiBaseUrl`. None owns its data layer any
-more: the station list and the reading pipeline they consume live in `core/` (below), so the slices
-themselves are mostly `presentation/`.
+are the same layering pointed at `:server` through `apiBaseUrl`. The first three no longer own a
+data layer: the station list and the reading pipeline they consume live in `core/` (below), so
+those slices are mostly `presentation/`. `feature/alarms` is the full layering again, since nothing
+else reads alarms.
 
 - **`feature/onboarding`** — a form: one list fetched once, a user choice persisted through
   `core/preferences`, and completion delivered as a one-shot event. Its own domain code is
@@ -293,6 +296,14 @@ themselves are mostly `presentation/`.
   case), `map/` (pure map geometry, see "All stations" below) and `presentation/`. `PerStationMeasurementRepository` in its `commonTest` is the fake for
   scripting a failure or a gate **per station**, which the single-result
   `FakeStationMeasurementRepository` cannot.
+- **`feature/alarms`** — the complete slice, with writes: `data/` (`AlarmApiService`, DTOs incl. the
+  polymorphic `ScheduleDto`, mapper, `AlarmRepositoryImpl` with lazy device registration),
+  `domain/` (`Alarm`, `AlarmDraft`, the pure `AlarmFormState`, typed failures, the repository
+  interface) and `presentation/` (the list with a permission gate, an optimistic switch and quiet
+  reload on resume; the editor with dirty-checking and confirm dialogs; `AlarmSummary` wording). The
+  model for a create/edit form whose rules are tested without a ViewModel (`AlarmFormStateTest`),
+  and for a repository that recovers from the backend forgetting this install
+  (`AlarmRepositoryImplTest`). See "Alarms" below.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
 imports another feature, and nothing in `core/` imports a feature except the DI module that wires
@@ -305,6 +316,8 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/species` | `Species` (`id`, `name`), `SpeciesRepository`(+`Impl`), `SpeciesApiService`, `SpeciesDto`, `SpeciesMapper` — `GET /pollen/species`, in the server's order. The app's pollen-type vocabulary where there is no reading (the alarm editor), loaded rather than declared so `PollenSpecies` stays authoritative |
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
+| `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
+| `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
 `FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
@@ -668,10 +681,10 @@ Nothing else knows about the tab. Update the order and name assertions in
 
 #### Alarms
 
-The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications. **So
-far the permission gate, the backend-loaded list, creating, editing, pausing and deleting daily
-reports and threshold alerts, and delivering both exist** (see "Alarm editor" below and "Alarm
-delivery" under the server).
+The fourth tab, `feature/alarms`: the user's pollen alarms, delivered as push notifications — a
+permission gate, the backend-loaded list, creating, editing, pausing and deleting daily reports and
+threshold alerts (see "Alarm editor" below), delivery (see "Alarm delivery" under the server) and
+keeping the push token current as FCM rotates or drops it (see "Firebase").
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
@@ -726,8 +739,8 @@ through), ignores clicks and is `disabled()` for TalkBack. If the limit is hit a
 install sharing the id, or a race), the backend's `409` arrives as `AlarmLimitReachedException`, which
 the editor shows as its `saveError`.
 
-**`AlarmRepositoryImpl` registers lazily.** Every call — `alarms`, `alarm(id)`, `create`, `update`,
-`delete` — goes through one `withDevice { }` wrapper:
+**`AlarmRepositoryImpl` registers lazily.** Every alarm call — `alarms`, `alarm(id)`, `create`,
+`update`, `delete` — goes through one `withDevice { }` wrapper:
 with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
 before any request), `POST /devices`, and stores the issued id. If a device call answers `404`
 (`UnknownDeviceException` from `AlarmApiService` — the backend lost its database, say) it clears the
@@ -742,6 +755,13 @@ unknown device would re-register and cut the install off from all its other alar
 `AlarmApiService` asks the device's list: a `404` there is `UnknownDeviceException` (re-register as
 above), otherwise it is `AlarmNotFoundException`, a plain `Failure`. `alarm(id)` has no endpoint of its
 own — it is the device's list, filtered — and fails with `AlarmNotFoundException` too.
+
+`AlarmRepositoryImpl` is also `core/push/PushTokenUpdater` (one Koin instance bound as both, so the
+two share the registration `Mutex`). `updateToken(token)` is deliberately **not** a `withDevice`
+call: with no stored id it makes no request and succeeds — the first registration will send
+whichever token is current then — and otherwise sends `PUT /devices/{id}/token`. A `404` there
+drops the stored id (if it is still the one used) so the next alarm call registers afresh, with the
+current token; it never registers from the push service itself.
 
 `core/notifications/` holds the platform side. `NotificationPermissionState` is `ENABLED`,
 `CAN_REQUEST` (button "Allow notifications", the system prompt) or `MUST_OPEN_SETTINGS` (button
@@ -770,7 +790,8 @@ prompts with an alert that does not pause the screen. It waits until `AlarmsView
 `AlarmsViewModelTest` covers the mapping, the flag, the list cycle, `onResume` and the optimistic
 switch (`FakeAlarmRepository.gate` holds a load in flight, `updateGate` an update).
 `AlarmRepositoryImplTest` drives registration, the `404` retry for every call, the unknown-alarm
-`404` that must not re-register, and both `schedule` variants through `MockEngine`, with `FakePushTokenProvider` and
+`404` that must not re-register, `updateToken` with and without a stored id, and both `schedule`
+variants through `MockEngine`, with `FakePushTokenProvider` and
 `FakeDeviceRegistrationRepository`. The permission controllers and `FirebasePushTokenProvider` are
 checked by hand.
 
@@ -852,6 +873,13 @@ without them is out of scope, and location deliberately stays on the platform pr
   foreground FCM shows nothing, so `PollenFirebaseMessagingService.onMessageReceived` posts it on the
   same channel with a tap that opens `MainActivity` — the two cases look the same. The service, the
   channels and the icon are checked by hand.
+- **Token rotation.** `PollenFirebaseMessagingService.onNewToken` hands the new token to
+  `PushTokenUpdater` (Koin `inject()`; it lives in `core/push` so the service does not import the
+  alarms feature). It runs the update with `runBlocking` under a 20-second timeout, on the Firebase
+  worker thread that calls it — the service may be stopped as soon as `onNewToken` returns, so a
+  launched coroutine could be cancelled mid-request. A failed update is only logged: FCM does not
+  call again for the same token, so the backend keeps the old one until the next rotation or until
+  it reports the old one unregistered (accepted for now).
 - **Sending** needs a Firebase service-account key for the server, passed as a file path in
   `FCM_CREDENTIALS`. It is **never committed** (see "Alarm delivery").
 
@@ -940,6 +968,7 @@ independently of the domain.
 | GET    | `/pollen/species`                       | The 7 taxa with display and latin names              |
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
 | POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
+| PUT    | `/devices/{deviceId}/token`             | `{ "fcmToken": "…" }` → `204`; `400 {error}` if missing or blank; `404` unknown device |
 | GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
 | POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device; `409 {error}` at 10 alarms |
 | PUT    | `/devices/{deviceId}/alarms/{alarmId}`  | Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown device, unknown alarm or another device's alarm |
@@ -951,7 +980,8 @@ There are no accounts. An install registers once, anonymously, and gets a `devic
 `SecureRandom`, base64url without padding, always 22 characters. **The id is the secret**: whoever
 holds it can read that device's alarms; alarms hold no personal data, so this is accepted for now.
 Every path under `/devices/{deviceId}` answers `404` for an unknown id, which is how the app learns
-to register again. An unknown device's list is a `404`, never `200 []` — `AlarmStore.list` returns
+to register again. **`PUT …/token`** replaces the device's push token when FCM rotates it
+(`DeviceStore.updateToken`, `false` → `404`); it also brings back a device whose token was dropped. An unknown device's list is a `404`, never `200 []` — `AlarmStore.list` returns
 `null` for it so the two cannot be confused.
 
 ```json
@@ -1010,7 +1040,9 @@ compiler — revisit with the Kotlin bump.
   busy timeout. Isolation is `SERIALIZABLE`, one of the two SQLite supports.
 - The schema is `SchemaUtils.create` on start. There is no migration tool: changing an existing
   table needs one first.
-- Tables: `devices(id PK, fcm_token NULL, created_at)`, `alarms(id PK, device_id → devices,
+- Tables: `devices(id PK, fcm_token NULL, created_at)` — `fcm_token` is `NULL` once FCM reported it
+  unregistered, which keeps the device and its alarms but stops their delivery until the app sends a
+  new token — `alarms(id PK, device_id → devices,
   enabled, station_abbr, species, min_severity, days, type, at_time, from_time, until_time,
   created_at)` and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date,
   PK(all three))` — which pollen types each threshold alert has notified about on a Swiss date
@@ -1093,8 +1125,14 @@ never throws for a delivery failure.
 - Without `FCM_CREDENTIALS` the server starts with a warning and uses `LoggingPushSender`, which logs
   the token's last six characters and the message and reports `Sent`. **The key is never
   committed.**
-- So far `Unregistered` and `Failed` are only logged; a daily report is not retried within its
-  minute, a threshold alert is retried on the next tick of its window.
+- On **`Unregistered`** the scheduler calls `DeviceStore.clearToken(deviceId, token)`: the device and
+  its alarms stay, but `enabledWithDeliverableDevice()` no longer returns them, so none is evaluated
+  or fetched for until `PUT /devices/{id}/token` sets a new token. The clear is conditional on the
+  token still being the rejected one, so a rotation that landed in the meantime is never wiped.
+  Nothing is recorded in the notification log. Other alarms of the same device in the same tick still
+  try (and fail) once; from the next tick on they are skipped.
+- **`Failed`** is only logged; a daily report is not retried within its minute, a threshold alert is
+  retried on the next tick of its window.
 
 The server logs through `logback-classic` (`server/src/main/resources/logback.xml`, INFO); without
 an SLF4J backend every log line, including the logged pushes, would be dropped.
@@ -1102,6 +1140,8 @@ an SLF4J backend every log line, including the logged pushes, would be dropped.
 `AlarmSchedulerTest` runs `tick()` against an in-memory database, `MeasurementService` over
 `FakePollenService` (whose `failures` map fails single stations), `FakePushSender` and
 `MutableClock` — a scheduler built a second time on the same database stands in for a restart.
+It also pins token handling: an `Unregistered` result clears the token and the device's alarms are
+skipped from the next tick, and a new token brings them back.
 `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers, both window edges),
 content, batching, the per-day exclusion and every staleness form.
 

@@ -284,6 +284,61 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `an updated token is the one alarms are delivered to`() = runTest {
+        val id = devices.register("token-old")
+        val alarm = dailyAlarm(id)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+
+        assertTrue(devices.updateToken(id, "token-new"))
+
+        assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
+    }
+
+    @Test
+    fun `updating the token of an unknown device returns false`() = runTest {
+        assertFalse(devices.updateToken(DeviceId("never-registered"), "token-1"))
+    }
+
+    @Test
+    fun `a cleared token removes only that device's alarms from delivery and keeps the device`() = runTest {
+        val mine = devices.register("token-mine")
+        val theirs = devices.register("token-theirs")
+        database.insertAlarm(dailyAlarm(mine), createdAtMillis = 1)
+        val theirAlarm = dailyAlarm(theirs)
+        database.insertAlarm(theirAlarm, createdAtMillis = 2)
+
+        devices.clearToken(mine, "token-mine")
+
+        assertEquals(listOf(AlarmWithToken(theirAlarm, "token-theirs")), alarms.enabledWithDeliverableDevice())
+        assertTrue(devices.exists(mine))
+        assertEquals(1, alarms.list(mine)?.size)
+    }
+
+    @Test
+    fun `clearing a token that was already replaced keeps the new one`() = runTest {
+        val id = devices.register("token-old")
+        val alarm = dailyAlarm(id)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+        devices.updateToken(id, "token-new")
+
+        devices.clearToken(id, "token-old")
+
+        assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
+    }
+
+    @Test
+    fun `a new token after a cleared one makes the device deliverable again`() = runTest {
+        val id = devices.register("token-old")
+        val alarm = dailyAlarm(id)
+        database.insertAlarm(alarm, createdAtMillis = 1)
+        devices.clearToken(id, "token-old")
+
+        devices.updateToken(id, "token-new")
+
+        assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
+    }
+
+    @Test
     fun `data survives closing and reopening a file backed database`() = runTest {
         val path = tempDir.resolve("nested/dir/polleninfo.db")
         val first = PollenInfoDatabase.file(path)

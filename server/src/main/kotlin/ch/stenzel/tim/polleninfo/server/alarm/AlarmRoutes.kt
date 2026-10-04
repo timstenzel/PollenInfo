@@ -16,6 +16,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.model.ErrorDto
 import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceRequest
 import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceResponse
 import ch.stenzel.tim.polleninfo.server.alarm.model.ScheduleDto
+import ch.stenzel.tim.polleninfo.server.alarm.model.UpdateTokenRequest
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.CreateResult
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
@@ -52,6 +53,24 @@ fun Route.alarmRoutes(devices: DeviceStore, alarms: AlarmStore) {
             }
             val id = devices.register(request.fcmToken)
             call.respond(HttpStatusCode.Created, RegisterDeviceResponse(id.value))
+        }
+
+        put("/{deviceId}/token") {
+            val deviceId = call.parameters["deviceId"]?.let(::DeviceId)
+                ?: return@put call.respond(HttpStatusCode.BadRequest)
+            val request = try {
+                call.receive<UpdateTokenRequest>()
+            } catch (e: BadRequestException) {
+                return@put call.respond(HttpStatusCode.BadRequest, ErrorDto("Expected {\"fcmToken\": \"…\"}"))
+            }
+            if (request.fcmToken.isBlank()) {
+                return@put call.respond(HttpStatusCode.BadRequest, ErrorDto("fcmToken must not be blank"))
+            }
+            if (devices.updateToken(deviceId, request.fcmToken)) {
+                call.respond(HttpStatusCode.NoContent)
+            } else {
+                call.respond(HttpStatusCode.NotFound)
+            }
         }
 
         get("/{deviceId}/alarms") {

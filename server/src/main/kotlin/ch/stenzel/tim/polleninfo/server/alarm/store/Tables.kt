@@ -4,7 +4,7 @@ import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
 /**
- * One row per registered install. [fcmToken] is nullable so push can later drop a token the push
+ * One row per registered install. [fcmToken] is nullable so the scheduler can drop a token the push
  * service reports as unregistered without forgetting the device and its alarms.
  */
 internal object DevicesTable : Table("devices") {

@@ -40,13 +40,14 @@ fun Application.module() {
     val database = PollenInfoDatabase.fromEnvironment()
     log.info("Alarm database: ${database.url}")
 
+    val devices = ExposedDeviceStore(database)
     val alarms = ExposedAlarmStore(database)
 
     configureRouting(
         thresholds = thresholds,
         measurementService = measurementService,
         database = database,
-        devices = ExposedDeviceStore(database),
+        devices = devices,
         alarms = alarms,
     )
 
@@ -54,6 +55,7 @@ fun Application.module() {
     launchAlarmScheduler(
         scheduler = AlarmScheduler(
             alarms = alarms,
+            devices = devices,
             log = ExposedNotificationLog(database),
             measurements = measurementService,
             push = pushSenderFromEnvironment(),

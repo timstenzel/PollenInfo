@@ -59,6 +59,7 @@ class AlarmSchedulerTest {
     /** A fresh scheduler with a fresh cache, as after a restart; only the database is shared. */
     private fun scheduler(measurements: MeasurementService = measurementService()) = AlarmScheduler(
         alarms = alarms,
+        devices = devices,
         log = log,
         measurements = measurements,
         push = push,
@@ -94,6 +95,37 @@ class AlarmSchedulerTest {
         assertEquals("token-1", delivery.token)
         assertEquals("Pollen in Zürich", delivery.message.title)
         assertEquals("Grasses: High · Birch: Moderate", delivery.message.body)
+    }
+
+    @Test
+    fun `an unregistered token is cleared and the device's alarms are skipped on the next tick`() = runTest {
+        dailyReport("token-gone")
+        thresholdAlert("token-gone-too")
+        push.results["token-gone"] = PushResult.Unregistered
+        push.results["token-gone-too"] = PushResult.Unregistered
+        val scheduler = scheduler()
+
+        scheduler.tick()
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+
+        assertEquals(listOf("token-gone", "token-gone-too"), push.sent.map { it.token }.sorted())
+        assertEquals(emptyList(), alarms.enabledWithDeliverableDevice())
+    }
+
+    @Test
+    fun `a device that sends a new token after being dropped is delivered to again`() = runTest {
+        val alarm = thresholdAlert("token-gone")
+        push.results["token-gone"] = PushResult.Unregistered
+        val scheduler = scheduler()
+        scheduler.tick()
+
+        devices.updateToken(alarm.deviceId, "token-new")
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+
+        assertEquals(listOf("token-gone", "token-new"), push.sent.map { it.token })
+        assertEquals(setOf(PollenSpecies.GRASSES), log.notifiedSpecies(alarm.id, monday))
     }
 
     @Test

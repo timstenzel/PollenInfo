@@ -9,6 +9,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RegisterDeviceRequest(val fcmToken: String)
 
+/** Body of `PUT /devices/{deviceId}/token`: the token FCM rotated to. */
+@Serializable
+data class UpdateTokenRequest(val fcmToken: String)
+
 /** Response of `POST /devices`: the id the app sends with every later alarm call. */
 @Serializable
 data class RegisterDeviceResponse(val deviceId: String)

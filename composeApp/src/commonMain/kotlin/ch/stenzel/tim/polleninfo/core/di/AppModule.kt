@@ -12,6 +12,7 @@ import ch.stenzel.tim.polleninfo.core.preferences.DeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.push.PushTokenUpdater
 import ch.stenzel.tim.polleninfo.core.species.data.remote.SpeciesApiService
 import ch.stenzel.tim.polleninfo.core.species.data.repository.SpeciesRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
@@ -63,7 +64,10 @@ val dataModule = module {
 
     // PushTokenProvider comes from platformModule.
     single { AlarmApiService(get(), apiBaseUrl) }
-    single<AlarmRepository> { AlarmRepositoryImpl(get(), get(), get()) }
+    single { AlarmRepositoryImpl(get(), get(), get()) }
+    single<AlarmRepository> { get<AlarmRepositoryImpl>() }
+    // The same instance, so a token update and a registration share its lock.
+    single<PushTokenUpdater> { get<AlarmRepositoryImpl>() }
 }
 
 val domainModule = module {

@@ -2,12 +2,18 @@ package ch.stenzel.tim.polleninfo.core.push
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import ch.stenzel.tim.polleninfo.MainActivity
 import ch.stenzel.tim.polleninfo.R
+import ch.stenzel.tim.polleninfo.core.result.Result
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import org.koin.android.ext.android.inject
 
 /**
  * Receives pollen alarms from FCM.
@@ -16,8 +22,24 @@ import com.google.firebase.messaging.RemoteMessage
  * named, and a tap opens the launcher activity. In the foreground FCM hands the message here
  * instead and shows nothing, so this posts it the same way — same channel, same tap — and the user
  * sees no difference.
+ *
+ * A rotated token is reported through [PushTokenUpdater] — only for an install that has registered;
+ * one that has not sends whatever token is current when it first does.
  */
 class PollenFirebaseMessagingService : FirebaseMessagingService() {
+
+    private val tokenUpdater: PushTokenUpdater by inject()
+
+    /**
+     * Called on a Firebase worker thread, and the service may be stopped as soon as this returns,
+     * so the update runs to completion here rather than in a scope that would be cancelled with it.
+     */
+    override fun onNewToken(token: String) {
+        runBlocking {
+            val result = withTimeoutOrNull(TOKEN_UPDATE_TIMEOUT) { tokenUpdater.updateToken(token) }
+            if (result !is Result.Success) Log.w(TAG, "Sending the new push token failed: $result")
+        }
+    }
 
     override fun onMessageReceived(message: RemoteMessage) {
         val notification = message.notification ?: return
@@ -49,3 +71,7 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 }
+
+private const val TAG = "PollenPush"
+
+private val TOKEN_UPDATE_TIMEOUT = 20.seconds

@@ -6,6 +6,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RegisterDeviceRequestDto(val fcmToken: String)
 
+/** Body of `PUT /devices/{deviceId}/token`. */
+@Serializable
+data class UpdateTokenRequestDto(val fcmToken: String)
+
 @Serializable
 data class RegisterDeviceResponseDto(val deviceId: String)
 

@@ -376,25 +376,26 @@ This task closes with a final documentation pass over the whole feature.
 
 ### Implementation steps
 
-- [ ] Server: `PUT /devices/{id}/token` → `204` / `404`; `DeviceStore.updateToken` / `clearToken`
-- [ ] Server: the scheduler clears the token on `PushResult.Unregistered`
-- [ ] App: `PollenFirebaseMessagingService.onNewToken` sends the token when a device id is stored and otherwise does nothing; add a repository `updateToken(token)`
-- [ ] Final CLAUDE.md pass: everything in the requirements' documentation list is present and consistent (architecture, Firebase, persistence, endpoints, the Alarms tab, the editor route, the `feature/alarms` slice entry)
+- [x] Server: `PUT /devices/{id}/token` → `204` / `404`; `DeviceStore.updateToken` / `clearToken`
+- [x] Server: the scheduler clears the token on `PushResult.Unregistered`
+- [x] App: `PollenFirebaseMessagingService.onNewToken` sends the token when a device id is stored and otherwise does nothing; add a repository `updateToken(token)`
+- [x] Final CLAUDE.md pass: everything in the requirements' documentation list is present and consistent (architecture, Firebase, persistence, endpoints, the Alarms tab, the editor route, the `feature/alarms` slice entry)
 
 ### Acceptance criteria
 
-- [ ] `AlarmRoutesTest`: `PUT /devices/{id}/token` → `204` for a known device and `404` for an unknown one
-- [ ] `ExposedStoresTest`: an updated token is returned by `enabledWithDeliverableDevice()`; a cleared token removes that device's alarms from it
-- [ ] `AlarmSchedulerTest`: an `Unregistered` result clears the token, and the device's alarms are skipped on the next tick
-- [ ] `AlarmRepositoryImplTest`: `updateToken` with a stored id sends `PUT /devices/{id}/token`, and without one makes no request
-- [ ] Manual:
+- [x] `AlarmRoutesTest`: `PUT /devices/{id}/token` → `204` for a known device and `404` for an unknown one
+- [x] `ExposedStoresTest`: an updated token is returned by `enabledWithDeliverableDevice()`; a cleared token removes that device's alarms from it
+- [x] `AlarmSchedulerTest`: an `Unregistered` result clears the token, and the device's alarms are skipped on the next tick
+- [x] `AlarmRepositoryImplTest`: `updateToken` with a stored id sends `PUT /devices/{id}/token`, and without one makes no request
+- [x] Manual, steps 1–2:
   1. clear the app's data or force a token refresh (`FirebaseMessaging.deleteToken()` via a debug path) and reopen the app
   2. `devices.fcm_token` shows the new token
-  3. a daily report still arrives
+  *(emulator, API 36, local backend: backed up the app's DataStore, `pm clear` (which resets Firebase so it issues a new token), restored the DataStore so `alarm_device_id` was still stored, relaunched. With no UI interaction the backend logged `204 PUT /devices/SoF5…/token`; `devices.fcm_token` for that id went from `dw1NCbI9…1Stkyo` to `eiOD-0wM…t5a0ng`; no new `POST /devices`)*
+- [ ] ~~Manual, step 3: a daily report still arrives~~ *(skipped: no `FCM_CREDENTIALS` here, so nothing can actually be delivered. Partial evidence: a daily report due at 19:52 for that device was handed to `LoggingPushSender` for `…t5a0ng`, the new token. Arrival on the device still needs checking against a backend with real credentials)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
-- [ ] No backtick test name contains a comma
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:assembleDebug` passes, and the Kotlin compiler output reports no warnings for files added or changed in this task
+- [x] No backtick test name contains a comma

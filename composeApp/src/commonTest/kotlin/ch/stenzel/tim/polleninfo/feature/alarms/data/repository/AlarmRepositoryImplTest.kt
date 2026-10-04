@@ -105,6 +105,10 @@ class AlarmRepositoryImplTest {
                     else -> respondError(HttpStatusCode.MethodNotAllowed)
                 }
             }
+            request.method == HttpMethod.Put && path.endsWith("/token") -> {
+                val deviceId = path.removePrefix("/devices/").removeSuffix("/token")
+                if (deviceId in knownDevices) respond("", HttpStatusCode.NoContent) else respondError(HttpStatusCode.NotFound)
+            }
             request.method == HttpMethod.Post && path == "/devices" -> {
                 val id = "device-${knownDevices.size + 1}"
                 knownDevices += id
@@ -171,6 +175,60 @@ class AlarmRepositoryImplTest {
 
         assertEquals(listOf("GET /devices/device-7/alarms"), recorded.map { it.describe() })
         assertEquals(0, pushTokens.callCount)
+    }
+
+    @Test
+    fun `updateToken with a stored id sends PUT token with the new token`() = runTest {
+        registration.store("device-7")
+        val repository = repository(backend(knownDevices = mutableSetOf("device-7")))
+
+        val result = repository.updateToken("fcm-token-2")
+
+        assertIs<Result.Success<Unit>>(result)
+        assertEquals(listOf("PUT /devices/device-7/token"), recorded.map { it.describe() })
+        val body = Json.parseToJsonElement((recorded.single().body as TextContent).text).jsonObject
+        assertEquals("fcm-token-2", body.getValue("fcmToken").jsonPrimitive.content)
+        assertEquals("device-7", registration.stored)
+    }
+
+    @Test
+    fun `updateToken without a stored id makes no request and does not register`() = runTest {
+        val repository = repository(backend())
+
+        val result = repository.updateToken("fcm-token-2")
+
+        assertIs<Result.Success<Unit>>(result)
+        assertTrue(recorded.isEmpty())
+        assertEquals(0, pushTokens.callCount)
+        assertEquals(null, registration.stored)
+    }
+
+    @Test
+    fun `updateToken for a device the backend forgot drops the id so the next call registers afresh`() = runTest {
+        registration.store("forgotten")
+        val repository = repository(backend())
+
+        val result = repository.updateToken("fcm-token-2")
+        repository.alarms()
+
+        assertIs<Result.Success<Unit>>(result)
+        assertEquals(
+            listOf("PUT /devices/forgotten/token", "POST /devices", "GET /devices/device-1/alarms"),
+            recorded.map { it.describe() },
+        )
+        assertEquals("device-1", registration.stored)
+    }
+
+    @Test
+    fun `updateToken fails on a server error and keeps the stored id`() = runTest {
+        registration.store("device-7")
+        val repository = repository { respondError(HttpStatusCode.InternalServerError) }
+
+        val result = repository.updateToken("fcm-token-2")
+
+        assertIs<Result.Failure>(result)
+        assertEquals("device-7", registration.stored)
+        assertEquals(0, registration.clearCount)
     }
 
     @Test
