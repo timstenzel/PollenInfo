@@ -41,6 +41,7 @@ import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleViewModel
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeViewModel
 import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingViewModel
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -98,6 +99,8 @@ val presentationModule = module {
     viewModel { DiaryViewModel(get(), get(), get(), get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
+    // AppInfo comes from platformModule.
+    viewModel { SettingsViewModel(get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

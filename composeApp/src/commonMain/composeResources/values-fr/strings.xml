@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Formal "vous". French typography: a narrow no-break space (U+202F) before ? ! ; and « » quotes.
+  The attribution keeps the exact form MeteoSwiss prescribes ("Source: MétéoSuisse").
+-->
+<resources>
+    <string name="nav_home">Accueil</string>
+    <string name="nav_all_stations">Toutes les stations</string>
+    <string name="nav_diary">Journal</string>
+    <string name="nav_alarms">Alarmes</string>
+    <string name="nav_settings">Paramètres</string>
+
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_section_impressum">Mentions légales</string>
+    <string name="settings_developed_by">Développé par %1$s</string>
+    <string name="settings_email_action">Écrire un e-mail</string>
+    <string name="settings_section_data_source">Source des données</string>
+    <string name="settings_data_source_attribution">Source: MétéoSuisse</string>
+    <string name="settings_meteoswiss_url">https://www.meteosuisse.admin.ch</string>
+    <string name="settings_meteoswiss_link_action">Ouvrir le site web de MétéoSuisse</string>
+    <string name="settings_data_source_disclaimer">PollenInfo est une application indépendante. Elle n’est ni affiliée à MétéoSuisse ni soutenue par MétéoSuisse.</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
+</resources>

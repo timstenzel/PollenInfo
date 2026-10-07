@@ -1,5 +1,11 @@
 package ch.stenzel.tim.polleninfo.navigation
 
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.nav_alarms
+import ch.stenzel.tim.polleninfo.resources.nav_all_stations
+import ch.stenzel.tim.polleninfo.resources.nav_diary
+import ch.stenzel.tim.polleninfo.resources.nav_home
+import ch.stenzel.tim.polleninfo.resources.nav_settings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -15,7 +21,7 @@ class TopLevelDestinationTest {
 
         assertEquals(TopLevelDestination.HOME, first)
         assertEquals(Screen.Home, first.screen)
-        assertEquals("Home", first.contentDescription)
+        assertEquals(Res.string.nav_home, first.contentDescription)
     }
 
     @Test
@@ -24,23 +30,29 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `there are five tabs with the diary third and alarms fourth`() {
+    fun `there are five tabs with the diary third and settings last`() {
         assertEquals(
             listOf(
                 TopLevelDestination.HOME,
                 TopLevelDestination.ALL_STATIONS,
                 TopLevelDestination.DIARY,
                 TopLevelDestination.ALARMS,
-                TopLevelDestination.FEATURE_5,
+                TopLevelDestination.SETTINGS,
             ),
             TopLevelDestination.entries,
         )
     }
 
     @Test
-    fun `the tabs are announced as Home then All stations then Diary then Alarms then Feature 5`() {
+    fun `the tabs are announced as Home then All stations then Diary then Alarms then Settings`() {
         assertEquals(
-            listOf("Home", "All stations", "Diary", "Alarms", "Feature 5"),
+            listOf(
+                Res.string.nav_home,
+                Res.string.nav_all_stations,
+                Res.string.nav_diary,
+                Res.string.nav_alarms,
+                Res.string.nav_settings,
+            ),
             TopLevelDestination.entries.map { it.contentDescription },
         )
     }
@@ -72,7 +84,7 @@ class TopLevelDestinationTest {
 
         assertEquals(TopLevelDestination.ALL_STATIONS, second)
         assertEquals(Screen.AllStations, second.screen)
-        assertEquals("All stations", second.contentDescription)
+        assertEquals(Res.string.nav_all_stations, second.contentDescription)
     }
 
     @Test
@@ -86,7 +98,7 @@ class TopLevelDestinationTest {
 
         assertEquals(TopLevelDestination.ALARMS, fourth)
         assertEquals(Screen.Alarms, fourth.screen)
-        assertEquals("Alarms", fourth.contentDescription)
+        assertEquals(Res.string.nav_alarms, fourth.contentDescription)
     }
 
     @Test
@@ -100,7 +112,7 @@ class TopLevelDestinationTest {
 
         assertEquals(TopLevelDestination.DIARY, third)
         assertEquals(Screen.Diary, third.screen)
-        assertEquals("Diary", third.contentDescription)
+        assertEquals(Res.string.nav_diary, third.contentDescription)
     }
 
     @Test
@@ -109,8 +121,17 @@ class TopLevelDestinationTest {
     }
 
     @Test
-    fun `the bar is shown on the placeholder screen`() {
-        assertEquals(TopLevelDestination.FEATURE_5, currentTabOn(Screen.Feature5))
+    fun `settings is the fifth tab and is announced as Settings`() {
+        val fifth = TopLevelDestination.entries[4]
+
+        assertEquals(TopLevelDestination.SETTINGS, fifth)
+        assertEquals(Screen.Settings, fifth.screen)
+        assertEquals(Res.string.nav_settings, fifth.contentDescription)
+    }
+
+    @Test
+    fun `the bar is shown on settings with that tab selected`() {
+        assertEquals(TopLevelDestination.SETTINGS, currentTabOn(Screen.Settings))
     }
 
     @Test

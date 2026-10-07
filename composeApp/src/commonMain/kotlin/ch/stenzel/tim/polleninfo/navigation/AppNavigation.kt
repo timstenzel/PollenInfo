@@ -24,6 +24,8 @@ import ch.stenzel.tim.polleninfo.feature.diary.presentation.DiaryScreen
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsScreen
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * [startDestination] is decided by the startup gate in `App()` — see its documentation for why the
@@ -53,7 +55,7 @@ fun AppNavigation(startDestination: Screen) {
                             selected = tab == currentTab,
                             // Reselecting the current tab is a no-op, not a reload.
                             onClick = { if (tab != currentTab) navController.navigateToTab(tab) },
-                            icon = { Icon(tab.icon, contentDescription = tab.contentDescription) },
+                            icon = { Icon(tab.icon, contentDescription = stringResource(tab.contentDescription)) },
                             alwaysShowLabel = false,
                         )
                     }
@@ -116,9 +118,8 @@ private fun AppNavHost(
             )
         }
 
-        // Placeholder tab. The title is the tab's accessibility name, so the two cannot disagree.
-        composable<Screen.Feature5> {
-            ComingSoonScreen(TopLevelDestination.FEATURE_5.contentDescription)
+        composable<Screen.Settings> {
+            SettingsScreen()
         }
 
         // The reference feature stays registered and unchanged; it is simply no longer the start

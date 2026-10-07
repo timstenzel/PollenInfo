@@ -75,6 +75,7 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 | Server unit tests               | `./gradlew :server:test`                    |
 | All unit tests we can run here  | `./gradlew :composeApp:testDebugUnitTest :server:test` |
 | Verify iOS sources compile      | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
+| Check translations (also part of `check`) | `./gradlew :composeApp:checkTranslations` |
 | Run the backend on :8080        | `./gradlew :server:run` (push is logged unless `FCM_CREDENTIALS` is set) |
 | Android debug APK               | `./gradlew :composeApp:assembleDebug`       |
 
@@ -314,6 +315,10 @@ else reads alarms. `feature/diary` reads `core/history` and so has no `data/` ei
   model for a create/edit form whose rules are tested without a ViewModel (`AlarmFormStateTest`),
   and for a repository that recovers from the backend forgetting this install
   (`AlarmRepositoryImplTest`). See "Alarms" below.
+- **`feature/settings`** — a screen of mostly fixed text: `presentation/` only, with a
+  `SettingsUiState` that has no `Loading` or `Error` (nothing on it depends on the network). The
+  first screen whose text comes entirely from string resources — the model for that (see
+  "Localization"). See "Settings" below.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
 imports another feature, and nothing in `core/` imports a feature except the DI module that wires
@@ -332,11 +337,13 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
+| `core/appinfo` | `AppVersion(name, code)` and `AppInfo` (`version: AppVersion?`, `null` when the platform reports no complete version) — bound in `platformModule`: `AndroidAppInfo` (`PackageManager`, `PackageInfoCompat.getLongVersionCode`), `IosAppInfo` (`CFBundleShortVersionString` / `CFBundleVersion`; a non-integer build number counts as missing). Checked by hand; consumers use `FakeAppInfo` |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
 `FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
 `FakeStationMeasurementRepository`), `core/history/HistoryFixtures.kt` (`stationHistory(...)` and
-the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt`.
+the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt`,
+`core/appinfo/FakeAppInfo.kt`.
 
 ### Talking to our own backend
 
@@ -376,6 +383,7 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` | The cleartext development backend on `localhost` |
 | `NSLocationWhenInUseUsageDescription`      | A sentence explaining the station shortcut | `rememberCoarseLocationPermissionRequester` — **mandatory**: without it `CLLocationManager` silently never prompts, so the shortcut fails with no error to debug |
 | `NSLocationDefaultAccuracyReduced`         | `true` | `IosCoarseLocationProvider` — the direct expression of "coarse is enough": iOS then never asks for precise access at all |
+| `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (a whole number) | `IosAppInfo` — Settings' version line; hidden if either is missing or the build number is not a whole number |
 
 The notification permission (`IosNotificationPermissionController`) needs no `Info.plist` key.
 
@@ -521,8 +529,8 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 
 Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
-`appModules`. It provides the `DataStore<Preferences>`, the `CoarseLocationProvider` and the
-`PushTokenProvider`. The DataStore factory needs a file path and an IO dispatcher, neither of which
+`appModules`. It provides the `DataStore<Preferences>`, the `CoarseLocationProvider`, the
+`PushTokenProvider` and `AppInfo`. The DataStore factory needs a file path and an IO dispatcher, neither of which
 exists in `commonMain`; the two providers are different platform classes on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
 Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
@@ -682,19 +690,20 @@ Browsing here never changes the station stored during onboarding; Home keeps sho
 each entry carrying its `Screen`, icon and `contentDescription`. It holds five tabs: `HOME` →
 `Screen.Home`, `ALL_STATIONS` → `Screen.AllStations` (see "All stations" above), `DIARY` →
 `Screen.Diary` (see "Diary" below), `ALARMS` → `Screen.Alarms` (see "Alarms" below) and
-`FEATURE_5` → `Screen.Feature5`. Tab 5 is a placeholder for a feature not yet defined. All
+`SETTINGS` → `Screen.Settings` (see "Settings" below). All
 stations shows `SwissOutline` (`feature/allstations/map/SwissOutlineIcon.kt`), a stroke-only
 `ImageVector` built from `SWISS_BORDER` through `SwissMapProjection`, so it tints like a Material
 icon; Diary shows the book `Icons.AutoMirrored.Filled.MenuBook`; Alarms shows
-`Icons.Default.Notifications`; Home and the placeholder use `Icons.Default.LocationOn` for now, at
-the product owner's request. The tabs are icon-only,
-so `contentDescription` ("Home", "All stations", "Diary", "Alarms", "Feature 5") is the only name a screen reader has to tell them apart; it is set on the `Icon`, and the item has no
-label.
+`Icons.Default.Notifications`; Settings shows `Icons.Default.Settings`; Home uses
+`Icons.Default.LocationOn`, at the product owner's request. The tabs are icon-only, so
+`contentDescription` is the only name a screen reader has to tell them apart. It is a
+`StringResource` (`nav_home`, `nav_all_stations`, `nav_diary`, `nav_alarms`, `nav_settings` — "Home",
+"All stations", "Diary", "Alarms", "Settings" in English), resolved with `stringResource` where it
+is set on the `Icon`, so the enum stays a pure, testable table; the item has no label.
 
-The placeholder destination renders `navigation/ComingSoonScreen(title)` — a stateless `Scaffold`
-with a `TopAppBar` naming the tab (its `contentDescription`, so the title and the spoken name cannot
-disagree), a pin and "Coming soon". The placeholder routes are separate `data object`s rather than
-one parameterised route, so each tab keeps its own saved state.
+Every route is a separate `data object` (or class) rather than one parameterised route, so each tab
+keeps its own saved state. There is no placeholder screen any more: the former `ComingSoonScreen` was
+deleted when the last placeholder tab became Settings.
 
 **The bar is shown exactly when the current back-stack destination is a tab** — never on
 `Onboarding` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
@@ -726,10 +735,9 @@ Compose sample: after a fresh install the graph's start destination is `Onboardi
 already been popped, and a `popUpTo` on a destination not in the back stack is silently ignored —
 history would then pile up with every tab switch.
 
-**Replacing a placeholder with a real feature:** rename the `Screen.FeatureN` object (and its
-`TopLevelDestination` entry, with a real icon and `contentDescription`), and point its
-`composable<Screen.X>` in `AppNavigation` at the feature's screen instead of `ComingSoonScreen`.
-Nothing else knows about the tab. Update the order and name assertions in
+**Adding or replacing a tab:** add or rename its `Screen` object and `TopLevelDestination` entry
+(icon and a `nav_*` string resource in all four languages), and register its `composable<Screen.X>`
+in `AppNavigation`. Nothing else knows about the tab. Update the order and name assertions in
 `TopLevelDestinationTest`.
 
 #### Diary
@@ -1024,6 +1032,34 @@ without them is out of scope, and location deliberately stays on the platform pr
 - **Sending** needs a Firebase service-account key for the server, passed as a file path in
   `FCM_CREDENTIALS`. It is **never committed** (see "Alarm delivery").
 
+#### Settings
+
+The fifth tab, `feature/settings`: one scrolling screen (`SettingsScreen`, its `rememberScrollState`
+restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Settings"
+(`settings_title`). Section titles are `semantics { heading() }`. Top to bottom:
+
+- **Impressum** (`settings_section_impressum`; "Mentions légales" / "Note legali") — "Developed by
+  Tim Stenzel" (`settings_developed_by`, the name a code constant) and the contact address
+  `developer.mobile.t3s@gmail.com`, a full-width row ≥ 48 dp that opens
+  `mailto:developer.mobile.t3s@gmail.com?subject=PollenInfo`.
+- **Data source** — the attribution in the exact form MeteoSwiss's terms of use prescribe for the
+  language (`settings_data_source_attribution`: "Source: MeteoSwiss", "Quelle: MeteoSchweiz",
+  "Source: MétéoSuisse", "Fonte: MeteoSvizzera" — **do not rephrase**, and the French one keeps the
+  prescribed "Source:" without the usual space before the colon), a link to their site in the same
+  language (`settings_meteoswiss_url`, a per-language resource: `meteoswiss` / `meteoschweiz` /
+  `meteosuisse` / `meteosvizzera.admin.ch`, shown without `https://`), and the statement that
+  PollenInfo is independent and not affiliated with or endorsed by MeteoSwiss
+  (`settings_data_source_disclaimer`), which those terms also require.
+- **Version** — "Version {name} ({code})" (`settings_version`) from `AppInfo`, hidden when it is
+  `null`. Gradle's values show through as they are, so a debug build reads "Version 1.0.0-debug (1)"
+  (`versionNameSuffix`) and a release "Version 1.0.0 (1)".
+
+Both links go through `LocalUriHandler`; a device with nothing to open them with swallows the tap
+rather than crash. Each row's icon is decorative and its `onClickLabel` says what a double tap does.
+`SettingsViewModel(appInfo)` holds no text — only the version passes through it
+(`SettingsViewModelTest`); the composable is checked by hand. The default station and the app
+language are planned as the first two sections.
+
 ### The startup gate
 
 `App()` does not compose `AppNavigation` until `core/startup/StartupViewModel` has resolved
@@ -1043,6 +1079,34 @@ Two deliberate choices:
 - **First value only, not an ongoing subscription.** "Where does the app start" is asked once.
   Following the flow would rebuild the graph the instant onboarding writes its selection, yanking
   the user out of the navigation that write just triggered.
+
+### Localization
+
+The app is being translated into German, French and Italian; English is the default. **Done so far:**
+the bottom bar's tab names and the Settings screen. Everything else is still hard-coded English and
+moves over screen by screen.
+
+- **Resources.** Compose Multiplatform resources in
+  `composeApp/src/commonMain/composeResources/values{,-de,-fr,-it}/strings.xml`; the generated
+  accessor is `ch.stenzel.tim.polleninfo.resources.Res` (`compose.resources { packageOfResClass }`
+  in `composeApp/build.gradle.kts`), internal to the module, so `commonTest` can compare
+  `Res.string.x` values (`StringResource` has value equality). Composables use
+  `stringResource(Res.string.x, args…)`. Placeholders are positional only — `%1$s`, `%2$d` — since
+  that is all Compose resources substitute. Android-only text goes in
+  `androidMain/res/values{,-de,-fr,-it}/strings.xml` (none yet).
+- **Fallback.** A device language other than de/fr/it gets `values/` (English).
+- **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`. Keys starting with `example_` are reserved
+  for the English-only reference feature.
+- **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
+  are formal ("vous" / "Lei"); French typography puts a narrow no-break space (U+202F) before `? ! ;`
+  and uses « » quotes. Use typographic apostrophes (’), which also sidesteps XML escaping. Station
+  names and "PollenInfo" are never translated.
+- **The check.** `./gradlew :composeApp:checkTranslations` (a dependency of `check`) compares each
+  language file with `values/` in the same resource set and fails, listing every problem, on a
+  missing or extra key, a different placeholder multiset per key, a blank value, or "ß" in a
+  `values-de` file. `example_` keys and `translatable="false"` keys are exempt from parity. It is
+  `CheckTranslationsTask` in `composeApp/build.gradle.kts`, with plain file inputs, so it works with
+  the configuration cache.
 
 ### Multiplatform gotchas
 

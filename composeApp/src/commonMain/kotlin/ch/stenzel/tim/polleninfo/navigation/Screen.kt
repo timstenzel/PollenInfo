@@ -30,13 +30,11 @@ sealed interface Screen {
     @Serializable
     data class AlarmEditor(val alarmId: String? = null) : Screen
 
+    /** The user's feelings against a station's daily pollen levels. The third bottom-bar tab. */
     @Serializable
     data object Diary : Screen
 
-    // Tab 5 is reserved for a feature not yet defined and shows `ComingSoonScreen` until then. A
-    // separate object rather than a parameterised route, so the tab keeps its own saved state and
-    // can be renamed to a real feature without touching the others.
-
+    /** Impressum, data source and app version. The fifth bottom-bar tab. */
     @Serializable
-    data object Feature5 : Screen
+    data object Settings : Screen
 }

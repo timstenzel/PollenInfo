@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  English, the default for every device language the app does not support. values-de, values-fr and
+  values-it must hold exactly the same keys with the same placeholders: ./gradlew
+  :composeApp:checkTranslations fails otherwise.
+-->
+<resources>
+    <!-- Bottom navigation: the tabs are icon-only, so these are their only names. -->
+    <string name="nav_home">Home</string>
+    <string name="nav_all_stations">All stations</string>
+    <string name="nav_diary">Diary</string>
+    <string name="nav_alarms">Alarms</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_impressum">Impressum</string>
+    <!-- %1$s is the developer's name. -->
+    <string name="settings_developed_by">Developed by %1$s</string>
+    <string name="settings_email_action">Write an email</string>
+    <string name="settings_section_data_source">Data source</string>
+    <!-- The wording MeteoSwiss's terms of use prescribe for this language. Do not rephrase. -->
+    <string name="settings_data_source_attribution">Source: MeteoSwiss</string>
+    <string name="settings_meteoswiss_url">https://www.meteoswiss.admin.ch</string>
+    <string name="settings_meteoswiss_link_action">Open the MeteoSwiss website</string>
+    <string name="settings_data_source_disclaimer">PollenInfo is an independent app. It is not affiliated with or endorsed by MeteoSwiss.</string>
+    <!-- %1$s is the version name, %2$d the build number: "Version 1.0.0 (1)". -->
+    <string name="settings_version">Version %1$s (%2$d)</string>
+</resources>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Formal "Lei". -->
+<resources>
+    <string name="nav_home">Home</string>
+    <string name="nav_all_stations">Tutte le stazioni</string>
+    <string name="nav_diary">Diario</string>
+    <string name="nav_alarms">Allarmi</string>
+    <string name="nav_settings">Impostazioni</string>
+
+    <string name="settings_title">Impostazioni</string>
+    <string name="settings_section_impressum">Note legali</string>
+    <string name="settings_developed_by">Sviluppato da %1$s</string>
+    <string name="settings_email_action">Scrivere un’e-mail</string>
+    <string name="settings_section_data_source">Fonte dei dati</string>
+    <string name="settings_data_source_attribution">Fonte: MeteoSvizzera</string>
+    <string name="settings_meteoswiss_url">https://www.meteosvizzera.admin.ch</string>
+    <string name="settings_meteoswiss_link_action">Aprire il sito web di MeteoSvizzera</string>
+    <string name="settings_data_source_disclaimer">PollenInfo è un’app indipendente. Non è affiliata a MeteoSvizzera né da essa sostenuta.</string>
+    <string name="settings_version">Versione %1$s (%2$d)</string>
+</resources>

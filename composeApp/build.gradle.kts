@@ -133,3 +133,119 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 }
+
+compose.resources {
+    // `Res` under the project's package root rather than the default derived from the module name.
+    packageOfResClass = "ch.stenzel.tim.polleninfo.resources"
+}
+
+val checkTranslations = tasks.register<CheckTranslationsTask>("checkTranslations") {
+    group = "verification"
+    description = "Fails when a translation is missing, extra, blank, has other placeholders or uses ß."
+    stringFiles.from(
+        fileTree("src/commonMain/composeResources") { include("values*/strings.xml") },
+        fileTree("src/androidMain/res") { include("values*/strings.xml") },
+    )
+    languages.set(listOf("de", "fr", "it"))
+    marker.set(layout.buildDirectory.file("checkTranslations/ok"))
+}
+
+tasks.named("check") { dependsOn(checkTranslations) }
+
+/**
+ * Compares every `values-<lang>/strings.xml` with the English `values/strings.xml` next to it — the
+ * Compose resources and the Android resources each form their own set. Fails, listing every problem,
+ * when a key is missing or extra in a language, a key's placeholders differ (as a multiset), a value
+ * is blank, or a German value contains "ß" (Swiss Standard German writes "ss").
+ *
+ * Keys starting with `example_` (the English-only reference feature) and `translatable="false"`
+ * keys are exempt from the parity check. Inputs are plain files, so the task is
+ * configuration-cache compatible.
+ */
+abstract class CheckTranslationsTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val stringFiles: ConfigurableFileCollection
+
+    @get:Input
+    abstract val languages: ListProperty<String>
+
+    @get:OutputFile
+    abstract val marker: RegularFileProperty
+
+    private class Entry(val placeholders: List<String>, val blank: Boolean, val exempt: Boolean, val text: String)
+
+    @TaskAction
+    fun check() {
+        val problems = mutableListOf<String>()
+        for ((root, files) in stringFiles.files.groupBy { it.parentFile.parentFile }.toSortedMap()) {
+            val byDir = files.associateBy { it.parentFile.name }
+            val base = byDir["values"]
+            if (base == null) {
+                problems += "${root.name}: no values/strings.xml to compare against"
+                continue
+            }
+            val baseEntries = parse(base)
+            baseEntries.forEach { (key, entry) ->
+                if (entry.blank) problems += "${label(base)}: '$key' is blank"
+            }
+            val required = baseEntries.filterValues { !it.exempt }
+            val dirs = (languages.get().map { "values-$it" } + byDir.keys.filter { it != "values" }).distinct()
+            for (dir in dirs) {
+                val file = byDir[dir]
+                if (file == null) {
+                    if (required.isNotEmpty()) problems += "${root.name}/$dir/strings.xml is missing"
+                    continue
+                }
+                val entries = parse(file)
+                (required.keys - entries.keys).sorted().forEach { problems += "${label(file)}: missing '$it'" }
+                entries.forEach { (key, entry) ->
+                    val english = baseEntries[key]
+                    when {
+                        english == null -> problems += "${label(file)}: '$key' is not in values/strings.xml"
+                        english.exempt -> problems += "${label(file)}: '$key' is not translated and must not appear here"
+                        entry.placeholders != english.placeholders ->
+                            problems += "${label(file)}: '$key' has placeholders ${entry.placeholders}, English has ${english.placeholders}"
+                    }
+                    if (entry.blank) problems += "${label(file)}: '$key' is blank"
+                    if (dir.startsWith("values-de") && 'ß' in entry.text) problems += "${label(file)}: '$key' contains ß, write ss"
+                }
+            }
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException("Translation check failed:\n" + problems.joinToString("\n") { "  - $it" })
+        }
+        marker.get().asFile.apply { parentFile.mkdirs() }.writeText("ok")
+    }
+
+    private fun label(file: java.io.File) = "${file.parentFile.parentFile.name}/${file.parentFile.name}/${file.name}"
+
+    /** `string` and `plurals` by name; a plural's placeholders are those of all its items together. */
+    private fun parse(file: java.io.File): Map<String, Entry> {
+        val document = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+        val nodes = document.documentElement.childNodes
+        val result = linkedMapOf<String, Entry>()
+        for (i in 0 until nodes.length) {
+            val element = nodes.item(i) as? org.w3c.dom.Element ?: continue
+            if (element.tagName != "string" && element.tagName != "plurals") continue
+            val name = element.getAttribute("name")
+            val texts = if (element.tagName == "string") {
+                listOf(element.textContent)
+            } else {
+                val items = element.getElementsByTagName("item")
+                (0 until items.length).map { items.item(it).textContent }
+            }
+            result[name] = Entry(
+                placeholders = texts.flatMap { text -> PLACEHOLDER.findAll(text.replace("%%", "")).map { it.value } }.sorted(),
+                blank = texts.isEmpty() || texts.any { it.isBlank() },
+                exempt = name.startsWith("example_") || element.getAttribute("translatable") == "false",
+                text = texts.joinToString("\n"),
+            )
+        }
+        return result
+    }
+
+    private companion object {
+        val PLACEHOLDER = Regex("""%(\d+\$)?[a-zA-Z]""")
+    }
+}

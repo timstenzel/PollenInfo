@@ -5,8 +5,8 @@ import org.koin.core.module.Module
 /**
  * Koin bindings that can only be built with platform APIs: the `DataStore<Preferences>` backing
  * `SelectedStationRepository`, whose factory needs a file path and an IO dispatcher, and the
- * `CoarseLocationProvider` and `PushTokenProvider`, which are different platform classes on each
- * side.
+ * `CoarseLocationProvider`, `PushTokenProvider` and `AppInfo`, which are different platform classes
+ * on each side.
  *
  * Keeping them here rather than in [appModules] means `AppModule.kt` stays free of
  * `expect`/`actual` noise, and a platform can add a binding without every other module having to
