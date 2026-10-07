@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.diary.chart
 
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryDay
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
@@ -168,6 +170,140 @@ class DiaryChartGeometryTest {
 
         assertEquals(DateTick(from, 0f), geometry.dateTicks.first())
         assertEquals(12, geometry.dateTicks.size)
+    }
+
+    /** An entry on the day [index] days after [start]. */
+    private fun entry(index: Int, feeling: Feeling) = DiaryEntry(start.plus(DatePeriod(days = index)), feeling)
+
+    @Test
+    fun `a very bad answer sits level with very high pollen`() {
+        val geometry = diaryChartGeometry(
+            days(PollenSeverity.VERY_HIGH),
+            listOf("BIRCH"),
+            HistoryRange.MONTH,
+            width = 100f,
+            height = 80f,
+            entries = listOf(entry(0, Feeling.VERY_BAD)),
+        )
+
+        assertEquals(geometry.lines.single().runs.single().single(), geometry.feeling.dots.single())
+        assertEquals(levelY(PollenSeverity.VERY_HIGH, 80f), geometry.feeling.dots.single().y)
+    }
+
+    @Test
+    fun `a very good answer sits level with low pollen`() {
+        val geometry = diaryChartGeometry(
+            days(PollenSeverity.LOW),
+            listOf("BIRCH"),
+            HistoryRange.MONTH,
+            width = 100f,
+            height = 80f,
+            entries = listOf(entry(0, Feeling.VERY_GOOD)),
+        )
+
+        assertEquals(geometry.lines.single().runs.single().single(), geometry.feeling.dots.single())
+        assertEquals(levelY(PollenSeverity.LOW, 80f), geometry.feeling.dots.single().y)
+    }
+
+    @Test
+    fun `every feeling takes the height of its level`() {
+        val geometry = diaryChartGeometry(
+            days(*Array(4) { PollenSeverity.LOW }),
+            listOf("BIRCH"),
+            HistoryRange.WEEK,
+            width = 300f,
+            height = 100f,
+            entries = listOf(
+                entry(0, Feeling.VERY_BAD),
+                entry(1, Feeling.BAD),
+                entry(2, Feeling.GOOD),
+                entry(3, Feeling.VERY_GOOD),
+            ),
+        )
+
+        assertEquals(listOf(listOf(ChartPoint(0f, 0f), ChartPoint(100f, 25f), ChartPoint(200f, 50f), ChartPoint(300f, 75f))), geometry.feeling.runs)
+    }
+
+    @Test
+    fun `an unanswered day splits the feeling line with a dot on each answered day`() {
+        // Monday and Wednesday answered and Tuesday not: two single-point runs and no line across.
+        val geometry = diaryChartGeometry(
+            days(*Array(3) { PollenSeverity.LOW }),
+            listOf("BIRCH"),
+            HistoryRange.WEEK,
+            width = 200f,
+            height = 100f,
+            entries = listOf(entry(0, Feeling.BAD), entry(2, Feeling.GOOD)),
+        )
+
+        assertEquals(listOf(listOf(ChartPoint(0f, 25f)), listOf(ChartPoint(200f, 50f))), geometry.feeling.runs)
+        assertEquals(listOf(ChartPoint(0f, 25f), ChartPoint(200f, 50f)), geometry.feeling.dots)
+    }
+
+    @Test
+    fun `a run of answers is one polyline and each of its days still has a dot`() {
+        val geometry = diaryChartGeometry(
+            days(*Array(5) { PollenSeverity.LOW }),
+            listOf("BIRCH"),
+            HistoryRange.WEEK,
+            width = 400f,
+            height = 100f,
+            entries = listOf(entry(0, Feeling.BAD), entry(1, Feeling.BAD), entry(3, Feeling.GOOD)),
+        )
+
+        assertEquals(listOf(2, 1), geometry.feeling.runs.map { it.size })
+        assertEquals(listOf(0f, 100f, 300f), geometry.feeling.dots.map { it.x })
+    }
+
+    @Test
+    fun `an isolated answer between two unanswered days is kept as a dot`() {
+        val geometry = diaryChartGeometry(
+            days(*Array(3) { PollenSeverity.LOW }),
+            listOf("BIRCH"),
+            HistoryRange.WEEK,
+            width = 200f,
+            height = 100f,
+            entries = listOf(entry(1, Feeling.VERY_BAD)),
+        )
+
+        assertEquals(listOf(listOf(ChartPoint(100f, 0f))), geometry.feeling.runs)
+        assertEquals(listOf(ChartPoint(100f, 0f)), geometry.feeling.dots)
+    }
+
+    @Test
+    fun `the feeling line ignores answers outside the days shown`() {
+        val geometry = diaryChartGeometry(
+            days(PollenSeverity.LOW, PollenSeverity.LOW),
+            listOf("BIRCH"),
+            HistoryRange.WEEK,
+            width = 100f,
+            height = 100f,
+            entries = listOf(entry(-1, Feeling.BAD), entry(2, Feeling.BAD)),
+        )
+
+        assertEquals(emptyList(), geometry.feeling.runs)
+    }
+
+    @Test
+    fun `no answers give a feeling line with no runs`() {
+        val geometry = diaryChartGeometry(month(), listOf("BIRCH"), HistoryRange.MONTH, width = 290f, height = 100f)
+
+        assertEquals(emptyList(), geometry.feeling.dots)
+    }
+
+    @Test
+    fun `the feeling words sit at the heights of their levels`() {
+        val geometry = diaryChartGeometry(month(), listOf("BIRCH"), HistoryRange.MONTH, width = 290f, height = 100f)
+
+        assertEquals(
+            listOf(
+                FeelingTick(Feeling.VERY_BAD, 0f),
+                FeelingTick(Feeling.BAD, 25f),
+                FeelingTick(Feeling.GOOD, 50f),
+                FeelingTick(Feeling.VERY_GOOD, 75f),
+            ),
+            geometry.feelingTicks,
+        )
     }
 
     @Test

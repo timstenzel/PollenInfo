@@ -132,26 +132,26 @@ period with no answers shows a hint pointing to Home.
 
 ### Implementation steps
 
-- [ ] App: `DiaryViewModel` takes `DiaryRepository` (update its registration) and combines `entries`, filtered to the history window (today excluded).
-- [ ] App: `DiaryChartGeometry` gains the feeling polylines and dots; `DiaryChart` draws them and labels the second axis side with feeling words.
-- [ ] App: overlay the hint "Answer 'How do you feel today?' on Home to see your line here." when the window holds no entries.
-- [ ] CLAUDE.md: the feeling line and the shared scale.
+- [x] App: `DiaryViewModel` takes `DiaryRepository` (update its registration) and combines `entries`, filtered to the history window (today excluded).
+- [x] App: `DiaryChartGeometry` gains the feeling polylines and dots; `DiaryChart` draws them and labels the second axis side with feeling words.
+- [x] App: overlay the hint "Answer 'How do you feel today?' on Home to see your line here." when the window holds no entries.
+- [x] CLAUDE.md: the feeling line and the shared scale.
 
 ### Acceptance criteria
 
-- [ ] `DiaryViewModelTest`: entries outside the window and today's entry are not in `Content`; a new entry for a day inside the window appears without a history reload.
-- [ ] `DiaryViewModelTest`: `Content` reports "no entries" exactly when the window holds none.
-- [ ] `DiaryChartGeometryTest`: a "Very bad" entry lands at the same y as `VERY_HIGH` and "Very good" at `LOW`; the feeling line splits at an unanswered day, with a dot on each answered day including an isolated one.
-- [ ] *(emulator)* After answering on Home and moving the device date one day forward, the Diary shows the answer as a dot at the matching height; with no answers in the period the hint is shown above the pollen lines.
+- [x] `DiaryViewModelTest`: entries outside the window and today's entry are not in `Content`; a new entry for a day inside the window appears without a history reload.
+- [x] `DiaryViewModelTest`: `Content` reports "no entries" exactly when the window holds none.
+- [x] `DiaryChartGeometryTest`: a "Very bad" entry lands at the same y as `VERY_HIGH` and "Very good" at `LOW`; the feeling line splits at an unanswered day, with a dot on each answered day including an isolated one.
+- [x] *(emulator)* After answering on Home and moving the device date one day forward, the Diary shows the answer as a dot at the matching height; with no answers in the period the hint is shown above the pollen lines. *(The backend's clock can't be moved, so the device clock was set back to 5 Oct, "Very bad" answered on Home, then the clock restored to 7 Oct: the Diary showed a dot at Very high / Very bad on 5 Oct, joined to 6 Oct's Very good dot at Low. The hint was checked on a cleared install, then the app data was restored from a backup.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] `./gradlew :composeApp:assembleDebug` passes.
-- [ ] No new compiler warnings compared with `main`.
-- [ ] No JVM-only API in `commonMain` and no comma in backtick test names.
-- [ ] CLAUDE.md updated as listed in the steps.
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] `./gradlew :composeApp:assembleDebug` passes.
+- [x] No new compiler warnings compared with `main`.
+- [x] No JVM-only API in `commonMain` and no comma in backtick test names.
+- [x] CLAUDE.md updated as listed in the steps.
 
 ---
 

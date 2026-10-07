@@ -2,6 +2,9 @@ package ch.stenzel.tim.polleninfo.feature.diary.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.swissToday
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
@@ -13,19 +16,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 /**
- * The Diary tab: the daily pollen levels at a station over a period ending yesterday.
+ * The Diary tab: the user's answers and the daily pollen levels at a station over a period ending
+ * yesterday.
  *
  * Opens on the stored home station over [HistoryRange.MONTH]. The home station is **read**, once,
  * and never written: whatever the diary shows later must not change what Home shows.
  *
  * Choosing another range keeps the current graph on screen, with `isLoading`, until the new history
  * arrives; a failed load is [DiaryUiState.Error], whose Retry loads the chosen range again.
+ *
+ * The answers are observed: one recorded while the Diary is open joins the graph at once if its day
+ * is on it, with no history reload. Today's answer never is — "today" is [swissToday] of [clock].
  */
 class DiaryViewModel(
     private val selectedStationRepository: SelectedStationRepository,
     private val stationHistoryRepository: StationHistoryRepository,
+    private val diaryRepository: DiaryRepository,
+    private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DiaryUiState>(DiaryUiState.Loading)
@@ -40,7 +50,17 @@ class DiaryViewModel(
     /** Every load starts by cancelling this, so an older answer can never replace a newer one. */
     private var loadJob: Job? = null
 
+    /** Every answer the user has given, as last read; filtered per history in [withEntries]. */
+    private var allEntries: List<DiaryEntry> = emptyList()
+
     init {
+        viewModelScope.launch {
+            diaryRepository.entries.collect { entries ->
+                allEntries = entries
+                val current = _uiState.value as? DiaryUiState.Content ?: return@collect
+                _uiState.value = withEntries(current)
+            }
+        }
         load()
     }
 
@@ -52,6 +72,13 @@ class DiaryViewModel(
         if (range == this.range) return
         this.range = range
         load()
+    }
+
+    /** [content] with the answers on the days its history covers, today excluded. */
+    private fun withEntries(content: DiaryUiState.Content): DiaryUiState.Content {
+        val today = swissToday(clock)
+        val window = content.history.from..content.history.until
+        return content.copy(entries = allEntries.filter { it.date in window && it.date < today })
     }
 
     private fun load() {
@@ -67,13 +94,15 @@ class DiaryViewModel(
                 return@launch
             }
             _uiState.value = when (val result = stationHistoryRepository.history(station.abbr, range)) {
-                is Result.Success -> DiaryUiState.Content(
-                    stationAbbr = station.abbr,
-                    stationName = station.name,
-                    range = range,
-                    historyRange = range,
-                    history = result.data,
-                    speciesIds = result.data.days.firstOrNull()?.levels?.keys?.toList().orEmpty(),
+                is Result.Success -> withEntries(
+                    DiaryUiState.Content(
+                        stationAbbr = station.abbr,
+                        stationName = station.name,
+                        range = range,
+                        historyRange = range,
+                        history = result.data,
+                        speciesIds = result.data.days.firstOrNull()?.levels?.keys?.toList().orEmpty(),
+                    ),
                 )
 
                 is Result.Failure -> DiaryUiState.Error(result.exception.message ?: DEFAULT_ERROR_MESSAGE)

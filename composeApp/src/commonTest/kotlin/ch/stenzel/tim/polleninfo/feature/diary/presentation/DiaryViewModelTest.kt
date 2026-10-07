@@ -1,5 +1,8 @@
 package ch.stenzel.tim.polleninfo.feature.diary.presentation
 
+import ch.stenzel.tim.polleninfo.core.diary.FakeDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
+import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.FakeStationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.stationHistory
@@ -15,6 +18,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -31,6 +36,15 @@ class DiaryViewModelTest {
 
     private val selectedStationRepository = FakeSelectedStationRepository(initial = zurich)
     private val historyRepository = FakeStationHistoryRepository()
+    private val diaryRepository = FakeDiaryRepository()
+
+    /**
+     * 4 October 2026, 00:30 in Zürich but still 3 October in UTC — so "today" must be the Swiss date.
+     * The default `stationHistory()` covers 4 September to 3 October: the month ending yesterday.
+     */
+    private val clock = object : Clock {
+        override fun now() = Instant.parse("2026-10-03T22:30:00Z")
+    }
 
     @BeforeTest
     fun setUp() {
@@ -42,7 +56,7 @@ class DiaryViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = DiaryViewModel(selectedStationRepository, historyRepository)
+    private fun viewModel() = DiaryViewModel(selectedStationRepository, historyRepository, diaryRepository, clock)
 
     @Test
     fun `starts in Loading`() = runTest {
@@ -127,7 +141,7 @@ class DiaryViewModelTest {
 
     @Test
     fun `no stored station is an error rather than an endless spinner`() = runTest {
-        val viewModel = DiaryViewModel(FakeSelectedStationRepository(initial = null), historyRepository)
+        val viewModel = DiaryViewModel(FakeSelectedStationRepository(initial = null), historyRepository, diaryRepository, clock)
 
         advanceUntilIdle()
 
@@ -207,5 +221,107 @@ class DiaryViewModelTest {
         advanceUntilIdle()
 
         assertTrue(selectedStationRepository.writes.isEmpty())
+    }
+
+    @Test
+    fun `content carries only the entries on the days of the history`() = runTest {
+        diaryRepository.record(LocalDate(2026, 9, 3), Feeling.BAD) // the day before the window
+        diaryRepository.record(LocalDate(2026, 9, 4), Feeling.VERY_BAD) // its first day
+        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD) // its last day: yesterday
+        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.VERY_GOOD) // today
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(DiaryEntry(LocalDate(2026, 9, 4), Feeling.VERY_BAD), DiaryEntry(LocalDate(2026, 10, 3), Feeling.GOOD)),
+            assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries,
+        )
+    }
+
+    @Test
+    fun `the entry for today is left out even when the history reaches today`() = runTest {
+        // A history whose last day is the Swiss today — the backend never sends one, but the rule
+        // that today is never plotted must not depend on that.
+        historyRepository.result = Result.Success(stationHistory(from = LocalDate(2026, 9, 5)))
+        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD)
+        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(DiaryEntry(LocalDate(2026, 10, 3), Feeling.GOOD)),
+            assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries,
+        )
+    }
+
+    @Test
+    fun `a new entry inside the window appears without a history reload`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        diaryRepository.record(LocalDate(2026, 9, 20), Feeling.BAD)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(DiaryEntry(LocalDate(2026, 9, 20), Feeling.BAD)),
+            assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries,
+        )
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+    }
+
+    @Test
+    fun `an answer recorded today does not join the graph`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries)
+    }
+
+    @Test
+    fun `entries follow the history on screen while a range change loads`() = runTest {
+        diaryRepository.record(LocalDate(2026, 9, 10), Feeling.BAD)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.gate = CompletableDeferred()
+        historyRepository.result = Result.Success(stationHistory(from = LocalDate(2026, 9, 27), days = 7))
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        runCurrent()
+
+        // The month is still drawn, so its answer stays with it.
+        assertEquals(1, assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries.size)
+
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries)
+    }
+
+    @Test
+    fun `reports no entries when the window holds none`() = runTest {
+        diaryRepository.record(LocalDate(2026, 9, 3), Feeling.BAD)
+        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertTrue(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
+    }
+
+    @Test
+    fun `reports entries once the window holds one`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
+
+        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD)
+        advanceUntilIdle()
+
+        assertFalse(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
     }
 }

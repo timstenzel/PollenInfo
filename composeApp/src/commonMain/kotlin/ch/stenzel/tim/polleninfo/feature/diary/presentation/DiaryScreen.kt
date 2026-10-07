@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -33,7 +34,8 @@ import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The Diary tab: the daily pollen levels at the home station over the last week, month or year.
+ * The Diary tab: the user's answers and the daily pollen levels at the home station over the last
+ * week, month or year. A period without answers shows a hint over the chart pointing to Home.
  *
  * Scrolls as a whole and has no pull-to-refresh. The note that the diary is no diagnosis is part of
  * every state with a graph, tied to the explanatory line by its asterisk.
@@ -79,11 +81,30 @@ private fun DiaryView(content: DiaryUiState.Content, onRangeSelected: (HistoryRa
             if (content.isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(8.dp))
-        DiaryChart(
-            days = content.history.days,
-            speciesIds = content.speciesIds,
-            range = content.historyRange,
-        )
+        Box {
+            DiaryChart(
+                days = content.history.days,
+                speciesIds = content.speciesIds,
+                range = content.historyRange,
+                entries = content.entries,
+            )
+            // Outside the chart's single semantics node, so a screen reader reads it on its own.
+            if (content.hasNoEntries) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 48.dp, vertical = 16.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 2.dp,
+                ) {
+                    Text(
+                        text = NO_ENTRIES_HINT,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
         Text(
             text = DISCLAIMER,
@@ -142,6 +163,8 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
         Button(onClick = onRetry) { Text("Retry") }
     }
 }
+
+private const val NO_ENTRIES_HINT = "Answer 'How do you feel today?' on Home to see your line here."
 
 private const val DISCLAIMER =
     "* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor."

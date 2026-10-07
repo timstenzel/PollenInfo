@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
+import ch.stenzel.tim.polleninfo.core.ui.feeling.label
 
 /**
  * The once-a-day question floated over Home's list: four full-word answers from Very bad to Very
@@ -76,12 +77,4 @@ fun FeelingPrompt(
             }
         }
     }
-}
-
-/** The word on a feeling's button — also what a screen reader announces for it. */
-private fun Feeling.label(): String = when (this) {
-    Feeling.VERY_BAD -> "Very bad"
-    Feeling.BAD -> "Bad"
-    Feeling.GOOD -> "Good"
-    Feeling.VERY_GOOD -> "Very good"
 }

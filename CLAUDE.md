@@ -327,6 +327,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
 | `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`, `DiaryRepository`, the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` — the user's answers, **on the device only** (see "Diary answers") |
+| `core/ui/feeling` | `Feeling.label()` — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
@@ -733,16 +734,33 @@ Nothing else knows about the tab. Update the order and name assertions in
 
 #### Diary
 
-The third tab, `feature/diary`: the daily pollen levels at the user's home station over the last
-week, month or year ending yesterday, as one line per pollen type, under the line "Compare how you felt with the pollen
+The third tab, `feature/diary`: the user's recorded feelings and the daily pollen levels at the
+user's home station over the last week, month or year ending yesterday, as one line per pollen type
+plus the feeling line, under the line "Compare how you felt with the pollen
 levels at a station.\*" and above the note "\* This is not a medical diagnosis. If you suspect a
 pollen allergy, please see a doctor." The screen scrolls as a whole and has no pull-to-refresh.
 
-`DiaryViewModel(selectedStationRepository, stationHistoryRepository)` reads the stored home station
-**once** and never writes it, then loads `GET /pollen/stations/{abbr}/history?range=…` through
-`StationHistoryRepository`: `Loading` → `Content(stationAbbr, stationName, range, historyRange,
-history, speciesIds, isLoading)` | `Error(message)` with Retry. `speciesIds` are the ids the history
-reports, in the backend's order. No stored station is an `Error`, never a spinner.
+`DiaryViewModel(selectedStationRepository, stationHistoryRepository, diaryRepository, clock)` reads
+the stored home station **once** and never writes it, then loads
+`GET /pollen/stations/{abbr}/history?range=…` through `StationHistoryRepository`: `Loading` →
+`Content(stationAbbr, stationName, range, historyRange, history, speciesIds, entries, isLoading)` |
+`Error(message)` with Retry. `speciesIds` are the ids the history reports, in the backend's order.
+No stored station is an `Error`, never a spinner.
+
+**The feeling line.** `DiaryViewModel` collects `DiaryRepository.entries` for as long as it lives;
+`Content.entries` are the answers whose date lies in `history.from..history.until` **and** before
+`swissToday(clock)` — today's answer is never plotted, even if a history reached today. The filter
+follows the history on screen, not the selected range, so while a range change loads the old
+history keeps its own answers. An answer recorded while the Diary is open joins the graph through
+the flow, with no history reload. `Content.hasNoEntries` (derived, no answer in the window) overlays
+the hint "Answer 'How do you feel today?' on Home to see your line here." at the top of the chart —
+outside the chart's semantics node, so a screen reader reads it on its own.
+
+**The shared scale.** Feelings and pollen levels share the chart's y-axis through `Feeling.level`:
+Very good = Low, Good = Moderate, Bad = High, Very bad = Very high, so higher is worse for both and
+a type whose line rises with the user's bad days lines up with them. `None` has no feeling. The
+feeling words (`core/ui/feeling/FeelingLabel.kt`'s `Feeling.label()`, shared with Home's prompt
+buttons) label the axis's right side, the severity words its left.
 
 **Ranges.** A `SingleChoiceSegmentedButtonRow` (Week / Month / Year) under the station name calls
 `onRangeSelected(range)`; it opens on `MONTH`, and the range already selected does nothing. A change
@@ -756,11 +774,14 @@ Retry load it again.
 plot of a given size: x by day index (first day at the left edge, last at the right), y by severity
 with `NONE` at the bottom and `VERY_HIGH` at the top, so higher is always worse; each species is a
 list of polylines split at every day without a value — a single known day between gaps survives as
-a one-point run, drawn as a dot — so the chart never bridges a day it does not know; one grid line
-per severity; date labels thinned per range — every day for a week, every 7th day counted back from
+a one-point run, drawn as a dot — so the chart never bridges a day it does not know; the feeling
+line (`FeelingLine`) split the same way at every unanswered day, with `dots` on every answered day
+(answers outside the days shown are ignored); one grid line per severity and one `FeelingTick` per
+feeling at its level's height; date labels thinned per range — every day for a week, every 7th day counted back from
 yesterday for a month, the first of each month for a year. `DiaryChart` draws it on a canvas —
-severity words on the left, dates below ("4 Sep"; the month alone, "Oct", for a year), 2 dp lines in
-each species' palette colour — and is one `clearAndSetSemantics` node announced as
+severity words on the left, feeling words on the right, dates below ("4 Sep"; the month alone,
+"Oct", for a year), 2 dp lines in each species' palette colour, and on top of them the feeling line,
+3 dp in `colorScheme.onSurface` with a dot on every answered day — and is one `clearAndSetSemantics` node announced as
 `diaryChartDescription(...)`: "Graph of your diary and 7 pollen types, last 30 days" ("last 7 days",
 "last 12 months" for the other ranges).
 
