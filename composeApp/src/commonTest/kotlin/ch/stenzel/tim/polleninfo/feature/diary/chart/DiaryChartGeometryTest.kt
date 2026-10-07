@@ -104,11 +104,29 @@ class DiaryChartGeometryTest {
     }
 
     @Test
-    fun `a species without any value has a line with no runs`() {
+    fun `a species without any value has no line`() {
         val geometry = diaryChartGeometry(days(null, null), listOf("BIRCH", "ASH"), HistoryRange.MONTH, width = 100f, height = 100f)
 
-        assertEquals(listOf("BIRCH", "ASH"), geometry.lines.map { it.speciesId })
-        assertEquals(listOf(emptyList(), emptyList()), geometry.lines.map { it.runs })
+        assertEquals(emptyList(), geometry.lines)
+    }
+
+    @Test
+    fun `an unchecked species produces no line`() {
+        // Birch and grasses both have values; only grasses is among the checked ids passed in.
+        val days = month().map { it.copy(levels = mapOf("BIRCH" to PollenSeverity.LOW, "GRASSES" to PollenSeverity.HIGH)) }
+
+        val geometry = diaryChartGeometry(days, listOf("GRASSES"), HistoryRange.MONTH, width = 290f, height = 100f)
+
+        assertEquals(listOf("GRASSES"), geometry.lines.map { it.speciesId })
+    }
+
+    @Test
+    fun `lines follow the order of the ids passed in`() {
+        val days = month().map { it.copy(levels = mapOf("BIRCH" to PollenSeverity.LOW, "GRASSES" to PollenSeverity.HIGH)) }
+
+        val geometry = diaryChartGeometry(days, listOf("GRASSES", "BIRCH"), HistoryRange.MONTH, width = 290f, height = 100f)
+
+        assertEquals(listOf("GRASSES", "BIRCH"), geometry.lines.map { it.speciesId })
     }
 
     @Test

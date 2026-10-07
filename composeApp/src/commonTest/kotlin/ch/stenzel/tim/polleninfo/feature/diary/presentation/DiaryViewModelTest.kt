@@ -6,9 +6,14 @@ import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.FakeStationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.stationHistory
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
+import ch.stenzel.tim.polleninfo.core.species.allSpecies
+import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
+import ch.stenzel.tim.polleninfo.core.station.allStations
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +40,8 @@ class DiaryViewModelTest {
     private val zurich = SelectedStation(abbr = "PZH", name = "Zürich")
 
     private val selectedStationRepository = FakeSelectedStationRepository(initial = zurich)
+    private val stationRepository = FakeStationRepository()
+    private val speciesRepository = FakeSpeciesRepository()
     private val historyRepository = FakeStationHistoryRepository()
     private val diaryRepository = FakeDiaryRepository()
 
@@ -56,7 +63,8 @@ class DiaryViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = DiaryViewModel(selectedStationRepository, historyRepository, diaryRepository, clock)
+    private fun viewModel(selected: FakeSelectedStationRepository = selectedStationRepository) =
+        DiaryViewModel(selected, stationRepository, speciesRepository, historyRepository, diaryRepository, clock)
 
     @Test
     fun `starts in Loading`() = runTest {
@@ -86,14 +94,14 @@ class DiaryViewModelTest {
 
         val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
         assertEquals("PZH", content.stationAbbr)
-        assertEquals("Zürich", content.stationName)
+        assertEquals(allStations, content.stations)
         assertEquals(HistoryRange.MONTH, content.range)
         assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
         assertFalse(content.isLoading)
     }
 
     @Test
-    fun `content carries the history and draws every species it reports in order`() = runTest {
+    fun `content carries the history and every pollen type in the backend order`() = runTest {
         val history = stationHistory()
         historyRepository.result = Result.Success(history)
         val viewModel = viewModel()
@@ -102,7 +110,9 @@ class DiaryViewModelTest {
 
         val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
         assertEquals(history, content.history)
-        assertEquals(listOf("BIRCH", "GRASSES", "ASH"), content.speciesIds)
+        assertEquals(allSpecies, content.species)
+        // The default history reports birch and grasses with values and ash without any.
+        assertEquals(listOf("BIRCH", "GRASSES"), content.shownSpeciesIds)
     }
 
     @Test
@@ -141,7 +151,7 @@ class DiaryViewModelTest {
 
     @Test
     fun `no stored station is an error rather than an endless spinner`() = runTest {
-        val viewModel = DiaryViewModel(FakeSelectedStationRepository(initial = null), historyRepository, diaryRepository, clock)
+        val viewModel = viewModel(FakeSelectedStationRepository(initial = null))
 
         advanceUntilIdle()
 
@@ -323,5 +333,259 @@ class DiaryViewModelTest {
         advanceUntilIdle()
 
         assertFalse(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
+    }
+
+    // Station choice
+
+    @Test
+    fun `selecting another station keeps the previous graph while its history loads`() = runTest {
+        val zurichHistory = stationHistory()
+        val baselHistory = stationHistory(stationAbbr = "PBS")
+        historyRepository.result = Result.Success(zurichHistory)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.gate = CompletableDeferred()
+        historyRepository.result = Result.Success(baselHistory)
+        viewModel.onStationSelected("PBS")
+        runCurrent()
+
+        val loading = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertTrue(loading.isLoading)
+        assertEquals("PBS", loading.stationAbbr)
+        assertEquals(zurichHistory, loading.history)
+
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+
+        val loaded = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertFalse(loaded.isLoading)
+        assertEquals("PBS", loaded.stationAbbr)
+        assertEquals(baselHistory, loaded.history)
+        assertEquals(listOf("PZH" to HistoryRange.MONTH, "PBS" to HistoryRange.MONTH), historyRepository.requested)
+    }
+
+    @Test
+    fun `selecting another station never writes the home station`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onStationSelected("PBS")
+        advanceUntilIdle()
+
+        assertTrue(selectedStationRepository.writes.isEmpty())
+        assertEquals(zurich, selectedStationRepository.stored)
+    }
+
+    @Test
+    fun `selecting the station already shown requests nothing`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onStationSelected("PZH")
+        advanceUntilIdle()
+
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+    }
+
+    @Test
+    fun `a range change keeps the chosen station`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onStationSelected("PBS")
+        advanceUntilIdle()
+
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        advanceUntilIdle()
+
+        assertEquals("PBS" to HistoryRange.WEEK, historyRepository.requested.last())
+    }
+
+    @Test
+    fun `a home station the list no longer holds opens on the first listed station`() = runTest {
+        val viewModel = viewModel(FakeSelectedStationRepository(initial = SelectedStation("PXX", "Gone")))
+
+        advanceUntilIdle()
+
+        assertEquals(allStations.first().abbr, assertIs<DiaryUiState.Content>(viewModel.uiState.value).stationAbbr)
+    }
+
+    @Test
+    fun `a failed station list is Error and Retry fetches it again`() = runTest {
+        stationRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertTrue(historyRepository.requested.isEmpty())
+
+        stationRepository.result = Result.Success(allStations)
+        viewModel.retry()
+        advanceUntilIdle()
+
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals(2, stationRepository.callCount)
+    }
+
+    @Test
+    fun `a failed pollen type list is Error and Retry fetches it again`() = runTest {
+        speciesRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+
+        speciesRepository.result = Result.Success(allSpecies)
+        viewModel.retry()
+        advanceUntilIdle()
+
+        assertEquals(allSpecies, assertIs<DiaryUiState.Content>(viewModel.uiState.value).species)
+    }
+
+    @Test
+    fun `stations and pollen types are fetched once across reloads`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onStationSelected("PBS")
+        advanceUntilIdle()
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        advanceUntilIdle()
+
+        assertEquals(1, stationRepository.callCount)
+        assertEquals(1, speciesRepository.callCount)
+    }
+
+    @Test
+    fun `a failed reload after a station change is Error and Retry resumes every choice`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onSpeciesToggled("BIRCH")
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        advanceUntilIdle()
+
+        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        viewModel.onStationSelected("PBS")
+        advanceUntilIdle()
+        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+
+        historyRepository.result = Result.Success(stationHistory(stationAbbr = "PBS"))
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals("PBS", content.stationAbbr)
+        assertEquals(HistoryRange.WEEK, content.range)
+        assertEquals("PBS" to HistoryRange.WEEK, historyRepository.requested.last())
+        assertEquals(allSpecies.map { it.id }.toSet() - "BIRCH", content.checked)
+    }
+
+    // Pollen type filters
+
+    @Test
+    fun `every pollen type is checked at first`() = runTest {
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(allSpecies.map { it.id }.toSet(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).checked)
+    }
+
+    @Test
+    fun `unchecking a pollen type removes its line without a history request`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onSpeciesToggled("BIRCH")
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertFalse("BIRCH" in content.checked)
+        assertEquals(listOf("GRASSES"), content.shownSpeciesIds)
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+    }
+
+    @Test
+    fun `checking it again brings the line back`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onSpeciesToggled("BIRCH")
+        viewModel.onSpeciesToggled("BIRCH")
+
+        assertEquals(listOf("BIRCH", "GRASSES"), assertIs<DiaryUiState.Content>(viewModel.uiState.value).shownSpeciesIds)
+    }
+
+    @Test
+    fun `checked types survive a station change`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onSpeciesToggled("BIRCH")
+
+        historyRepository.gate = CompletableDeferred()
+        viewModel.onStationSelected("PBS")
+        runCurrent()
+        assertFalse("BIRCH" in assertIs<DiaryUiState.Content>(viewModel.uiState.value).checked)
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse("BIRCH" in assertIs<DiaryUiState.Content>(viewModel.uiState.value).checked)
+    }
+
+    @Test
+    fun `checked types survive a range change`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onSpeciesToggled("BIRCH")
+
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        advanceUntilIdle()
+
+        assertFalse("BIRCH" in assertIs<DiaryUiState.Content>(viewModel.uiState.value).checked)
+    }
+
+    @Test
+    fun `a type without a value on any day is not measured here`() = runTest {
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        // ASH is null on every day; the four types the fixture leaves out entirely count as well.
+        assertEquals(setOf("ALDER", "HAZEL", "BEECH", "ASH", "OAK"), content.notMeasured)
+        // It stays checked, so a station that reports it draws it again.
+        assertTrue("ASH" in content.checked)
+        assertFalse("ASH" in content.shownSpeciesIds)
+    }
+
+    @Test
+    fun `a type with a value on a single day is measured`() = runTest {
+        val days = stationHistory().days
+        val oneAshDay = days.mapIndexed { index, day ->
+            if (index == 10) day.copy(levels = day.levels + ("ASH" to PollenSeverity.NONE)) else day
+        }
+        historyRepository.result = Result.Success(stationHistory().copy(days = oneAshDay))
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertFalse("ASH" in content.notMeasured)
+        assertTrue("ASH" in content.shownSpeciesIds)
+    }
+
+    @Test
+    fun `a type is measured again at a station that reports it`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue("ASH" in assertIs<DiaryUiState.Content>(viewModel.uiState.value).notMeasured)
+
+        historyRepository.result = Result.Success(
+            stationHistory(stationAbbr = "PBS", levels = mapOf("BIRCH" to PollenSeverity.LOW, "ASH" to PollenSeverity.MODERATE)),
+        )
+        viewModel.onStationSelected("PBS")
+        advanceUntilIdle()
+
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertFalse("ASH" in content.notMeasured)
+        assertEquals(listOf("BIRCH", "ASH"), content.shownSpeciesIds)
     }
 }

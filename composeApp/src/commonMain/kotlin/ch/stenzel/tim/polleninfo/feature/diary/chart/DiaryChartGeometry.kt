@@ -49,7 +49,9 @@ data class DiaryChartGeometry(
  * - **x** is the day's index in [days]: the first day at 0, the last at [width], evenly between.
  * - **y** is the severity level, `NONE` = 0 … `VERY_HIGH` = 4, inverted so a higher point is
  *   always worse: `VERY_HIGH` at the top (0), `NONE` at the bottom ([height]).
- * - One line per id in [speciesIds], in that order; a species with no value on a day has a gap there.
+ * - One line per id in [speciesIds], in that order — the caller passes only the checked types, so an
+ *   unchecked one has no line. A species with no value on a day has a gap there, and one with no
+ *   value on any day has no line at all.
  * - The feeling line from [entries] on the same scale — each feeling at its [Feeling.level], so
  *   "Very bad" is level with `VERY_HIGH` — with a gap on every day without an answer. Entries for
  *   dates outside [days] are ignored.
@@ -85,7 +87,7 @@ fun diaryChartGeometry(
     val feelings = entries.associate { it.date to it.feeling }
 
     return DiaryChartGeometry(
-        lines = speciesIds.map { id -> SpeciesLine(id, runs { it.levels[id] }) },
+        lines = speciesIds.map { id -> SpeciesLine(id, runs { it.levels[id] }) }.filter { it.runs.isNotEmpty() },
         feeling = FeelingLine(runs { feelings[it.date]?.level }),
         levelTicks = PollenSeverity.entries.map { LevelTick(it, levelY(it, height)) },
         feelingTicks = Feeling.entries.map { FeelingTick(it, levelY(it.level, height)) },

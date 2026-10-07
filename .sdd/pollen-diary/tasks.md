@@ -164,25 +164,25 @@ tab switches, but not an app restart.
 
 ### Implementation steps
 
-- [ ] App: `DiaryViewModel.onStationSelected` (keeps the old graph while loading, never touches `SelectedStationRepository`); station `ExposedDropdownMenuBox` in `DiaryScreen`, names from `StationRepository`.
-- [ ] App: keep the chosen station, range and `checked` in ViewModel fields (not only in `Content`), so a failed reload's `Error` and its Retry resume the user's choices.
-- [ ] App: species from `SpeciesRepository`; `checked` (all by default) and `onSpeciesToggled`, which never reloads; derive "not measured here" (every day in the window `null`).
-- [ ] App: checkbox rows with a colour sample in species order; disabled rows labelled "Not measured here"; the geometry omits unchecked and unmeasured species.
-- [ ] CLAUDE.md: station choice, filters, "Not measured here".
+- [x] App: `DiaryViewModel.onStationSelected` (keeps the old graph while loading, never touches `SelectedStationRepository`); station `ExposedDropdownMenuBox` in `DiaryScreen`, names from `StationRepository`.
+- [x] App: keep the chosen station, range and `checked` in ViewModel fields (not only in `Content`), so a failed reload's `Error` and its Retry resume the user's choices.
+- [x] App: species from `SpeciesRepository`; `checked` (all by default) and `onSpeciesToggled`, which never reloads; derive "not measured here" (every day in the window `null`).
+- [x] App: checkbox rows with a colour sample in species order; disabled rows labelled "Not measured here"; the geometry omits unchecked and unmeasured species.
+- [x] CLAUDE.md: station choice, filters, "Not measured here".
 
 ### Acceptance criteria
 
-- [ ] `DiaryViewModelTest`: selecting another station reloads its history, keeps the previous graph while gated, and leaves `FakeSelectedStationRepository` unchanged.
-- [ ] `DiaryViewModelTest`: all species are checked initially; a toggle changes `checked` without a history request; `checked` survives a station and a range change.
-- [ ] `DiaryViewModelTest`: a failed reload after a station change is `Error`; Retry reloads the chosen station and range and `checked` is unchanged.
-- [ ] `DiaryViewModelTest`: a species with no value on any day in the window is reported as not measured, and as measured for a station that reports it; `DiaryChartGeometryTest`: an unchecked species produces no line.
-- [ ] *(emulator)* Choosing Basel leaves Home on the home station; Basel stays selected after switching tabs and back; after an app restart the Diary opens on the home station; an unmeasured type's checkbox is disabled and reads "Not measured here".
+- [x] `DiaryViewModelTest`: selecting another station reloads its history, keeps the previous graph while gated, and leaves `FakeSelectedStationRepository` unchanged.
+- [x] `DiaryViewModelTest`: all species are checked initially; a toggle changes `checked` without a history request; `checked` survives a station and a range change.
+- [x] `DiaryViewModelTest`: a failed reload after a station change is `Error`; Retry reloads the chosen station and range and `checked` is unchanged.
+- [x] `DiaryViewModelTest`: a species with no value on any day in the window is reported as not measured, and as measured for a station that reports it; `DiaryChartGeometryTest`: an unchecked species produces no line.
+- [x] *(emulator)* Choosing Basel leaves Home on the home station; Basel stays selected after switching tabs and back; after an app restart the Diary opens on the home station; an unmeasured type's checkbox is disabled and reads "Not measured here". *(Live MeteoSwiss data has no type missing at any station in any period, so for the last part the backend's upstream address was pointed, temporarily and uncommitted, at a local proxy that blanked Basel's ash column in `d_recent`. Ash was then disabled, unchecked and labelled "Not measured here", and the graph was announced as "6 pollen types". The other parts ran against live data. Basel left Home on Zürich and stayed selected after Home → Diary. After force-stop and relaunch the Diary opened on Zürich. Unchecking Grasses removed its line.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] `./gradlew :composeApp:assembleDebug` passes.
-- [ ] No new compiler warnings compared with `main`.
-- [ ] No JVM-only API in `commonMain` and no comma in backtick test names.
-- [ ] CLAUDE.md updated as listed in the steps.
+- [x] `./gradlew :composeApp:testDebugUnitTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] `./gradlew :composeApp:assembleDebug` passes.
+- [x] No new compiler warnings compared with `main`.
+- [x] No JVM-only API in `commonMain` and no comma in backtick test names.
+- [x] CLAUDE.md updated as listed in the steps.

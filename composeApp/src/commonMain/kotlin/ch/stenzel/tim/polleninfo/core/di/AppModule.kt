@@ -95,7 +95,7 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
 }

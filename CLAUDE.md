@@ -734,18 +734,43 @@ Nothing else knows about the tab. Update the order and name assertions in
 
 #### Diary
 
-The third tab, `feature/diary`: the user's recorded feelings and the daily pollen levels at the
-user's home station over the last week, month or year ending yesterday, as one line per pollen type
-plus the feeling line, under the line "Compare how you felt with the pollen
-levels at a station.\*" and above the note "\* This is not a medical diagnosis. If you suspect a
-pollen allergy, please see a doctor." The screen scrolls as a whole and has no pull-to-refresh.
+The third tab, `feature/diary`: the user's recorded feelings and the daily pollen levels at a
+chosen station over the last week, month or year ending yesterday, as one line per checked pollen
+type plus the feeling line. Top to bottom: station dropdown, range buttons, the line "Compare how you
+felt with the pollen levels at a station.\*", the chart, one checkbox per pollen type, and the note
+"\* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor." The
+screen scrolls as a whole and has no pull-to-refresh.
 
-`DiaryViewModel(selectedStationRepository, stationHistoryRepository, diaryRepository, clock)` reads
-the stored home station **once** and never writes it, then loads
+`DiaryViewModel(selectedStationRepository, stationRepository, speciesRepository,
+stationHistoryRepository, diaryRepository, clock)` reads the stored home station **once** and never
+writes it, fetches the station list and the pollen types (in parallel, once — kept across reloads,
+and a Retry fetches only what has not arrived), then loads
 `GET /pollen/stations/{abbr}/history?range=…` through `StationHistoryRepository`: `Loading` →
-`Content(stationAbbr, stationName, range, historyRange, history, speciesIds, entries, isLoading)` |
-`Error(message)` with Retry. `speciesIds` are the ids the history reports, in the backend's order.
-No stored station is an `Error`, never a spinner.
+`Content(stations, stationAbbr, range, historyRange, history, species, checked, entries, isLoading)` |
+`Error(message)` with Retry. No stored station is an `Error`, never a spinner; a failed station or
+pollen-type list is an `Error` too.
+
+**The chosen station, range and checked types are ViewModel fields**, not only `Content` fields, so
+a failed load's `Error` and its Retry resume all three. None is persisted: they survive tab switches
+(the ViewModel lives in `navigateToTab`'s saved state) but an app restart opens on the home station,
+`MONTH` and every type checked again.
+
+**Station choice.** An `ExposedDropdownMenuBox` (as in onboarding and the alarm editor) lists every
+station by name and calls `onStationSelected(abbr)`. It opens on the stored home station — the first
+listed station if that is no longer listed — and **never writes `SelectedStationRepository`**, so
+Home keeps its station. Choosing the station already shown does nothing. Like a range change it
+keeps the current graph with `isLoading` until the new history arrives; `stationAbbr` is the
+selection and moves at once, `history.stationAbbr` is what is drawn. The feeling line is the same
+for every station — answers are about the user, not a place.
+
+**Pollen-type filters.** One checkbox row per `SpeciesRepository` type, in the backend's order, each
+with a short bar in its line's colour so the rows double as the chart's legend; the whole row is one
+toggleable focus stop. `checked` starts with every type; `onSpeciesToggled(id)` changes it and
+**never reloads**. `Content.notMeasured` (derived) is every type with no value on any day of the
+history on screen; its row is disabled, shown unchecked and labelled "Not measured here", so a
+missing line is not read as "no pollen". Its choice stays in `checked`, so the line comes back at a
+station that measures it. `Content.shownSpeciesIds` — checked and measured, in order — is what the
+chart draws and counts in its description.
 
 **The feeling line.** `DiaryViewModel` collects `DiaryRepository.entries` for as long as it lives;
 `Content.entries` are the answers whose date lies in `history.from..history.until` **and** before
@@ -762,17 +787,17 @@ a type whose line rises with the user's bad days lines up with them. `None` has 
 feeling words (`core/ui/feeling/FeelingLabel.kt`'s `Feeling.label()`, shared with Home's prompt
 buttons) label the axis's right side, the severity words its left.
 
-**Ranges.** A `SingleChoiceSegmentedButtonRow` (Week / Month / Year) under the station name calls
+**Ranges.** A `SingleChoiceSegmentedButtonRow` (Week / Month / Year) under the station dropdown calls
 `onRangeSelected(range)`; it opens on `MONTH`, and the range already selected does nothing. A change
 keeps the current graph on screen with `isLoading` (a linear indicator above the chart, its slot
 always reserved) until the new history arrives. `range` is the selection and moves at once;
 `historyRange` is what `history` covers, and the chart is laid out and announced for that, so the two
-differ only while loading. The chosen range is a ViewModel field, so a failed load's `Error` and its
-Retry load it again.
+differ only while loading.
 
 **The chart.** `DiaryChartGeometry` (`chart/`, pure, no Compose import) lays the history out for a
 plot of a given size: x by day index (first day at the left edge, last at the right), y by severity
-with `NONE` at the bottom and `VERY_HIGH` at the top, so higher is always worse; each species is a
+with `NONE` at the bottom and `VERY_HIGH` at the top, so higher is always worse; one line per id it is
+given (the caller passes the checked ones; an id with no value on any day gets no line), each a
 list of polylines split at every day without a value — a single known day between gaps survives as
 a one-point run, drawn as a dot — so the chart never bridges a day it does not know; the feeling
 line (`FeelingLine`) split the same way at every unanswered day, with `dots` on every answered day
