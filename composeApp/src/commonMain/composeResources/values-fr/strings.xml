@@ -20,4 +20,22 @@
     <string name="settings_meteoswiss_link_action">Ouvrir le site web de MétéoSuisse</string>
     <string name="settings_data_source_disclaimer">PollenInfo est une application indépendante. Elle n’est ni affiliée à MétéoSuisse ni soutenue par MétéoSuisse.</string>
     <string name="settings_version">Version %1$s (%2$d)</string>
+
+    <string name="error_network">Impossible de joindre le serveur. Vérifiez votre connexion Internet et réessayez.</string>
+    <string name="error_server_unavailable">Le service rencontre actuellement des problèmes. Veuillez réessayer plus tard.</string>
+    <string name="error_not_found">Ces informations ne sont pas disponibles pour le moment.</string>
+    <string name="error_alarm_not_found">Cette alarme n’existe plus.</string>
+    <string name="error_no_station_selected">Aucune station de mesure n’est sélectionnée.</string>
+    <string name="error_no_readings">Aucune station n’a pu fournir de mesure. Veuillez réessayer plus tard.</string>
+    <string name="error_no_stations">Aucune station de mesure n’est disponible pour le moment.</string>
+    <string name="error_push_unavailable">Les notifications push ne sont pas encore disponibles sur cet appareil.</string>
+    <string name="error_alarm_limit_reached">Vous avez atteint le nombre maximal d’alarmes. Supprimez-en une pour en créer une autre.</string>
+    <string name="error_invalid_alarm">Le serveur n’a pas accepté cette alarme. Vérifiez vos indications et réessayez.</string>
+    <string name="error_unknown">Une erreur s’est produite. Veuillez réessayer.</string>
+    <string name="error_action_save_alarm">Impossible d’enregistrer l’alarme.</string>
+    <string name="error_action_delete_alarm">Impossible de supprimer l’alarme.</string>
+    <string name="error_action_pause_alarm">Impossible de mettre l’alarme en pause.</string>
+    <string name="error_action_resume_alarm">Impossible de réactiver l’alarme.</string>
+
+    <string name="home_feeling_save_error">Votre réponse n’a pas pu être enregistrée. Veuillez réessayer.</string>
 </resources>

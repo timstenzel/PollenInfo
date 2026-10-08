@@ -9,7 +9,9 @@ import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.result.toAppError
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,8 +47,8 @@ class HomeViewModel(
     /** The diary as last read; `null` until it has been, so the prompt never flashes up unasked. */
     private var diary: DiarySnapshot? = null
 
-    /** Why the last answer was not stored; cleared by the next attempt. */
-    private var feelingSaveError: String? = null
+    /** The last answer was not stored; cleared by the next attempt. */
+    private var feelingSaveError = false
 
     init {
         viewModelScope.launch {
@@ -89,9 +91,9 @@ class HomeViewModel(
     /** Stores today's answer; the prompt hides when the diary reports it stored. */
     fun onFeelingSelected(feeling: Feeling) {
         viewModelScope.launch {
-            feelingSaveError = null
+            feelingSaveError = false
             val result = diaryRepository.record(swissToday(clock), feeling)
-            if (result is Result.Failure) feelingSaveError = FEELING_SAVE_ERROR_MESSAGE
+            feelingSaveError = result is Result.Failure
             refreshPrompt()
         }
     }
@@ -99,7 +101,7 @@ class HomeViewModel(
     /** Closes the prompt for today without recording an answer. */
     fun onFeelingPromptDismissed() {
         viewModelScope.launch {
-            feelingSaveError = null
+            feelingSaveError = false
             // A failed dismissal simply leaves the prompt up to be closed again.
             diaryRepository.dismiss(swissToday(clock))
             refreshPrompt()
@@ -123,7 +125,7 @@ class HomeViewModel(
         } ?: false
         return content.copy(
             showFeelingPrompt = show,
-            feelingSaveError = if (show) feelingSaveError else null,
+            feelingSaveError = show && feelingSaveError,
         )
     }
 
@@ -131,10 +133,10 @@ class HomeViewModel(
         loadJob?.cancel()
 
         // Unreachable by design: the startup gate only routes here once a station is stored. It is
-        // still an error with a message rather than an endless spinner, so a future change that
+        // still an error rather than an endless spinner, so a future change that
         // made it reachable would be diagnosable.
         val station = selected ?: run {
-            _uiState.value = HomeUiState.Error(stationName = "", message = NO_STATION_MESSAGE)
+            _uiState.value = HomeUiState.Error(stationName = "", error = AppError.NoStationSelected)
             return
         }
 
@@ -168,7 +170,7 @@ class HomeViewModel(
 
                 is Result.Failure -> HomeUiState.Error(
                     stationName = station.name,
-                    message = result.exception.message ?: DEFAULT_ERROR_MESSAGE,
+                    error = result.exception.toAppError(),
                 )
             }
         }
@@ -177,10 +179,6 @@ class HomeViewModel(
     companion object {
         /** The shortest time a refresh shows its indicator; see [load] for why one is needed. */
         val MIN_REFRESH_INDICATOR = 500.milliseconds
-
-        private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
-        private const val NO_STATION_MESSAGE = "No measuring station is selected."
-        private const val FEELING_SAVE_ERROR_MESSAGE = "Your answer could not be saved. Please try again."
     }
 
     private data class DiarySnapshot(val entries: List<DiaryEntry>, val dismissedOn: LocalDate?)

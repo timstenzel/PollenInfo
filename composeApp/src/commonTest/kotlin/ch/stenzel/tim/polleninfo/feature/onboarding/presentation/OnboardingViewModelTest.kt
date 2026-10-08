@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.core.location.FakeCoarseLocationProvider
 import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.expectedStationNamesAlphabetical
@@ -29,6 +30,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
@@ -78,27 +80,23 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `emits Error with the exception message when the station list cannot be loaded`() = runTest {
-        repository.result = Result.Failure(RuntimeException("Connection refused"))
+    fun `emits a Network Error when the station list cannot be reached`() = runTest {
+        repository.result = Result.Failure(IOException("Connection refused"))
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
-        assertEquals("Connection refused", state.message)
+        assertEquals(OnboardingUiState.Error(AppError.Network), viewModel.uiState.value)
     }
 
     @Test
-    fun `falls back to a generic message when the exception has none`() = runTest {
+    fun `emits an Unknown Error for any other failure`() = runTest {
         repository.result = Result.Failure(RuntimeException())
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        assertEquals(
-            "An unexpected error occurred",
-            assertIs<OnboardingUiState.Error>(viewModel.uiState.value).message,
-        )
+        assertEquals(OnboardingUiState.Error(AppError.Unknown), viewModel.uiState.value)
     }
 
     @Test

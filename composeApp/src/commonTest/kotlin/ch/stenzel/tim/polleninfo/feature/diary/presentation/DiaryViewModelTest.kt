@@ -9,11 +9,19 @@ import ch.stenzel.tim.polleninfo.core.history.stationHistory
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.allStations
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,13 +34,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DiaryViewModelTest {
@@ -125,18 +127,18 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `a failed history request is Error with its message`() = runTest {
-        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+    fun `a failed history request is Error with its kind`() = runTest {
+        historyRepository.result = Result.Failure(IOException("backend unreachable"))
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
     }
 
     @Test
     fun `retry from Error reaches Content once the backend answers`() = runTest {
-        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        historyRepository.result = Result.Failure(IOException("backend unreachable"))
         val viewModel = viewModel()
         advanceUntilIdle()
 
@@ -155,7 +157,7 @@ class DiaryViewModelTest {
 
         advanceUntilIdle()
 
-        assertIs<DiaryUiState.Error>(viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.NoStationSelected), viewModel.uiState.value)
         assertTrue(historyRepository.requested.isEmpty())
     }
 
@@ -207,10 +209,10 @@ class DiaryViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        historyRepository.result = Result.Failure(IOException("backend unreachable"))
         viewModel.onRangeSelected(HistoryRange.YEAR)
         advanceUntilIdle()
-        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
 
         historyRepository.result = Result.Success(stationHistory(days = 365))
         viewModel.retry()
@@ -412,10 +414,10 @@ class DiaryViewModelTest {
 
     @Test
     fun `a failed station list is Error and Retry fetches it again`() = runTest {
-        stationRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        stationRepository.result = Result.Failure(IOException("backend unreachable"))
         val viewModel = viewModel()
         advanceUntilIdle()
-        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
         assertTrue(historyRepository.requested.isEmpty())
 
         stationRepository.result = Result.Success(allStations)
@@ -428,10 +430,10 @@ class DiaryViewModelTest {
 
     @Test
     fun `a failed pollen type list is Error and Retry fetches it again`() = runTest {
-        speciesRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        speciesRepository.result = Result.Failure(IOException("backend unreachable"))
         val viewModel = viewModel()
         advanceUntilIdle()
-        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
 
         speciesRepository.result = Result.Success(allSpecies)
         viewModel.retry()
@@ -462,10 +464,10 @@ class DiaryViewModelTest {
         viewModel.onRangeSelected(HistoryRange.WEEK)
         advanceUntilIdle()
 
-        historyRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+        historyRepository.result = Result.Failure(IOException("backend unreachable"))
         viewModel.onStationSelected("PBS")
         advanceUntilIdle()
-        assertEquals(DiaryUiState.Error("backend unreachable"), viewModel.uiState.value)
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
 
         historyRepository.result = Result.Success(stationHistory(stationAbbr = "PBS"))
         viewModel.retry()

@@ -30,10 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import kotlinx.datetime.DayOfWeek
@@ -164,7 +166,7 @@ private fun AlarmEditorContent(
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    uiState.message,
+                    uiState.error.message(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -347,8 +349,10 @@ private fun EditingForm(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        state.saveError?.let { error ->
-            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        val failure = state.saveError?.message(ErrorContext.SAVE_ALARM)
+            ?: state.deleteError?.message(ErrorContext.DELETE_ALARM)
+        failure?.let { text ->
+            Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
 
         Button(

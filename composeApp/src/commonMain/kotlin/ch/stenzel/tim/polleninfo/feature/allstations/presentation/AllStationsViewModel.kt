@@ -2,7 +2,9 @@ package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.result.toAppError
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
@@ -97,9 +99,7 @@ class AllStationsViewModel(
         loadJob = viewModelScope.launch {
             val stations = stations ?: when (val result = stationRepository.getStations()) {
                 is Result.Failure -> {
-                    _uiState.value = AllStationsUiState.Error(
-                        result.exception.message ?: DEFAULT_ERROR_MESSAGE,
-                    )
+                    _uiState.value = AllStationsUiState.Error(result.exception.toAppError())
                     return@launch
                 }
 
@@ -126,7 +126,7 @@ class AllStationsViewModel(
      */
     private fun completeRound(readings: List<StationReading>) {
         if (readings.all { it is StationReading.Unavailable }) {
-            _uiState.value = AllStationsUiState.Error(NO_READINGS_MESSAGE)
+            _uiState.value = AllStationsUiState.Error(AppError.NoReadings)
             return
         }
         _uiState.update { state ->
@@ -138,8 +138,5 @@ class AllStationsViewModel(
     companion object {
         /** The shortest time a refresh shows its indicator; see [refresh] for why one is needed. */
         val MIN_REFRESH_INDICATOR = 500.milliseconds
-
-        private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
-        private const val NO_READINGS_MESSAGE = "No station's reading could be loaded."
     }
 }

@@ -8,7 +8,9 @@ import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.result.toAppError
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
@@ -127,7 +129,7 @@ class DiaryViewModel(
             val home = if (stationAbbr == null) {
                 // Unreachable past the startup gate, as on Home; an error rather than a spinner.
                 selectedStationRepository.selectedStation.first()
-                    ?: return@launch fail(NO_STATION_MESSAGE)
+                    ?: return@launch fail(AppError.NoStationSelected)
             } else {
                 null
             }
@@ -137,13 +139,13 @@ class DiaryViewModel(
             stationsRequest?.await()?.let { result ->
                 when (result) {
                     is Result.Success -> stations = result.data
-                    is Result.Failure -> return@launch fail(result.exception)
+                    is Result.Failure -> return@launch fail(result.exception.toAppError())
                 }
             }
             speciesRequest?.await()?.let { result ->
                 when (result) {
                     is Result.Success -> species = result.data
-                    is Result.Failure -> return@launch fail(result.exception)
+                    is Result.Failure -> return@launch fail(result.exception.toAppError())
                 }
             }
             val stations = stations.orEmpty()
@@ -153,7 +155,7 @@ class DiaryViewModel(
             val abbr = stationAbbr
                 ?: (stations.firstOrNull { it.abbr == home?.abbr } ?: stations.firstOrNull())?.abbr
                     ?.also { stationAbbr = it }
-                ?: return@launch fail(NO_STATIONS_MESSAGE)
+                ?: return@launch fail(AppError.NoStations)
 
             _uiState.value = when (val result = stationHistoryRepository.history(abbr, range)) {
                 is Result.Success -> withEntries(
@@ -168,20 +170,12 @@ class DiaryViewModel(
                     ),
                 )
 
-                is Result.Failure -> DiaryUiState.Error(result.exception.message ?: DEFAULT_ERROR_MESSAGE)
+                is Result.Failure -> DiaryUiState.Error(result.exception.toAppError())
             }
         }
     }
 
-    private fun fail(exception: Exception) = fail(exception.message ?: DEFAULT_ERROR_MESSAGE)
-
-    private fun fail(message: String) {
-        _uiState.value = DiaryUiState.Error(message)
-    }
-
-    companion object {
-        private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
-        private const val NO_STATION_MESSAGE = "No measuring station is selected."
-        private const val NO_STATIONS_MESSAGE = "No measuring stations are available."
+    private fun fail(error: AppError) {
+        _uiState.value = DiaryUiState.Error(error)
     }
 }

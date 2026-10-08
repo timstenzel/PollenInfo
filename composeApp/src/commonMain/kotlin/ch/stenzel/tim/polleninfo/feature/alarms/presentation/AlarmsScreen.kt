@@ -1,30 +1,29 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -32,6 +31,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +52,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.notifications.rememberNotificationPermissionController
+import ch.stenzel.tim.polleninfo.core.result.AppError
+import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
+import ch.stenzel.tim.polleninfo.core.ui.error.loadMessage
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
 import kotlinx.coroutines.flow.filter
 import org.koin.compose.viewmodel.koinViewModel
@@ -81,7 +85,10 @@ fun AlarmsScreen(
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                is AlarmsEvent.ToggleFailed -> snackbarHostState.showSnackbar(event.message)
+                is AlarmsEvent.ToggleFailed -> {
+                    val context = if (event.enabling) ErrorContext.RESUME_ALARM else ErrorContext.PAUSE_ALARM
+                    snackbarHostState.showSnackbar(event.error.loadMessage(context))
+                }
             }
         }
     }
@@ -180,10 +187,10 @@ private fun AlarmsContent(
                 }
             }
 
-            is AlarmsUiState.Error -> if (uiState.pushUnavailable) {
+            is AlarmsUiState.Error -> if (uiState.error == AppError.PushUnavailable) {
                 PushUnavailableView(messageModifier)
             } else {
-                ErrorView(uiState.message, onRetry, messageModifier)
+                ErrorView(uiState.error.message(), onRetry, messageModifier)
             }
         }
     }

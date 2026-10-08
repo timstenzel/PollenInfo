@@ -4,6 +4,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.data.remote.StationMeasurement
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.StationMeasurement
 import ch.stenzel.tim.polleninfo.core.measurement.measurementJson
+import ch.stenzel.tim.polleninfo.core.network.HttpStatusException
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.result.Result
 import io.ktor.client.engine.mock.MockEngine
@@ -126,6 +127,17 @@ class StationMeasurementRepositoryImplTest {
         val repository = repository { respondError(HttpStatusCode.BadGateway) }
 
         assertIs<Result.Failure>(repository.getMeasurement("PZH"))
+    }
+
+    @Test
+    fun `a 502 fails with HttpStatusException rather than a deserialization error`() = runTest {
+        // A JSON error body, so a service that skipped the status check would try to read it.
+        val repository = repository {
+            respond("""{"error":"upstream failed"}""", HttpStatusCode.BadGateway, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.getMeasurement("PZH"))
+        assertEquals(502, assertIs<HttpStatusException>(failure.exception).status)
     }
 
     @Test

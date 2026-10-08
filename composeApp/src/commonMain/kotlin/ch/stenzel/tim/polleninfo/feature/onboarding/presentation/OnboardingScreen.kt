@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.location.rememberCoarseLocationPermissionRequester
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -84,7 +85,7 @@ private fun OnboardingContent(
         when (uiState) {
             is OnboardingUiState.Loading -> LoadingView()
 
-            is OnboardingUiState.Error -> ErrorView(message = uiState.message, onRetry = onRetry)
+            is OnboardingUiState.Error -> ErrorView(message = uiState.error.message(), onRetry = onRetry)
 
             is OnboardingUiState.Content -> StationPickerView(
                 stations = uiState.stations,

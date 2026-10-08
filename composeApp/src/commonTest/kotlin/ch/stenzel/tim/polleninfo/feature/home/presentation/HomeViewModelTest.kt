@@ -9,8 +9,10 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.measurement.measurement
 import ch.stenzel.tim.polleninfo.core.measurement.reading
+import ch.stenzel.tim.polleninfo.core.network.HttpStatusException
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -18,7 +20,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -36,6 +37,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -155,26 +157,33 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `a repository failure resolves to Error carrying its message`() = runTest {
-        measurementRepository.result = Result.Failure(RuntimeException("no network"))
+    fun `a transport failure resolves to a Network Error`() = runTest {
+        measurementRepository.result = Result.Failure(IOException("no network"))
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertEquals("no network", assertIs<HomeUiState.Error>(viewModel.uiState.value).message)
+        assertEquals(HomeUiState.Error("Zürich", AppError.Network), viewModel.uiState.value)
     }
 
     @Test
-    fun `an exception with no message still produces a readable Error`() = runTest {
+    fun `a server error resolves to a ServerUnavailable Error`() = runTest {
+        measurementRepository.result = Result.Failure(HttpStatusException(502))
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(HomeUiState.Error("Zürich", AppError.ServerUnavailable), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `any other failure resolves to an Unknown Error`() = runTest {
         measurementRepository.result = Result.Failure(RuntimeException())
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertEquals(
-            "An unexpected error occurred",
-            assertIs<HomeUiState.Error>(viewModel.uiState.value).message,
-        )
+        assertEquals(HomeUiState.Error("Zürich", AppError.Unknown), viewModel.uiState.value)
     }
 
     @Test
@@ -277,11 +286,11 @@ class HomeViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        measurementRepository.result = Result.Failure(RuntimeException("no network"))
+        measurementRepository.result = Result.Failure(IOException("no network"))
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertEquals("no network", assertIs<HomeUiState.Error>(viewModel.uiState.value).message)
+        assertEquals(AppError.Network, assertIs<HomeUiState.Error>(viewModel.uiState.value).error)
     }
 
     @Test
@@ -304,14 +313,14 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `no stored station resolves to Error with a message rather than a spinner`() = runTest {
+    fun `no stored station resolves to a NoStationSelected Error rather than a spinner`() = runTest {
         selectedStationRepository = FakeSelectedStationRepository(initial = null)
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
         val state = assertIs<HomeUiState.Error>(viewModel.uiState.value)
-        assertTrue(state.message.isNotBlank())
+        assertEquals(AppError.NoStationSelected, state.error)
         assertEquals(emptyList(), measurementRepository.requested)
     }
 
@@ -355,7 +364,7 @@ class HomeViewModelTest {
 
         val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
         assertTrue(state.showFeelingPrompt)
-        assertNull(state.feelingSaveError)
+        assertFalse(state.feelingSaveError)
     }
 
     @Test
@@ -501,7 +510,7 @@ class HomeViewModelTest {
 
         val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
         assertTrue(state.showFeelingPrompt)
-        assertTrue(!state.feelingSaveError.isNullOrBlank())
+        assertTrue(state.feelingSaveError)
         assertEquals(emptyList(), diaryRepository.storedEntries)
     }
 
@@ -519,6 +528,6 @@ class HomeViewModelTest {
 
         val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
         assertFalse(state.showFeelingPrompt)
-        assertNull(state.feelingSaveError)
+        assertFalse(state.feelingSaveError)
     }
 }

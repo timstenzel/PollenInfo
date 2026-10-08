@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -120,7 +121,7 @@ private fun HomeContent(
                 }
             }
 
-            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
+            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
         }
     }
 }

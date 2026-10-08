@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.allStations
@@ -34,6 +35,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AllStationsViewModelTest {
@@ -145,13 +147,13 @@ class AllStationsViewModelTest {
     }
 
     @Test
-    fun `a failing station list gives Error with its message`() = runTest {
-        stationRepository.result = Result.Failure(RuntimeException("backend unreachable"))
+    fun `a failing station list gives Error with its kind`() = runTest {
+        stationRepository.result = Result.Failure(IOException("backend unreachable"))
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertEquals("backend unreachable", assertIs<AllStationsUiState.Error>(viewModel.uiState.value).message)
+        assertEquals(AllStationsUiState.Error(AppError.Network), viewModel.uiState.value)
     }
 
     @Test
@@ -187,7 +189,7 @@ class AllStationsViewModelTest {
 
         advanceUntilIdle()
 
-        assertIs<AllStationsUiState.Error>(viewModel.uiState.value)
+        assertEquals(AllStationsUiState.Error(AppError.NoReadings), viewModel.uiState.value)
     }
 
     @Test
@@ -306,7 +308,7 @@ class AllStationsViewModelTest {
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertIs<AllStationsUiState.Error>(viewModel.uiState.value)
+        assertEquals(AllStationsUiState.Error(AppError.NoReadings), viewModel.uiState.value)
     }
 
     @Test

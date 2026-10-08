@@ -17,4 +17,22 @@
     <string name="settings_meteoswiss_link_action">Website von MeteoSchweiz öffnen</string>
     <string name="settings_data_source_disclaimer">PollenInfo ist eine unabhängige App. Sie steht in keiner Verbindung zu MeteoSchweiz und wird von MeteoSchweiz weder unterstützt noch empfohlen.</string>
     <string name="settings_version">Version %1$s (%2$d)</string>
+
+    <string name="error_network">Der Server ist nicht erreichbar. Prüfe deine Internetverbindung und versuche es noch einmal.</string>
+    <string name="error_server_unavailable">Der Dienst hat gerade Probleme. Bitte versuche es später noch einmal.</string>
+    <string name="error_not_found">Diese Angaben sind gerade nicht verfügbar.</string>
+    <string name="error_alarm_not_found">Diesen Alarm gibt es nicht mehr.</string>
+    <string name="error_no_station_selected">Es ist keine Messstation ausgewählt.</string>
+    <string name="error_no_readings">Für keine Station konnten Messwerte geladen werden. Bitte versuche es später noch einmal.</string>
+    <string name="error_no_stations">Zurzeit sind keine Messstationen verfügbar.</string>
+    <string name="error_push_unavailable">Push-Mitteilungen sind auf diesem Gerät noch nicht verfügbar.</string>
+    <string name="error_alarm_limit_reached">Du hast die maximale Anzahl Alarme erreicht. Lösche einen, um einen neuen zu erstellen.</string>
+    <string name="error_invalid_alarm">Der Server hat diesen Alarm nicht angenommen. Bitte prüfe deine Angaben und versuche es noch einmal.</string>
+    <string name="error_unknown">Etwas ist schiefgelaufen. Bitte versuche es noch einmal.</string>
+    <string name="error_action_save_alarm">Der Alarm konnte nicht gespeichert werden.</string>
+    <string name="error_action_delete_alarm">Der Alarm konnte nicht gelöscht werden.</string>
+    <string name="error_action_pause_alarm">Der Alarm konnte nicht pausiert werden.</string>
+    <string name="error_action_resume_alarm">Der Alarm konnte nicht wieder eingeschaltet werden.</string>
+
+    <string name="home_feeling_save_error">Deine Antwort konnte nicht gespeichert werden. Bitte versuche es noch einmal.</string>
 </resources>

@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.station.data.repository
 
+import ch.stenzel.tim.polleninfo.core.network.HttpStatusException
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
@@ -107,6 +108,17 @@ class StationRepositoryImplTest {
         val repository = repository { respondError(HttpStatusCode.InternalServerError) }
 
         assertIs<Result.Failure>(repository.getStations())
+    }
+
+    @Test
+    fun `a 502 fails with HttpStatusException rather than a deserialization error`() = runTest {
+        // A JSON error body, so a service that skipped the status check would try to read it.
+        val repository = repository {
+            respond("""{"error":"upstream failed"}""", HttpStatusCode.BadGateway, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.getStations())
+        assertEquals(502, assertIs<HttpStatusException>(failure.exception).status)
     }
 
     @Test

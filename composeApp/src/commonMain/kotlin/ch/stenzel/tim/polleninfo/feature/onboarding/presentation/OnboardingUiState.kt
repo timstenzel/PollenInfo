@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 
 sealed interface OnboardingUiState {
@@ -31,10 +32,7 @@ sealed interface OnboardingUiState {
      * The screen cannot do its job at all — the station list could not be retrieved, so there is
      * nothing to pick from and only a retry makes sense.
      */
-    data class Error(
-        val exception: Exception,
-        val message: String = exception.message ?: "An unexpected error occurred",
-    ) : OnboardingUiState
+    data class Error(val error: AppError) : OnboardingUiState
 }
 
 /**

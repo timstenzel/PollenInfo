@@ -336,6 +336,9 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
+| `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
+| `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
+| `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 | `core/appinfo` | `AppVersion(name, code)` and `AppInfo` (`version: AppVersion?`, `null` when the platform reports no complete version) — bound in `platformModule`: `AndroidAppInfo` (`PackageManager`, `PackageInfoCompat.getLongVersionCode`), `IosAppInfo` (`CFBundleShortVersionString` / `CFBundleVersion`; a non-integer build number counts as missing). Checked by hand; consumers use `FakeAppInfo` |
 
@@ -398,6 +401,33 @@ Our `Result` deliberately shadows `kotlin.Result`, which is a default import. **
 `ch.stenzel.tim.polleninfo.core.result.Result` explicitly** — the explicit import wins, but a file
 that omits it binds to the stdlib type and fails to compile against `Success` / `Failure`. Use
 `safeCall`, not `runCatching` (which returns the stdlib type).
+
+**UI states carry an `AppError`, never a message string.** `core/result/AppError.kt` is a sealed
+interface of what went wrong *for the user*: `Network`, `ServerUnavailable`, `NotFound` (mapped from
+exceptions), `NoStationSelected`, `NoReadings`, `NoStations` (conditions a ViewModel finds itself),
+`PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures) and `Unknown`. A ViewModel
+turns a `Failure` into one with `exception.toAppError()`: any `kotlinx.io.IOException` — every
+engine's transport failures and Ktor's `HttpRequestTimeoutException` — is `Network`, an
+`HttpStatusException` 5xx `ServerUnavailable` and 404 `NotFound`, anything else (a payload that does
+not parse, another status) `Unknown`. `feature/alarms` has its own `toAlarmAppError()`
+(`domain/model/AlarmAppError.kt`) that maps its five exceptions — `UnknownDeviceException`, which
+only escapes after the repository's one re-registration, is `Unknown` — and delegates the rest; the
+alarm exceptions stay in the feature because `core/` may not import one.
+
+**Every API service checks the status before `body()`** through `core/network`'s
+`HttpResponse.checkSuccess()`, which throws `HttpStatusException(status)` on a non-2xx — so an error
+body is never read as the expected payload and the mapping can tell a 502 from a 404.
+(`AlarmApiService` first turns its own statuses — 400, 404, 409 — into the alarm exceptions.)
+
+**Screens turn an `AppError` into text** with `core/ui/error/AppErrorText.kt`:
+`AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
+snackbar shown from an event. `ErrorContext` is `LOAD` (the reason sentence alone, under the
+screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM`, which
+put "Couldn't save the alarm." etc. before the reason; `NotFound` reads "This alarm no longer
+exists." outside `LOAD`. The choice is the pure `AppError.text(context)` → `ErrorText(action,
+reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
+in all four languages. No exception text — host names, status codes, library messages — reaches a
+screen; `feature/example` is the one exception, being the untouched reference.
 
 ### UI state
 
@@ -563,8 +593,9 @@ change) and on every diary change: shown while `swissToday(clock)` has neither a
 `dismissedOn`. Until the diary has been read it is hidden, so the card never flashes up for a day
 already answered. `Loading` and `Error` never carry it. `onFeelingSelected(feeling)` records today's
 answer and `onFeelingPromptDismissed()` records only the dismissal; either hides the card through the
-diary flow, with no reload. A failed save keeps the card with `Content.feelingSaveError`, cleared by
-the next attempt. Swiss midnight passing while Home stays open shows the prompt at the next such
+diary flow, with no reload. A failed save keeps the card with `Content.feelingSaveError` (a
+`Boolean` — a local storage failure, shown as `home_feeling_save_error`), cleared by the next
+attempt. Swiss midnight passing while Home stays open shows the prompt at the next such
 event, not on the dot — accepted. While the card is up the list's bottom padding grows by its
 measured height (plus its margin), so the last species row still scrolls fully above it.
 
@@ -755,8 +786,8 @@ writes it, fetches the station list and the pollen types (in parallel, once — 
 and a Retry fetches only what has not arrived), then loads
 `GET /pollen/stations/{abbr}/history?range=…` through `StationHistoryRepository`: `Loading` →
 `Content(stations, stationAbbr, range, historyRange, history, species, checked, entries, isLoading)` |
-`Error(message)` with Retry. No stored station is an `Error`, never a spinner; a failed station or
-pollen-type list is an `Error` too.
+`Error(AppError)` with Retry. No stored station is `Error(NoStationSelected)`, never a spinner; a
+failed station or pollen-type list is an `Error` too, and an empty station list `Error(NoStations)`.
 
 **The chosen station, range and checked types are ViewModel fields**, not only `Content` fields, so
 a failed load's `Error` and its Retry resume all three. None is persisted: they survive tab switches
@@ -837,7 +868,7 @@ keeping the push token current as FCM rotates or drops it (see "Firebase").
 
 **Notifications are checked first.** `AlarmsUiState` is `CheckingPermission` (renders nothing; the
 permission has not been read yet) → `PermissionRequired(state)`, or, once `ENABLED`, the list:
-`Loading` → `Content(alarms, isRefreshing)` | `Error(message, pushUnavailable)`.
+`Loading` → `Content(alarms, isRefreshing)` | `Error(AppError)`.
 `AlarmsViewModel.onPermissionState(state)` maps the two non-enabled
 `NotificationPermissionState`s to `PermissionRequired`, in either direction, so revoking later brings
 the explanation back. The ViewModel never touches a platform API.
@@ -849,7 +880,7 @@ revocation is shown again unchanged when notifications come back. Reloading on r
 `onResume()` instead (below). (On Android revoking the permission kills the
 process, so in practice that return is a fresh load of the same list — same stored device id.) It
 has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at least
-`MIN_REFRESH_INDICATOR`, and `Error` offers Retry. `Error(pushUnavailable = true)` — iOS — says
+`MIN_REFRESH_INDICATOR`, and `Error` offers Retry. `Error(AppError.PushUnavailable)` — iOS — says
 "Push notifications aren't available on this device yet" with no Retry. Station names come from
 `StationRepository` and pollen-type names from `SpeciesRepository`, both fetched only when there is
 an alarm to describe (cached after that; the abbreviation or species id stands in if one fails), so
@@ -867,8 +898,9 @@ prefixed "Paused · ".
 **Tapping a row** opens `Screen.AlarmEditor(id)` (`onEditAlarm`). **Its `Switch` pauses or resumes
 the alarm optimistically**: `AlarmsViewModel.onEnabledToggled(id, enabled)` flips the row at once and
 stores the whole alarm with the new flag through `AlarmRepository.update` (a full `PUT`). If that
-fails the row flips back and `AlarmsEvent.ToggleFailed(message)` — a buffered `Channel`, as for any
-one-shot event — shows a snackbar once. The switch is its own focus stop, named "Alarm for
+fails the row flips back and `AlarmsEvent.ToggleFailed(error, enabling)` — a buffered `Channel`, as
+for any one-shot event — shows a snackbar once ("Couldn't resume the alarm." / "Couldn't pause the
+alarm." before the reason). The switch is its own focus stop, named "Alarm for
 <station>", so TalkBack reads its on/off state with what it switches; the row's click label is "Edit
 alarm".
 
@@ -886,7 +918,7 @@ first list item a reload into the limit would leave it scrolled out of view). Ma
 FAB has no disabled state, so it takes the spec's disabled colours (composited, so rows do not show
 through), ignores clicks and is `disabled()` for TalkBack. If the limit is hit anyway (another
 install sharing the id, or a race), the backend's `409` arrives as `AlarmLimitReachedException`, which
-the editor shows as its `saveError`.
+the editor shows as its `saveError` (`AppError.AlarmLimitReached`).
 
 **`AlarmRepositoryImpl` registers lazily.** Every alarm call — `alarms`, `alarm(id)`, `create`,
 `update`, `delete` — goes through one `withDevice { }` wrapper:
@@ -896,7 +928,9 @@ before any request), `POST /devices`, and stores the issued id. If a device call
 id, registers once and retries once; a second `404` is a `Failure`. Registration is behind a
 `Mutex`, and a re-registration that finds a newer id already stored uses it instead of replacing it
 again, so concurrent calls never register twice. `AlarmApiService` checks status codes itself rather
-than letting `body()` read an error response as data.
+than letting `body()` read an error response as data; any status it does not map is
+`HttpStatusException`. `UnknownDeviceException` lives in `domain/model/AlarmFailures.kt` with the
+other alarm failures, since it can reach a caller.
 
 On a single alarm's path (`PUT` / `DELETE …/alarms/{alarmId}`) the backend answers the **same**
 `404` for an unknown device and for an alarm the device does not have. Treating the latter as an
@@ -960,12 +994,13 @@ it sends `Done` at once.
 
 `AlarmEditorViewModel` loads the stations and the pollen types — and when editing, the alarm
 (`AlarmRepository.alarm(id)`) — in parallel (`Error` with Retry if any fails) and opens
-`Editing(form, stations, species, canDelete, isSaving, isDeleting, saveError, showDiscardDialog,
-showDeleteDialog)`. An existing alarm opens on `AlarmFormState.fromAlarm(alarm)`: every field as
+`Editing(form, stations, species, canDelete, isSaving, isDeleting, saveError, deleteError,
+showDiscardDialog, showDeleteDialog)`; an empty station list is `Error(AppError.NoStations)`. An existing alarm opens on `AlarmFormState.fromAlarm(alarm)`: every field as
 stored, `typeLocked` (the type toggle is shown disabled and `withType` changes nothing) and its
 paused state kept, since the list's switch owns that. Save then calls `update(id, draft)`, and "Delete
 alarm" (existing alarms only, `canDelete`) asks first (`showDeleteDialog`); confirming deletes and
-sends `Done`, a failed delete stays with its message in `saveError`. A new alarm opens on
+sends `Done`, a failed delete stays with its `AppError` in `deleteError` (shown in the
+`DELETE_ALARM` context). A new alarm opens on
 `AlarmFormState.newDailyReport(home, speciesIds)`: the stored home station (the first station if it
 is no longer listed), every pollen type, every day, "Any", 08:00. Choosing another station never
 touches the stored home station.
@@ -981,8 +1016,10 @@ is Any … Very high for a daily report and Low … Very high for a threshold al
 applies to a daily report, `withWindowStart` / `withWindowEnd` only to a threshold alert. `Editing.canSave` is `isValid && !isBusy`
 (`isBusy` = saving or deleting); `save()` is ignored otherwise, and so are field changes while a save
 or delete runs — the save sends the form
-as it was when tapped. A failed save keeps the form and shows its message as `saveError` until the
-next attempt. A backend `400` arrives as `InvalidAlarmException` with the server's `error` text.
+as it was when tapped. A failed save keeps the form and shows its `AppError` as `saveError` (in the
+`SAVE_ALARM` context) until the next save or delete, which clears both errors. A backend `400`
+arrives as `InvalidAlarmException` with the server's `error` text, which stays in the exception — the
+screen shows `AppError.InvalidAlarm`'s sentence.
 
 The screen: a `SingleChoiceSegmentedButtonRow` type toggle ("Daily report" / "Threshold alert"), a
 station `ExposedDropdownMenuBox` (as in onboarding), `FilterChip`s in `FlowRow`s for pollen types,
@@ -1083,7 +1120,8 @@ Two deliberate choices:
 ### Localization
 
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
-the bottom bar's tab names and the Settings screen. Everything else is still hard-coded English and
+the bottom bar's tab names, the Settings screen, every error sentence (`error_*`, see "Error
+handling") and Home's feeling-save error. Everything else is still hard-coded English and
 moves over screen by screen.
 
 - **Resources.** Compose Multiplatform resources in
@@ -1095,7 +1133,7 @@ moves over screen by screen.
   that is all Compose resources substitute. Android-only text goes in
   `androidMain/res/values{,-de,-fr,-it}/strings.xml` (none yet).
 - **Fallback.** A device language other than de/fr/it gets `values/` (English).
-- **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`. Keys starting with `example_` are reserved
+- **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`. Keys starting with `example_` are reserved
   for the English-only reference feature.
 - **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
   are formal ("vous" / "Lei"); French typography puts a narrow no-break space (U+202F) before `? ! ;`

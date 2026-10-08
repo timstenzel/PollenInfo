@@ -9,11 +9,11 @@ import ch.stenzel.tim.polleninfo.core.result.safeCall
 import ch.stenzel.tim.polleninfo.feature.alarms.data.mapper.toDomain
 import ch.stenzel.tim.polleninfo.feature.alarms.data.mapper.toInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
-import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.UnknownDeviceException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmDraft
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.UnknownDeviceException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex

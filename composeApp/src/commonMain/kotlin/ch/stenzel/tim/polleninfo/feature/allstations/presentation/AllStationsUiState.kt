@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
 import kotlinx.datetime.Instant
 
@@ -24,5 +25,5 @@ sealed interface AllStationsUiState {
         val isRefreshing: Boolean = false,
     ) : AllStationsUiState
 
-    data class Error(val message: String) : AllStationsUiState
+    data class Error(val error: AppError) : AllStationsUiState
 }

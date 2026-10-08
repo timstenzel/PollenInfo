@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.feature.diary.presentation
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.model.StationHistory
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 
@@ -55,5 +56,5 @@ sealed interface DiaryUiState {
             }
     }
 
-    data class Error(val message: String) : DiaryUiState
+    data class Error(val error: AppError) : DiaryUiState
 }

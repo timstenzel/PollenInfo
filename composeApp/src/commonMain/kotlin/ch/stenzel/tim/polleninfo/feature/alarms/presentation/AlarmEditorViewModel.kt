@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.toAlarmAppError
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -76,7 +78,7 @@ class AlarmEditorViewModel(
     fun save() {
         val editing = _uiState.value as? AlarmEditorUiState.Editing ?: return
         if (!editing.canSave) return
-        _uiState.value = editing.copy(isSaving = true, saveError = null)
+        _uiState.value = editing.copy(isSaving = true, saveError = null, deleteError = null)
 
         viewModelScope.launch {
             val draft = editing.form.toDraft()
@@ -84,7 +86,7 @@ class AlarmEditorViewModel(
             when (result) {
                 is Result.Success -> _events.send(AlarmEditorEvent.Done)
                 is Result.Failure -> updateEditing {
-                    copy(isSaving = false, saveError = result.exception.message ?: DEFAULT_SAVE_ERROR)
+                    copy(isSaving = false, saveError = result.exception.toAlarmAppError())
                 }
             }
         }
@@ -120,13 +122,18 @@ class AlarmEditorViewModel(
     fun onDeleteConfirmed() {
         val editing = _uiState.value as? AlarmEditorUiState.Editing ?: return
         if (alarmId == null || !editing.showDeleteDialog || editing.isBusy) return
-        _uiState.value = editing.copy(showDeleteDialog = false, isDeleting = true, saveError = null)
+        _uiState.value = editing.copy(
+            showDeleteDialog = false,
+            isDeleting = true,
+            saveError = null,
+            deleteError = null,
+        )
 
         viewModelScope.launch {
             when (val result = alarmRepository.delete(alarmId)) {
                 is Result.Success -> _events.send(AlarmEditorEvent.Done)
                 is Result.Failure -> updateEditing {
-                    copy(isDeleting = false, saveError = result.exception.message ?: DEFAULT_DELETE_ERROR)
+                    copy(isDeleting = false, deleteError = result.exception.toAlarmAppError())
                 }
             }
         }
@@ -144,22 +151,22 @@ class AlarmEditorViewModel(
 
             val stationList = when (val result = stations.await()) {
                 is Result.Success -> result.data
-                is Result.Failure -> return@launch fail(result.exception)
+                is Result.Failure -> return@launch fail(result.exception.toAlarmAppError())
             }
             val speciesList = when (val result = species.await()) {
                 is Result.Success -> result.data
-                is Result.Failure -> return@launch fail(result.exception)
+                is Result.Failure -> return@launch fail(result.exception.toAlarmAppError())
             }
             val form = if (alarm != null) {
                 when (val result = alarm.await()) {
                     is Result.Success -> AlarmFormState.fromAlarm(result.data)
-                    is Result.Failure -> return@launch fail(result.exception)
+                    is Result.Failure -> return@launch fail(result.exception.toAlarmAppError())
                 }
             } else {
                 // Past the startup gate a home station always exists; the fallback covers a stored
                 // station the list no longer contains rather than leaving the dropdown empty.
                 val station = stationList.firstOrNull { it.abbr == home?.abbr } ?: stationList.firstOrNull()
-                    ?: return@launch fail(IllegalStateException("No stations available"))
+                    ?: return@launch fail(AppError.NoStations)
                 AlarmFormState.newDailyReport(station.abbr, speciesList.map { it.id })
             }
 
@@ -172,8 +179,8 @@ class AlarmEditorViewModel(
         }
     }
 
-    private fun fail(exception: Exception) {
-        _uiState.value = AlarmEditorUiState.Error(exception.message ?: DEFAULT_LOAD_ERROR)
+    private fun fail(error: AppError) {
+        _uiState.value = AlarmEditorUiState.Error(error)
     }
 
     /**
@@ -186,11 +193,5 @@ class AlarmEditorViewModel(
 
     private fun updateEditing(change: AlarmEditorUiState.Editing.() -> AlarmEditorUiState.Editing) {
         _uiState.update { state -> if (state is AlarmEditorUiState.Editing) state.change() else state }
-    }
-
-    private companion object {
-        const val DEFAULT_LOAD_ERROR = "An unexpected error occurred"
-        const val DEFAULT_SAVE_ERROR = "The alarm could not be saved"
-        const val DEFAULT_DELETE_ERROR = "The alarm could not be deleted"
     }
 }

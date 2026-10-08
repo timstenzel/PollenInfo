@@ -1,8 +1,10 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.network.HttpStatusException
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
@@ -12,6 +14,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmFormState
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
@@ -38,6 +41,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlarmEditorViewModelTest {
@@ -105,16 +109,16 @@ class AlarmEditorViewModelTest {
 
     @Test
     fun `a failing species load shows Error`() = runTest {
-        species.result = Result.Failure(RuntimeException("offline"))
+        species.result = Result.Failure(IOException("offline"))
 
-        assertEquals(AlarmEditorUiState.Error("offline"), loadedViewModel().uiState.value)
+        assertEquals(AlarmEditorUiState.Error(AppError.Network), loadedViewModel().uiState.value)
     }
 
     @Test
     fun `a failing station load shows Error`() = runTest {
-        stations.result = Result.Failure(RuntimeException("offline"))
+        stations.result = Result.Failure(HttpStatusException(502))
 
-        assertEquals(AlarmEditorUiState.Error("offline"), loadedViewModel().uiState.value)
+        assertEquals(AlarmEditorUiState.Error(AppError.ServerUnavailable), loadedViewModel().uiState.value)
     }
 
     @Test
@@ -215,14 +219,14 @@ class AlarmEditorViewModelTest {
         val events = collectEvents(viewModel)
         viewModel.onSpeciesToggled("BIRCH")
         val formBefore = viewModel.editing().form
-        alarms.createResult = Result.Failure(RuntimeException("Connection refused"))
+        alarms.createResult = Result.Failure(IOException("Connection refused"))
 
         viewModel.save()
         advanceUntilIdle()
 
         val editing = viewModel.editing()
         assertEquals(formBefore, editing.form)
-        assertEquals("Connection refused", editing.saveError)
+        assertEquals(AppError.Network, editing.saveError)
         assertFalse(editing.isSaving)
         assertTrue(events.isEmpty())
     }
@@ -240,7 +244,7 @@ class AlarmEditorViewModelTest {
 
         val editing = viewModel.editing()
         assertEquals(formBefore, editing.form)
-        assertEquals("You can have at most 10 alarms. Delete one to create another.", editing.saveError)
+        assertEquals(AppError.AlarmLimitReached, editing.saveError)
         assertFalse(editing.isSaving)
         assertTrue(events.isEmpty())
     }
@@ -402,11 +406,11 @@ class AlarmEditorViewModelTest {
 
     @Test
     fun `a failed edit load shows Error`() = runTest {
-        alarms.alarmResult = Result.Failure(RuntimeException("This alarm no longer exists"))
+        alarms.alarmResult = Result.Failure(AlarmNotFoundException())
 
         val viewModel = viewModel(alarmId = "gone").also { advanceUntilIdle() }
 
-        assertEquals(AlarmEditorUiState.Error("This alarm no longer exists"), viewModel.uiState.value)
+        assertEquals(AlarmEditorUiState.Error(AppError.NotFound), viewModel.uiState.value)
     }
 
     @Test
@@ -487,7 +491,7 @@ class AlarmEditorViewModelTest {
     @Test
     fun `a failed delete stays in the editor with an error`() = runTest {
         alarms.result = Result.Success(listOf(dailyAlarm()))
-        alarms.deleteResult = Result.Failure(RuntimeException("offline"))
+        alarms.deleteResult = Result.Failure(IOException("offline"))
         val viewModel = viewModel(alarmId = "daily-1").also { advanceUntilIdle() }
         val events = collectEvents(viewModel)
         viewModel.onDeleteRequested()
@@ -497,7 +501,8 @@ class AlarmEditorViewModelTest {
 
         val editing = viewModel.editing()
         assertFalse(editing.isDeleting)
-        assertEquals("offline", editing.saveError)
+        assertEquals(AppError.Network, editing.deleteError)
+        assertNull(editing.saveError)
         assertEquals(emptyList(), events)
     }
 }

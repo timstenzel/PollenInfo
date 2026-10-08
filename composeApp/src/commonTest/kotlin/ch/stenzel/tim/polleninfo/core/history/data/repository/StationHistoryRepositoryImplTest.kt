@@ -4,6 +4,7 @@ import ch.stenzel.tim.polleninfo.core.history.data.remote.StationHistoryApiServi
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.model.StationHistory
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.network.HttpStatusException
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.result.Result
 import io.ktor.client.engine.mock.MockEngine
@@ -13,12 +14,12 @@ import io.ktor.client.engine.mock.respondError
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 
 /**
  * Through a real Ktor client backed by [MockEngine], so the JSON contract with our backend and the
@@ -136,6 +137,17 @@ class StationHistoryRepositoryImplTest {
         val repository = repository { respondError(HttpStatusCode.BadGateway) }
 
         assertIs<Result.Failure>(repository.history("PZH", HistoryRange.WEEK))
+    }
+
+    @Test
+    fun `a 502 fails with HttpStatusException rather than a deserialization error`() = runTest {
+        // A JSON error body, so a service that skipped the status check would try to read it.
+        val repository = repository {
+            respond("""{"error":"upstream failed"}""", HttpStatusCode.BadGateway, jsonHeaders)
+        }
+
+        val failure = assertIs<Result.Failure>(repository.history("PZH", HistoryRange.WEEK))
+        assertEquals(502, assertIs<HttpStatusException>(failure.exception).status)
     }
 
     @Test

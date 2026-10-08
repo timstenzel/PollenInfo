@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.data.remote
 
+import ch.stenzel.tim.polleninfo.core.network.checkSuccess
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.AlarmInputDto
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.ErrorDto
@@ -9,6 +10,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.dto.UpdateTokenReque
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmNotFoundException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.UnknownDeviceException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
@@ -20,7 +22,6 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.http.isSuccess
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -40,7 +41,7 @@ class AlarmApiService(
         client.post("$baseUrl/devices") {
             contentType(ContentType.Application.Json)
             setBody(RegisterDeviceRequestDto(fcmToken))
-        }.checked().body()
+        }.checkSuccess().body()
 
     /** `404` is [UnknownDeviceException], as on every device path. */
     suspend fun updateToken(deviceId: String, fcmToken: String) {
@@ -49,7 +50,7 @@ class AlarmApiService(
             setBody(UpdateTokenRequestDto(fcmToken))
         }
         if (response.status == HttpStatusCode.NotFound) throw UnknownDeviceException()
-        response.checked()
+        response.checkSuccess()
     }
 
     suspend fun getAlarms(deviceId: String): List<AlarmDto> =
@@ -103,17 +104,6 @@ class AlarmApiService(
             }
             throw InvalidAlarmException(reason ?: "The backend refused this alarm")
         }
-        return checked()
-    }
-
-    private fun HttpResponse.checked(): HttpResponse {
-        if (!status.isSuccess()) throw BackendStatusException(status)
-        return this
+        return checkSuccess()
     }
 }
-
-/** The backend does not know the stored device id — its database was reset, or the id is stale. */
-class UnknownDeviceException : Exception("The backend does not know this device")
-
-class BackendStatusException(status: HttpStatusCode) :
-    Exception("The backend answered ${status.value} ${status.description}")

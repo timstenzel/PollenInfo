@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -144,7 +145,7 @@ private fun AllStationsContent(
 
             is AllStationsUiState.Content -> ContentView(uiState, listState, onRefresh, onStationClick, modifier)
 
-            is AllStationsUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
+            is AllStationsUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
         }
     }
 }

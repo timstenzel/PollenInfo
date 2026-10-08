@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
 
@@ -26,13 +27,10 @@ sealed interface AlarmsUiState {
     }
 
     /**
-     * The list could not be loaded. [pushUnavailable] means it never can be on this device, so the
-     * screen explains that instead of offering a retry.
+     * The list could not be loaded. [AppError.PushUnavailable] means it never can be on this device,
+     * so the screen explains that instead of offering a retry.
      */
-    data class Error(
-        val message: String,
-        val pushUnavailable: Boolean = false,
-    ) : AlarmsUiState
+    data class Error(val error: AppError) : AlarmsUiState
 }
 
 /** One row of the list: the alarm, its station's display name and a one-line summary. */

@@ -7,7 +7,7 @@ import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferen
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
-import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.toAlarmAppError
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
@@ -126,11 +126,7 @@ class AlarmsViewModel(
             val result = alarmRepository.update(alarmId, toggled.toDraft())
             if (result is Result.Failure) {
                 setEnabled(alarmId, !enabled)
-                _events.send(
-                    AlarmsEvent.ToggleFailed(
-                        if (enabled) "The alarm could not be switched on" else "The alarm could not be switched off",
-                    ),
-                )
+                _events.send(AlarmsEvent.ToggleFailed(result.exception.toAlarmAppError(), enabling = enabled))
             }
         }
     }
@@ -164,10 +160,7 @@ class AlarmsViewModel(
             minimumIndicator?.join()
             listState = when (result) {
                 is Result.Success -> AlarmsUiState.Content(result.data)
-                is Result.Failure -> AlarmsUiState.Error(
-                    message = result.exception.message ?: DEFAULT_ERROR_MESSAGE,
-                    pushUnavailable = result.exception is PushUnavailableException,
-                )
+                is Result.Failure -> AlarmsUiState.Error(result.exception.toAlarmAppError())
             }
             publish()
         }
@@ -226,7 +219,5 @@ class AlarmsViewModel(
     companion object {
         /** The shortest time a refresh shows its indicator; see [load] for why one is needed. */
         val MIN_REFRESH_INDICATOR = 500.milliseconds
-
-        private const val DEFAULT_ERROR_MESSAGE = "An unexpected error occurred"
     }
 }

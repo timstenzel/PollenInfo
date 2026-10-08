@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.preferences.FakeNotificationPermissionPreferences
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
@@ -31,6 +32,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlarmsViewModelTest {
@@ -258,15 +260,12 @@ class AlarmsViewModelTest {
 
     @Test
     fun `a failing load shows Error and retry shows Content`() = runTest {
-        alarms.result = Result.Failure(RuntimeException("Connection refused"))
+        alarms.result = Result.Failure(IOException("Connection refused"))
         val viewModel = viewModel()
         viewModel.onPermissionState(NotificationPermissionState.ENABLED)
         advanceUntilIdle()
 
-        assertEquals(
-            AlarmsUiState.Error(message = "Connection refused", pushUnavailable = false),
-            viewModel.uiState.value,
-        )
+        assertEquals(AlarmsUiState.Error(AppError.Network), viewModel.uiState.value)
 
         alarms.result = Result.Success(listOf(dailyAlarm()))
         alarms.gate = CompletableDeferred()
@@ -280,14 +279,14 @@ class AlarmsViewModelTest {
     }
 
     @Test
-    fun `PushUnavailable shows Error with the push-unavailable flag`() = runTest {
+    fun `PushUnavailable shows Error with the PushUnavailable kind`() = runTest {
         alarms.result = Result.Failure(PushUnavailableException())
         val viewModel = viewModel()
 
         viewModel.onPermissionState(NotificationPermissionState.ENABLED)
         advanceUntilIdle()
 
-        assertTrue(assertIs<AlarmsUiState.Error>(viewModel.uiState.value).pushUnavailable)
+        assertEquals(AlarmsUiState.Error(AppError.PushUnavailable), viewModel.uiState.value)
     }
 
     // --- Refresh ---
@@ -474,7 +473,7 @@ class AlarmsViewModelTest {
         val viewModel = loadedViewModel(listOf(thresholdAlarm()))
         val events = collectEvents(viewModel)
         alarms.updateGate = CompletableDeferred()
-        alarms.updateResult = Result.Failure(RuntimeException("offline"))
+        alarms.updateResult = Result.Failure(IOException("offline"))
 
         viewModel.onEnabledToggled("threshold-1", enabled = true)
         runCurrent()
@@ -484,7 +483,7 @@ class AlarmsViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.enabledOf("threshold-1"))
-        assertEquals(listOf<AlarmsEvent>(AlarmsEvent.ToggleFailed("The alarm could not be switched on")), events)
+        assertEquals(listOf<AlarmsEvent>(AlarmsEvent.ToggleFailed(AppError.Network, enabling = true)), events)
     }
 
     @Test

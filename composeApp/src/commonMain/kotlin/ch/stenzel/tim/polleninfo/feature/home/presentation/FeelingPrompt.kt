@@ -24,6 +24,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.ui.feeling.label
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.home_feeling_save_error
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The once-a-day question floated over Home's list: four full-word answers from Very bad to Very
@@ -31,7 +34,7 @@ import ch.stenzel.tim.polleninfo.core.ui.feeling.label
  */
 @Composable
 fun FeelingPrompt(
-    saveError: String?,
+    saveError: Boolean,
     onFeelingSelected: (Feeling) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -67,9 +70,9 @@ fun FeelingPrompt(
                     }
                 }
             }
-            if (saveError != null) {
+            if (saveError) {
                 Text(
-                    text = saveError,
+                    text = stringResource(Res.string.home_feeling_save_error),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 8.dp, end = 12.dp),

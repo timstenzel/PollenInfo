@@ -19,6 +19,12 @@ class InvalidAlarmException(message: String) : Exception(message)
  */
 class AlarmNotFoundException : Exception("This alarm no longer exists")
 
+/**
+ * The backend does not know the stored device id — its database was reset, or the id is stale. The
+ * repository re-registers once on it; it only reaches a caller if the fresh id is unknown too.
+ */
+class UnknownDeviceException : Exception("The backend does not know this device")
+
 /** How many alarms one device may hold; the backend refuses the next with `409`. */
 const val MAX_ALARMS = 10
 

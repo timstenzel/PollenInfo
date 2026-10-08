@@ -17,4 +17,22 @@
     <string name="settings_meteoswiss_link_action">Aprire il sito web di MeteoSvizzera</string>
     <string name="settings_data_source_disclaimer">PollenInfo è un’app indipendente. Non è affiliata a MeteoSvizzera né da essa sostenuta.</string>
     <string name="settings_version">Versione %1$s (%2$d)</string>
+
+    <string name="error_network">Impossibile raggiungere il server. Controlli la connessione Internet e riprovi.</string>
+    <string name="error_server_unavailable">Il servizio ha attualmente dei problemi. Riprovi più tardi.</string>
+    <string name="error_not_found">Queste informazioni non sono disponibili al momento.</string>
+    <string name="error_alarm_not_found">Questo allarme non esiste più.</string>
+    <string name="error_no_station_selected">Nessuna stazione di misurazione è selezionata.</string>
+    <string name="error_no_readings">Non è stato possibile caricare le misurazioni di nessuna stazione. Riprovi più tardi.</string>
+    <string name="error_no_stations">Al momento non è disponibile nessuna stazione di misurazione.</string>
+    <string name="error_push_unavailable">Le notifiche push non sono ancora disponibili su questo dispositivo.</string>
+    <string name="error_alarm_limit_reached">Ha raggiunto il numero massimo di allarmi. Ne elimini uno per crearne un altro.</string>
+    <string name="error_invalid_alarm">Il server non ha accettato questo allarme. Controlli i dati inseriti e riprovi.</string>
+    <string name="error_unknown">Si è verificato un errore. Riprovi.</string>
+    <string name="error_action_save_alarm">Impossibile salvare l’allarme.</string>
+    <string name="error_action_delete_alarm">Impossibile eliminare l’allarme.</string>
+    <string name="error_action_pause_alarm">Impossibile sospendere l’allarme.</string>
+    <string name="error_action_resume_alarm">Impossibile riattivare l’allarme.</string>
+
+    <string name="home_feeling_save_error">Non è stato possibile salvare la Sua risposta. Riprovi.</string>
 </resources>

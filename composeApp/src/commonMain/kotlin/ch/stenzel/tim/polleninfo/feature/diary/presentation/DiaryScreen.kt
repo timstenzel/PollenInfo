@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import org.koin.compose.viewmodel.koinViewModel
@@ -98,7 +99,7 @@ private fun DiaryContent(
         when (uiState) {
             is DiaryUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
             is DiaryUiState.Content -> DiaryView(uiState, actions, modifier)
-            is DiaryUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.message, onRetry) }
+            is DiaryUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
         }
     }
 }

@@ -73,25 +73,26 @@ picker is built on `AppError` from the start.
 
 ### Implementation steps
 
-- [ ] Add `AppError` (`Network`, `ServerUnavailable`, `NotFound`, `NoStationSelected`, `NoReadings`, `NoStations`, `PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm`, `Unknown`) and `Throwable.toAppError()` (IO/transport/timeout → `Network`, `HttpStatusException` 5xx → `ServerUnavailable`, 404 → `NotFound`, else `Unknown`) in `core/result`.
-- [ ] Add `HttpStatusException(status)` in `core/network`, replacing `BackendStatusException`, and make every API service check the status before `body()` (station, measurement, history, species, alarms; history already checks — switch it to the new exception).
-- [ ] Add `toAlarmAppError()` in `feature/alarms`: `PushUnavailableException` → `PushUnavailable`, `InvalidAlarmException` → `InvalidAlarm`, `AlarmLimitReachedException` → `AlarmLimitReached`, `AlarmNotFoundException` → `NotFound`, `UnknownDeviceException` → `Unknown`, everything else delegated.
-- [ ] Replace message strings with `AppError` in Home (`NO_STATION_MESSAGE` → `NoStationSelected`; `feelingSaveError` → `Boolean`), All stations (`NO_READINGS_MESSAGE` → `NoReadings`), Diary, Alarms (`Error(message, pushUnavailable)` → `Error(AppError)`, `ToggleFailed(message)` → `ToggleFailed(error, enabling: Boolean)`), Alarm editor (`saveError: AppError?`, "No stations available" → `NoStations`) and Onboarding; remove the `DEFAULT_*_ERROR` constants.
-- [ ] Add `AppError.message(context)` in `core/ui/error` with load / save / delete / toggle wording, translated into all four languages; screens map `AppError` (and Home's feeling-save flag) to text.
-- [ ] Update CLAUDE.md "Error handling" and the UI-state descriptions that mention messages.
+- [x] Add `AppError` (`Network`, `ServerUnavailable`, `NotFound`, `NoStationSelected`, `NoReadings`, `NoStations`, `PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm`, `Unknown`) and `Throwable.toAppError()` (IO/transport/timeout → `Network`, `HttpStatusException` 5xx → `ServerUnavailable`, 404 → `NotFound`, else `Unknown`) in `core/result`.
+- [x] Add `HttpStatusException(status)` in `core/network`, replacing `BackendStatusException`, and make every API service check the status before `body()` (station, measurement, history, species, alarms; history already checks — switch it to the new exception).
+- [x] Add `toAlarmAppError()` in `feature/alarms`: `PushUnavailableException` → `PushUnavailable`, `InvalidAlarmException` → `InvalidAlarm`, `AlarmLimitReachedException` → `AlarmLimitReached`, `AlarmNotFoundException` → `NotFound`, `UnknownDeviceException` → `Unknown`, everything else delegated.
+- [x] Replace message strings with `AppError` in Home (`NO_STATION_MESSAGE` → `NoStationSelected`; `feelingSaveError` → `Boolean`), All stations (`NO_READINGS_MESSAGE` → `NoReadings`), Diary, Alarms (`Error(message, pushUnavailable)` → `Error(AppError)`, `ToggleFailed(message)` → `ToggleFailed(error, enabling: Boolean)`), Alarm editor (`saveError: AppError?`, "No stations available" → `NoStations`) and Onboarding; remove the `DEFAULT_*_ERROR` constants.
+- [x] Add `AppError.message(context)` in `core/ui/error` with load / save / delete / toggle wording, translated into all four languages; screens map `AppError` (and Home's feeling-save flag) to text.
+- [x] Update CLAUDE.md "Error handling" and the UI-state descriptions that mention messages.
 
 ### Acceptance criteria
 
-- [ ] `AppErrorTest` pins: an IO exception and a request timeout → `Network`; `HttpStatusException` 500, 502 and 503 → `ServerUnavailable`; 404 → `NotFound`; any other exception → `Unknown`.
-- [ ] An alarms test pins `toAlarmAppError()` for each of the five alarm exceptions and delegation for any other.
-- [ ] `MockEngine` tests for the station, measurement and species services pin that a `502` response fails with `HttpStatusException(502)` rather than a deserialization error.
-- [ ] The existing error tests of `HomeViewModelTest`, `AllStationsViewModelTest`, `DiaryViewModelTest`, `AlarmsViewModelTest`, `AlarmEditorViewModelTest` and `OnboardingViewModelTest` assert an `AppError` kind (or Home's feeling-save flag) instead of a message.
-- [ ] `grep -rnE '(message|[eE]rror): String' --include='*UiState.kt' --include='*Event.kt' composeApp/src/commonMain` returns nothing outside `feature/example`, and `grep -rn 'exception.message' composeApp/src/commonMain` returns nothing under any `presentation/` outside `feature/example`.
-- [ ] On the emulator: in airplane mode Home shows the translated "couldn't reach the server" sentence; with a backend answering `502` (stop upstream access or stub) it shows the "service is having problems" sentence instead; saving an eleventh alarm (ten seeded through the API for the same device id) shows the translated limit message; no host name, status code or library text appears in any of them.
+- [x] `AppErrorTest` pins: an IO exception and a request timeout → `Network`; `HttpStatusException` 500, 502 and 503 → `ServerUnavailable`; 404 → `NotFound`; any other exception → `Unknown`.
+- [x] An alarms test pins `toAlarmAppError()` for each of the five alarm exceptions and delegation for any other.
+- [x] `MockEngine` tests for the station, measurement and species services pin that a `502` response fails with `HttpStatusException(502)` rather than a deserialization error.
+- [x] The existing error tests of `HomeViewModelTest`, `AllStationsViewModelTest`, `DiaryViewModelTest`, `AlarmsViewModelTest`, `AlarmEditorViewModelTest` and `OnboardingViewModelTest` assert an `AppError` kind (or Home's feeling-save flag) instead of a message.
+- [x] `grep -rnE '(message|[eE]rror): String' --include='*UiState.kt' --include='*Event.kt' composeApp/src/commonMain` returns nothing outside `feature/example`, and `grep -rn 'exception.message' composeApp/src/commonMain` returns nothing under any `presentation/` outside `feature/example`.
+- [x] On the emulator: in airplane mode Home shows the translated "couldn't reach the server" sentence; with a backend answering `502` (stop upstream access or stub) it shows the "service is having problems" sentence instead; saving an eleventh alarm (ten seeded through the API for the same device id) shows the translated limit message; no host name, status code or library text appears in any of them.
+  *(Verified 2026-10-08 on API 36 with the app locale set to de-CH: airplane mode → "Der Server ist nicht erreichbar. Prüfe deine Internetverbindung …"; a stub on :8080 answering `502` → "Der Dienst hat gerade Probleme. …"; nine alarms seeded through the API, editor opened, a tenth seeded, Save → "Der Alarm konnte nicht gespeichert werden. Du hast die maximale Anzahl Alarme erreicht. …". The screens' headings and "Retry" are still English until task 06. Seeded alarms deleted afterwards.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
+- [x] Common quality gates.
 
 ## Task 03-change-default-station
 
