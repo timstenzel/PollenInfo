@@ -66,8 +66,50 @@ import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.alarm_delete
+import ch.stenzel.tim.polleninfo.resources.alarm_delete_confirm
+import ch.stenzel.tim.polleninfo.resources.alarm_delete_text
+import ch.stenzel.tim.polleninfo.resources.alarm_delete_title
+import ch.stenzel.tim.polleninfo.resources.alarm_deleting
+import ch.stenzel.tim.polleninfo.resources.alarm_discard_confirm
+import ch.stenzel.tim.polleninfo.resources.alarm_discard_keep
+import ch.stenzel.tim.polleninfo.resources.alarm_discard_text
+import ch.stenzel.tim.polleninfo.resources.alarm_discard_title
+import ch.stenzel.tim.polleninfo.resources.alarm_editor_load_failed
+import ch.stenzel.tim.polleninfo.resources.alarm_editor_title_edit
+import ch.stenzel.tim.polleninfo.resources.alarm_editor_title_new
+import ch.stenzel.tim.polleninfo.resources.alarm_hint_no_days
+import ch.stenzel.tim.polleninfo.resources.alarm_hint_no_species
+import ch.stenzel.tim.polleninfo.resources.alarm_hint_window
+import ch.stenzel.tim.polleninfo.resources.alarm_minimum_note_any
+import ch.stenzel.tim.polleninfo.resources.alarm_minimum_note_daily
+import ch.stenzel.tim.polleninfo.resources.alarm_minimum_note_threshold
+import ch.stenzel.tim.polleninfo.resources.alarm_report_time
+import ch.stenzel.tim.polleninfo.resources.alarm_save
+import ch.stenzel.tim.polleninfo.resources.alarm_saving
+import ch.stenzel.tim.polleninfo.resources.alarm_section_days
+import ch.stenzel.tim.polleninfo.resources.alarm_section_minimum_daily
+import ch.stenzel.tim.polleninfo.resources.alarm_section_minimum_threshold
+import ch.stenzel.tim.polleninfo.resources.alarm_section_species
+import ch.stenzel.tim.polleninfo.resources.alarm_section_station
+import ch.stenzel.tim.polleninfo.resources.alarm_section_time
+import ch.stenzel.tim.polleninfo.resources.alarm_section_window
+import ch.stenzel.tim.polleninfo.resources.alarm_swiss_time
+import ch.stenzel.tim.polleninfo.resources.alarm_time_description
+import ch.stenzel.tim.polleninfo.resources.alarm_time_picker_confirm
+import ch.stenzel.tim.polleninfo.resources.alarm_type_daily
+import ch.stenzel.tim.polleninfo.resources.alarm_type_daily_description
+import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold
+import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold_description
+import ch.stenzel.tim.polleninfo.resources.alarm_window_end
+import ch.stenzel.tim.polleninfo.resources.alarm_window_start
+import ch.stenzel.tim.polleninfo.resources.common_back
+import ch.stenzel.tim.polleninfo.resources.common_cancel
+import ch.stenzel.tim.polleninfo.resources.common_retry
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -98,7 +140,7 @@ fun AlarmEditorScreen(
 
     AlarmEditorContent(
         uiState = uiState,
-        title = if (alarmId == null) "New alarm" else "Edit alarm",
+        title = stringResource(if (alarmId == null) Res.string.alarm_editor_title_new else Res.string.alarm_editor_title_edit),
         onBack = viewModel::onBack,
         onRetry = viewModel::retry,
         onStationSelected = viewModel::onStationSelected,
@@ -146,7 +188,7 @@ private fun AlarmEditorContent(
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
                     }
                 },
             )
@@ -164,7 +206,7 @@ private fun AlarmEditorContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "The alarm editor could not be loaded.",
+                    stringResource(Res.string.alarm_editor_load_failed),
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
                 )
@@ -174,7 +216,7 @@ private fun AlarmEditorContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                Button(onClick = onRetry) { Text("Retry") }
+                Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
             }
 
             is AlarmEditorUiState.Editing -> EditingForm(
@@ -198,24 +240,24 @@ private fun AlarmEditorContent(
         if (uiState.showDiscardDialog) {
             AlertDialog(
                 onDismissRequest = onDiscardDismissed,
-                title = { Text("Discard changes?") },
-                text = { Text("Your changes to this alarm will not be saved.") },
-                confirmButton = { TextButton(onClick = onDiscardConfirmed) { Text("Discard") } },
-                dismissButton = { TextButton(onClick = onDiscardDismissed) { Text("Keep editing") } },
+                title = { Text(stringResource(Res.string.alarm_discard_title)) },
+                text = { Text(stringResource(Res.string.alarm_discard_text)) },
+                confirmButton = { TextButton(onClick = onDiscardConfirmed) { Text(stringResource(Res.string.alarm_discard_confirm)) } },
+                dismissButton = { TextButton(onClick = onDiscardDismissed) { Text(stringResource(Res.string.alarm_discard_keep)) } },
             )
         }
         if (uiState.showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = onDeleteDismissed,
-                title = { Text("Delete alarm?") },
-                text = { Text("You will no longer get notifications from this alarm.") },
+                title = { Text(stringResource(Res.string.alarm_delete_title)) },
+                text = { Text(stringResource(Res.string.alarm_delete_text)) },
                 confirmButton = {
                     TextButton(
                         onClick = onDeleteConfirmed,
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text("Delete") }
+                    ) { Text(stringResource(Res.string.alarm_delete_confirm)) }
                 },
-                dismissButton = { TextButton(onClick = onDeleteDismissed) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = onDeleteDismissed) { Text(stringResource(Res.string.common_cancel)) } },
             )
         }
     }
@@ -245,17 +287,17 @@ private fun EditingForm(
         // Locked when editing: still shown, so the alarm's type is visible, but not changeable.
         TypeToggle(selected = form.type, enabled = enabled && !form.typeLocked, onTypeSelected = onTypeSelected)
         Text(
-            when (form.type) {
-                AlarmType.DAILY -> "A summary of the selected pollen types at one time on the chosen days."
-                AlarmType.THRESHOLD ->
-                    "A notification as soon as a selected pollen type reaches the chosen level, " +
-                        "at most once per type per day."
-            },
+            stringResource(
+                when (form.type) {
+                    AlarmType.DAILY -> Res.string.alarm_type_daily_description
+                    AlarmType.THRESHOLD -> Res.string.alarm_type_threshold_description
+                },
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        SectionHeading("Station")
+        SectionHeading(stringResource(Res.string.alarm_section_station))
         StationDropdown(
             stations = state.stations,
             selectedAbbr = form.stationAbbr,
@@ -263,7 +305,7 @@ private fun EditingForm(
             onStationSelected = onStationSelected,
         )
 
-        SectionHeading("Pollen types")
+        SectionHeading(stringResource(Res.string.alarm_section_species))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             state.species.forEach { species ->
                 FilterChip(
@@ -274,13 +316,15 @@ private fun EditingForm(
                 )
             }
         }
-        if (form.species.isEmpty()) ValidationHint("Select at least one pollen type.")
+        if (form.species.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_species))
 
         SectionHeading(
-            when (form.type) {
-                AlarmType.DAILY -> "Send only from"
-                AlarmType.THRESHOLD -> "Notify from"
-            },
+            stringResource(
+                when (form.type) {
+                    AlarmType.DAILY -> Res.string.alarm_section_minimum_daily
+                    AlarmType.THRESHOLD -> Res.string.alarm_section_minimum_threshold
+                },
+            ),
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             form.severityOptions.forEach { severity ->
@@ -295,15 +339,15 @@ private fun EditingForm(
         Text(
             when {
                 form.type == AlarmType.THRESHOLD ->
-                    "Sent when a selected type is at least ${form.minSeverity.minimumLabel()}."
-                form.minSeverity == PollenSeverity.NONE -> "Sent every chosen day."
-                else -> "Sent only when a selected type is at least ${form.minSeverity.minimumLabel()}."
+                    stringResource(Res.string.alarm_minimum_note_threshold, form.minSeverity.minimumLabel())
+                form.minSeverity == PollenSeverity.NONE -> stringResource(Res.string.alarm_minimum_note_any)
+                else -> stringResource(Res.string.alarm_minimum_note_daily, form.minSeverity.minimumLabel())
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        SectionHeading("Days")
+        SectionHeading(stringResource(Res.string.alarm_section_days))
         val dates = rememberDateWording()
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DayOfWeek.entries.forEach { day ->
@@ -319,18 +363,18 @@ private fun EditingForm(
                 )
             }
         }
-        if (form.days.isEmpty()) ValidationHint("Select at least one day.")
+        if (form.days.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_days))
 
         when (val schedule = form.schedule) {
             is AlarmSchedule.Daily -> {
-                SectionHeading("Time")
-                TimeField(label = "Report time", time = schedule.at, enabled = enabled, onTimeSelected = onTimeSelected)
+                SectionHeading(stringResource(Res.string.alarm_section_time))
+                TimeField(label = stringResource(Res.string.alarm_report_time), time = schedule.at, enabled = enabled, onTimeSelected = onTimeSelected)
             }
             is AlarmSchedule.Threshold -> {
-                SectionHeading("Active window")
+                SectionHeading(stringResource(Res.string.alarm_section_window))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     TimeField(
-                        label = "Window start",
+                        label = stringResource(Res.string.alarm_window_start),
                         time = schedule.from,
                         enabled = enabled,
                         onTimeSelected = onWindowStartSelected,
@@ -338,17 +382,17 @@ private fun EditingForm(
                     // Decorative: each button names its own end of the window.
                     Text("–", modifier = Modifier.clearAndSetSemantics {})
                     TimeField(
-                        label = "Window end",
+                        label = stringResource(Res.string.alarm_window_end),
                         time = schedule.until,
                         enabled = enabled,
                         onTimeSelected = onWindowEndSelected,
                     )
                 }
-                if (!form.isWindowValid) ValidationHint("The end must be after the start.")
+                if (!form.isWindowValid) ValidationHint(stringResource(Res.string.alarm_hint_window))
             }
         }
         Text(
-            "Times are Swiss time.",
+            stringResource(Res.string.alarm_swiss_time),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -367,10 +411,10 @@ private fun EditingForm(
             if (state.isSaving) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text("Saving…")
+                    Text(stringResource(Res.string.alarm_saving))
                 }
             } else {
-                Text("Save")
+                Text(stringResource(Res.string.alarm_save))
             }
         }
 
@@ -384,11 +428,11 @@ private fun EditingForm(
                 if (state.isDeleting) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("Deleting…")
+                        Text(stringResource(Res.string.alarm_deleting))
                     }
                 } else {
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Delete alarm", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(Res.string.alarm_delete), modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
@@ -403,7 +447,7 @@ private fun TypeToggle(
     enabled: Boolean,
     onTypeSelected: (AlarmType) -> Unit,
 ) {
-    val options = listOf(AlarmType.DAILY to "Daily report", AlarmType.THRESHOLD to "Threshold alert")
+    val options = listOf(AlarmType.DAILY to stringResource(Res.string.alarm_type_daily), AlarmType.THRESHOLD to stringResource(Res.string.alarm_type_threshold))
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (type, label) ->
             SegmentedButton(
@@ -450,7 +494,7 @@ private fun StationDropdown(
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
-            label = { Text("Station") },
+            label = { Text(stringResource(Res.string.alarm_section_station)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -484,11 +528,12 @@ private fun TimeField(
     onTimeSelected: (LocalTime) -> Unit,
 ) {
     var showPicker by rememberSaveable { mutableStateOf(false) }
+    val description = stringResource(Res.string.alarm_time_description, label, formatTime(time))
     OutlinedButton(
         onClick = { showPicker = true },
         enabled = enabled,
         // Read as "Report time 08:00" rather than a bare time.
-        modifier = Modifier.semantics { contentDescription = "$label ${formatTime(time)}" },
+        modifier = Modifier.semantics { contentDescription = description },
     ) {
         Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
         Text(formatTime(time), modifier = Modifier.padding(start = 8.dp))
@@ -510,10 +555,10 @@ private fun TimeField(
                         onTimeSelected(LocalTime(pickerState.hour, pickerState.minute))
                         showPicker = false
                     },
-                ) { Text("OK") }
+                ) { Text(stringResource(Res.string.alarm_time_picker_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showPicker = false }) { Text(stringResource(Res.string.common_cancel)) }
             },
         )
     }

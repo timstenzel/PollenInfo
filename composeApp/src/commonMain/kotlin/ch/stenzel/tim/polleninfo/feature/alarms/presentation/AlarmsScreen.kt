@@ -61,7 +61,26 @@ import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.alarm_create
+import ch.stenzel.tim.polleninfo.resources.alarm_edit_action
+import ch.stenzel.tim.polleninfo.resources.alarm_empty_body
+import ch.stenzel.tim.polleninfo.resources.alarm_empty_title
+import ch.stenzel.tim.polleninfo.resources.alarm_limit_hint
+import ch.stenzel.tim.polleninfo.resources.alarm_load_failed
+import ch.stenzel.tim.polleninfo.resources.alarm_permission_allow
+import ch.stenzel.tim.polleninfo.resources.alarm_permission_body_request
+import ch.stenzel.tim.polleninfo.resources.alarm_permission_body_settings
+import ch.stenzel.tim.polleninfo.resources.alarm_permission_open_settings
+import ch.stenzel.tim.polleninfo.resources.alarm_permission_title
+import ch.stenzel.tim.polleninfo.resources.alarm_push_unavailable_body
+import ch.stenzel.tim.polleninfo.resources.alarm_push_unavailable_title
+import ch.stenzel.tim.polleninfo.resources.alarm_switch_description
+import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.nav_alarms
 import kotlinx.coroutines.flow.filter
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -142,7 +161,7 @@ private fun AlarmsContent(
     snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Alarms") }) },
+        topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_alarms)) }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             // The empty state has its own, more prominent button.
@@ -210,19 +229,16 @@ private fun PermissionRequiredView(
     val mustOpenSettings = state == NotificationPermissionState.MUST_OPEN_SETTINGS
     CenteredMessage(
         icon = Icons.Default.NotificationsOff,
-        title = "Notifications are disabled",
-        body = if (mustOpenSettings) {
-            "Pollen alarms arrive as notifications. Turn on notifications for PollenInfo in the " +
-                "system settings to set alarms."
-        } else {
-            "Pollen alarms arrive as notifications. Allow PollenInfo to send notifications to set alarms."
-        },
+        title = stringResource(Res.string.alarm_permission_title),
+        body = stringResource(
+            if (mustOpenSettings) Res.string.alarm_permission_body_settings else Res.string.alarm_permission_body_request,
+        ),
         modifier = modifier,
     ) {
         if (mustOpenSettings) {
-            Button(onClick = onOpenSettings) { Text("Open settings") }
+            Button(onClick = onOpenSettings) { Text(stringResource(Res.string.alarm_permission_open_settings)) }
         } else {
-            Button(onClick = onRequestPermission) { Text("Allow notifications") }
+            Button(onClick = onRequestPermission) { Text(stringResource(Res.string.alarm_permission_allow)) }
         }
     }
 }
@@ -231,12 +247,11 @@ private fun PermissionRequiredView(
 private fun EmptyAlarmsView(onCreateAlarm: () -> Unit, modifier: Modifier) {
     CenteredMessage(
         icon = Icons.Default.Notifications,
-        title = "No alarms yet",
-        body = "Create an alarm to get a daily pollen report, or a warning when a pollen type " +
-            "reaches a level you choose.",
+        title = stringResource(Res.string.alarm_empty_title),
+        body = stringResource(Res.string.alarm_empty_body),
         modifier = modifier,
     ) {
-        Button(onClick = onCreateAlarm) { Text("Create alarm") }
+        Button(onClick = onCreateAlarm) { Text(stringResource(Res.string.alarm_create)) }
     }
 }
 
@@ -250,7 +265,7 @@ private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
     ExtendedFloatingActionButton(
         onClick = { if (enabled) onClick() },
         icon = { Icon(Icons.Default.Add, contentDescription = null) },
-        text = { Text("Create alarm") },
+        text = { Text(stringResource(Res.string.alarm_create)) },
         // Composited, because a translucent button floating over the list would show the rows through it.
         containerColor = if (enabled) {
             colors.primaryContainer
@@ -284,7 +299,7 @@ private fun AlarmList(
         // scroll anchored on the first alarm, which would leave a new first item scrolled out of view.
         if (limitReached) {
             Text(
-                text = "You have $MAX_ALARMS alarms, the most a device can hold. Delete one to create another.",
+                text = pluralStringResource(Res.plurals.alarm_limit_hint, MAX_ALARMS, MAX_ALARMS),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -304,23 +319,25 @@ private fun AlarmRows(
 ) {
     val dates = rememberDateWording()
     val severityLabels = PollenSeverity.entries.associateWith { it.label() }
+    val wording = rememberAlarmSummaryWording()
     // Room below the last row, so the create button never covers it.
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp)) {
         items(alarms, key = { it.alarm.id }) { item ->
             val enabled = item.alarm.enabled
             val speciesNames = item.speciesNames.mapValues { (id, name) -> speciesName(id, name) }
-            val summary = summaryOf(item.alarm, speciesNames, severityLabels, dates)
+            val summary = summaryOf(item.alarm, speciesNames, severityLabels, dates, wording)
+            val switchDescription = stringResource(Res.string.alarm_switch_description, item.stationName)
             ListItem(
                 headlineContent = { Text(item.stationName) },
-                supportingContent = { Text(if (enabled) summary else "Paused · $summary") },
+                supportingContent = { Text(summary) },
                 trailingContent = {
                     Switch(
                         checked = enabled,
                         onCheckedChange = { onEnabledToggled(item.alarm.id, it) },
-                        modifier = Modifier.semantics { contentDescription = "Alarm for ${item.stationName}" },
+                        modifier = Modifier.semantics { contentDescription = switchDescription },
                     )
                 },
-                modifier = Modifier.clickable(onClickLabel = "Edit alarm") { onEditAlarm(item.alarm.id) },
+                modifier = Modifier.clickable(onClickLabel = stringResource(Res.string.alarm_edit_action)) { onEditAlarm(item.alarm.id) },
             )
             HorizontalDivider()
         }
@@ -331,9 +348,8 @@ private fun AlarmRows(
 private fun PushUnavailableView(modifier: Modifier) {
     CenteredMessage(
         icon = Icons.Default.NotificationsOff,
-        title = "Push notifications aren't available on this device yet",
-        body = "Pollen alarms arrive as push notifications, which PollenInfo cannot receive on " +
-            "this device so far.",
+        title = stringResource(Res.string.alarm_push_unavailable_title),
+        body = stringResource(Res.string.alarm_push_unavailable_body),
         modifier = modifier,
     ) {}
 }
@@ -342,11 +358,11 @@ private fun PushUnavailableView(modifier: Modifier) {
 private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier) {
     CenteredMessage(
         icon = Icons.Default.ErrorOutline,
-        title = "Your alarms could not be loaded.",
+        title = stringResource(Res.string.alarm_load_failed),
         body = message,
         modifier = modifier,
     ) {
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
     }
 }
 

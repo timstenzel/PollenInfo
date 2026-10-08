@@ -16,6 +16,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -70,7 +71,7 @@ class ExampleViewModelTest {
     }
 
     @Test
-    fun `falls back to a generic message when the exception has none`() = runTest {
+    fun `leaves the message empty for the screen to word when the exception has none`() = runTest {
         repository.result = Result.Failure(RuntimeException())
 
         val viewModel = viewModel()
@@ -78,7 +79,7 @@ class ExampleViewModelTest {
 
         val state = viewModel.uiState.value
         assertIs<ExampleUiState.Error>(state)
-        assertEquals("An unexpected error occurred", state.message)
+        assertNull(state.message)
     }
 
     @Test

@@ -435,7 +435,8 @@ put "Couldn't save the alarm." etc. before the reason; `NotFound` reads "This al
 exists." outside `LOAD`. The choice is the pure `AppError.text(context)` → `ErrorText(action,
 reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
 in all four languages. No exception text — host names, status codes, library messages — reaches a
-screen; `feature/example` is the one exception, being the untouched reference.
+screen; `feature/example` is the one exception: its `Error` carries the exception's own text (the
+screen words only the case where there is none, `example_error_unexpected`).
 
 ### UI state
 
@@ -920,7 +921,7 @@ has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at leas
 an alarm to describe (cached after that; the abbreviation or species id stands in if one fails), so
 the iOS path makes no network call at all.
 
-Each row is the station name over `summaryOf(alarm, speciesNames, severityLabels, dates)` (`AlarmSummary.kt`), e.g. "Daily
+Each row is the station name over `summaryOf(alarm, speciesNames, severityLabels, dates, wording)` (`AlarmSummary.kt`), e.g. "Daily
 report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate" or "Threshold alert 07:00–21:00 · Every day ·
 Birch, Grasses ≥ High" — the same three parts for both types: types in display order ("All pollen types"
 when every one is selected), the minimum only when it is not "Any", and days collapsed by
@@ -929,8 +930,11 @@ when every one is selected), the minimum only when it is not "Any", and days col
 (`PollenSeverity.label()`; `minimumLabel()` calls `NONE` "Any") and weekdays are in the app's
 language: the ViewModel puts only the backend's names by id (`AlarmListItem.speciesNames`) in the
 state, and the screen resolves the words and calls the pure `summaryOf`. It sits in
-`presentation/`, not `domain/`, because it is wording. A paused alarm's summary is prefixed
-"Paused · ".
+`presentation/`, not `domain/`, because it is wording. A paused alarm's summary is wrapped in
+"Paused · …". The sentences are `AlarmSummaryWording` — the `alarm_summary_*` and `alarm_paused`
+patterns read unformatted by `rememberAlarmSummaryWording()`, their `%1$s` / `%2$s` filled by
+`summaryOf` itself, as `DateWording` does with `date_day_month` — so `AlarmSummaryTest` pins the
+chosen pattern and its arguments with marker words, not English sentences.
 
 **Tapping a row** opens `Screen.AlarmEditor(id)` (`onEditAlarm`). **Its `Switch` pauses or resumes
 the alarm optimistically**: `AlarmsViewModel.onEnabledToggled(id, enabled)` flips the row at once and
@@ -1192,14 +1196,17 @@ Two deliberate choices:
 ### Localization
 
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
-the bottom bar's tab names, Home (feeling prompt included), All stations (the map's spoken
+every screen — the bottom bar's tab names, Home (feeling prompt included), All stations (the map's spoken
 description included), the reading composables in `core/ui/severity` they share, the Settings
 screen, onboarding, the change-station screen and the station picker they share, the Diary (chart
-description, axis words and the no-answers hint included), every error
-sentence (`error_*`, see "Error handling"), the Android notification channel names, and the
-vocabulary every screen shares — pollen-type, severity and feeling words, month and weekday names
-and date forms (below). Everything else (Alarms) is still hard-coded English and moves
-over screen by screen.
+description, axis words and the no-answers hint included), Alarms (permission gate, list, row
+summaries, limit hint, snackbars, the editor with its dialogs and time pickers, and every spoken
+label) — every error sentence (`error_*`, see "Error handling"), the Android notification channel
+names, and the vocabulary every screen shares — pollen-type, severity and feeling words, month and
+weekday names and date forms (below). **Not translated, by decision:** station names, "PollenInfo",
+and `feature/example`, whose text is English-only `example_*` resources in `values/` (so the
+reference shows the pattern too). Still open: the alarm push notifications themselves, which the
+server currently words in English.
 
 - **Vocabulary lookups.** Each has a composable form and a `StringResource` form for code outside
   Compose (`getString`, the push service later): `speciesName(id, fallback)` /
@@ -1269,8 +1276,8 @@ over screen by screen.
   `change_station_*`, `station_picker_*`, `species_*`, `severity_*`, `feeling_*`, `date_*`,
   `alarm_*`, `all_stations_*`, `diary_*`, `reading_*` (the reading composables of `core/ui/severity`:
   reading age, refresh caption, species list), and `common_*` for words several screens share ("Retry",
-  "Back"). Keys starting with `example_` are reserved
-  for the English-only reference feature.
+  "Back", "Cancel"). Keys starting with `example_` are reserved
+  for the English-only reference feature and live in `values/` only.
 - **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
   are formal ("vous" / "Lei"); French typography puts a narrow no-break space (U+202F) before `? ! ;`
   and uses « » quotes. Use typographic apostrophes (’), which also sidesteps XML escaping. Station
@@ -1282,6 +1289,17 @@ over screen by screen.
   `values-de` file. `example_` keys and `translatable="false"` keys are exempt from parity. It is
   `CheckTranslationsTask` in `composeApp/build.gradle.kts`, with plain file inputs, so it works with
   the configuration cache.
+- **No hard-coded text.** Review new code with
+  `grep -rnE '"[A-Z][a-z]+( [a-z]+)+' composeApp/src/commonMain composeApp/src/androidMain composeApp/src/iosMain --include='*.kt'`
+  (comment and KDoc lines and `feature/example` left out). Every hit must be on this reviewed
+  allowlist — text that is never shown: exception messages (`HttpStatusException`, the alarm
+  failures in `AlarmFailures.kt`, `InvalidAlarmException`'s fallback in `AlarmApiService`, the
+  activity `error(...)` in `NotificationPermissionController.android.kt`, the iOS Documents
+  `requireNotNull`), log lines (`PollenFirebaseMessagingService`) and the lake names in
+  `SwissLakes.kt` (data labels). Screens never show an exception's `message`; they show
+  `AppError.message()`. Single quoted words outside the grep are ids (species, severity wire names,
+  `AppleLanguages`, Info.plist keys) or the language names in their own language
+  (`SettingsScreen`).
 
 ### Multiplatform gotchas
 

@@ -34,6 +34,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.feature.example.domain.model.PollenSnapshot
 import ch.stenzel.tim.polleninfo.feature.example.domain.model.PollenLevel
 import ch.stenzel.tim.polleninfo.feature.example.domain.model.PollenReading
+import ch.stenzel.tim.polleninfo.feature.example.domain.model.PollenType
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.example_concentration
+import ch.stenzel.tim.polleninfo.resources.example_error_title
+import ch.stenzel.tim.polleninfo.resources.example_error_unexpected
+import ch.stenzel.tim.polleninfo.resources.example_heading
+import ch.stenzel.tim.polleninfo.resources.example_level_high
+import ch.stenzel.tim.polleninfo.resources.example_level_low
+import ch.stenzel.tim.polleninfo.resources.example_level_moderate
+import ch.stenzel.tim.polleninfo.resources.example_level_none
+import ch.stenzel.tim.polleninfo.resources.example_level_very_high
+import ch.stenzel.tim.polleninfo.resources.example_retry
+import ch.stenzel.tim.polleninfo.resources.example_title
+import ch.stenzel.tim.polleninfo.resources.example_type_alder
+import ch.stenzel.tim.polleninfo.resources.example_type_birch
+import ch.stenzel.tim.polleninfo.resources.example_type_grass
+import ch.stenzel.tim.polleninfo.resources.example_type_mugwort
+import ch.stenzel.tim.polleninfo.resources.example_type_olive
+import ch.stenzel.tim.polleninfo.resources.example_type_ragweed
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -56,7 +77,7 @@ private fun ExampleContent(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("PollenInfo") })
+            TopAppBar(title = { Text(stringResource(Res.string.example_title)) })
         },
     ) { innerPadding ->
         when (uiState) {
@@ -87,17 +108,17 @@ private fun LoadingView(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+private fun ErrorView(message: String?, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "Something went wrong", style = MaterialTheme.typography.titleMedium)
+        Text(text = stringResource(Res.string.example_error_title), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
-        Text(text = message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        Text(text = message ?: stringResource(Res.string.example_error_unexpected), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.example_retry)) }
     }
 }
 
@@ -110,7 +131,7 @@ private fun PollenSnapshotView(snapshot: PollenSnapshot) {
     ) {
         item {
             Text(
-                text = "Current pollen levels",
+                text = stringResource(Res.string.example_heading),
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
@@ -138,9 +159,9 @@ private fun PollenReadingCard(reading: PollenReading) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(reading.type.displayName, style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(reading.type.label), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "${reading.valueGrainsPerM3} grains/m³",
+                    stringResource(Res.string.example_concentration, reading.valueGrainsPerM3.toString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -154,18 +175,29 @@ private fun PollenReadingCard(reading: PollenReading) {
 @Composable
 private fun PollenLevelBadge(level: PollenLevel) {
     val (color, label) = when (level) {
-        PollenLevel.NONE -> Color(0xFF9E9E9E) to "None"
-        PollenLevel.LOW -> Color(0xFF4CAF50) to "Low"
-        PollenLevel.MODERATE -> Color(0xFFFFEB3B) to "Moderate"
-        PollenLevel.HIGH -> Color(0xFFFF9800) to "High"
-        PollenLevel.VERY_HIGH -> Color(0xFFF44336) to "Very High"
+        PollenLevel.NONE -> Color(0xFF9E9E9E) to Res.string.example_level_none
+        PollenLevel.LOW -> Color(0xFF4CAF50) to Res.string.example_level_low
+        PollenLevel.MODERATE -> Color(0xFFFFEB3B) to Res.string.example_level_moderate
+        PollenLevel.HIGH -> Color(0xFFFF9800) to Res.string.example_level_high
+        PollenLevel.VERY_HIGH -> Color(0xFFF44336) to Res.string.example_level_very_high
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = color),
         modifier = Modifier.size(width = 90.dp, height = 32.dp),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White)
+            Text(stringResource(label), style = MaterialTheme.typography.labelSmall, color = Color.White)
         }
     }
 }
+
+/** The fictional type's name. English only, like the whole reference feature: `example_` keys live in `values/` alone. */
+private val PollenType.label: StringResource
+    get() = when (this) {
+        PollenType.BIRCH -> Res.string.example_type_birch
+        PollenType.GRASS -> Res.string.example_type_grass
+        PollenType.MUGWORT -> Res.string.example_type_mugwort
+        PollenType.ALDER -> Res.string.example_type_alder
+        PollenType.OLIVE -> Res.string.example_type_olive
+        PollenType.RAGWEED -> Res.string.example_type_ragweed
+    }

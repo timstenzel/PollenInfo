@@ -182,4 +182,67 @@
         <item quantity="one">Grafico del Suo diario e di %1$d tipo di polline, ultimi 12 mesi</item>
         <item quantity="other">Grafico del Suo diario e di %1$d tipi di polline, ultimi 12 mesi</item>
     </plurals>
+
+    <!-- Alarms: the list, its rows' summaries and the editor. %1$s in alarm_time_description is the
+         field's name, %2$s its time (HH:mm), read as one: "Report time 08:00". -->
+    <string name="alarm_permission_title">Le notifiche sono disattivate</string>
+    <string name="alarm_permission_body_request">Gli allarmi pollini arrivano come notifiche. Consenta a PollenInfo di inviare notifiche per impostare degli allarmi.</string>
+    <string name="alarm_permission_body_settings">Gli allarmi pollini arrivano come notifiche. Attivi le notifiche di PollenInfo nelle impostazioni di sistema per impostare degli allarmi.</string>
+    <string name="alarm_permission_allow">Consenti notifiche</string>
+    <string name="alarm_permission_open_settings">Apri impostazioni</string>
+    <string name="alarm_empty_title">Ancora nessun allarme</string>
+    <string name="alarm_empty_body">Crei un allarme per ricevere un bollettino pollinico giornaliero o un avviso quando un tipo di polline raggiunge il livello che sceglie.</string>
+    <string name="alarm_create">Crea allarme</string>
+    <string name="alarm_paused">In pausa · %1$s</string>
+    <string name="alarm_switch_description">Allarme per %1$s</string>
+    <string name="alarm_edit_action">Modifica allarme</string>
+    <string name="alarm_push_unavailable_title">Le notifiche push non sono ancora disponibili su questo dispositivo</string>
+    <string name="alarm_push_unavailable_body">Gli allarmi pollini arrivano come notifiche push, che PollenInfo per ora non può ricevere su questo dispositivo.</string>
+    <string name="alarm_load_failed">Non è stato possibile caricare i Suoi allarmi.</string>
+    <string name="alarm_summary_daily">Bollettino giornaliero alle %1$s</string>
+    <string name="alarm_summary_threshold">Avviso di soglia %1$s–%2$s</string>
+    <string name="alarm_summary_every_day">Ogni giorno</string>
+    <string name="alarm_summary_all_types">Tutti i tipi di polline</string>
+    <string name="alarm_editor_title_new">Nuovo allarme</string>
+    <string name="alarm_editor_title_edit">Modifica allarme</string>
+    <string name="alarm_editor_load_failed">Non è stato possibile caricare l’editor dell’allarme.</string>
+    <string name="alarm_discard_title">Scartare le modifiche?</string>
+    <string name="alarm_discard_text">Le modifiche a questo allarme non verranno salvate.</string>
+    <string name="alarm_discard_confirm">Scarta</string>
+    <string name="alarm_discard_keep">Continua a modificare</string>
+    <string name="alarm_delete_title">Eliminare l’allarme?</string>
+    <string name="alarm_delete_text">Non riceverà più notifiche da questo allarme.</string>
+    <string name="alarm_delete_confirm">Elimina</string>
+    <string name="alarm_type_daily">Bollettino giornaliero</string>
+    <string name="alarm_type_threshold">Avviso di soglia</string>
+    <string name="alarm_type_daily_description">Un riepilogo dei tipi di polline scelti, a un orario fisso nei giorni scelti.</string>
+    <string name="alarm_type_threshold_description">Una notifica non appena un tipo di polline scelto raggiunge il livello scelto, al massimo una volta per tipo al giorno.</string>
+    <string name="alarm_section_station">Stazione</string>
+    <string name="alarm_section_species">Tipi di polline</string>
+    <string name="alarm_hint_no_species">Selezioni almeno un tipo di polline.</string>
+    <string name="alarm_section_minimum_daily">Inviare solo da</string>
+    <string name="alarm_section_minimum_threshold">Notificare da</string>
+    <string name="alarm_minimum_note_threshold">Inviato quando un tipo scelto raggiunge almeno il livello %1$s.</string>
+    <string name="alarm_minimum_note_any">Inviato ogni giorno scelto.</string>
+    <string name="alarm_minimum_note_daily">Inviato solo quando un tipo scelto raggiunge almeno il livello %1$s.</string>
+    <string name="alarm_section_days">Giorni</string>
+    <string name="alarm_hint_no_days">Selezioni almeno un giorno.</string>
+    <string name="alarm_section_time">Orario</string>
+    <string name="alarm_report_time">Orario del bollettino</string>
+    <string name="alarm_section_window">Fascia attiva</string>
+    <string name="alarm_window_start">Inizio della fascia</string>
+    <string name="alarm_window_end">Fine della fascia</string>
+    <string name="alarm_hint_window">La fine deve essere dopo l’inizio.</string>
+    <string name="alarm_time_description">%1$s %2$s</string>
+    <string name="alarm_swiss_time">Gli orari sono in ora svizzera.</string>
+    <string name="alarm_save">Salva</string>
+    <string name="alarm_saving">Salvataggio…</string>
+    <string name="alarm_delete">Elimina allarme</string>
+    <string name="alarm_deleting">Eliminazione…</string>
+    <string name="alarm_time_picker_confirm">OK</string>
+    <!-- %1$d is the most alarms a device can hold. -->
+    <plurals name="alarm_limit_hint">
+        <item quantity="one">Ha %1$d allarme, il massimo per un dispositivo. Ne elimini uno per crearne un altro.</item>
+        <item quantity="other">Ha %1$d allarmi, il massimo per un dispositivo. Ne elimini uno per crearne un altro.</item>
+    </plurals>
 </resources>

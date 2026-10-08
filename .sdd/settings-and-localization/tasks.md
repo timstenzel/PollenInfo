@@ -267,21 +267,30 @@ hard-coded user-facing string remains anywhere in the app.
 
 ### Implementation steps
 
-- [ ] Move every user-visible and spoken string of `feature/alarms` (incl. `summaryOf` wording) and `core/notifications` to resources and translate them.
-- [ ] Move `feature/example` strings to `example_`-prefixed keys in `values/` only.
-- [ ] Run the hard-coded text grep over `commonMain`, `androidMain` and `iosMain`; convert every remaining user-facing hit and record the reviewed allowlist.
-- [ ] Complete CLAUDE.md "Localization" (what is and is not translated, key naming, the `feature/example` exemption, the grep and its allowlist).
+- [x] Move every user-visible and spoken string of `feature/alarms` (incl. `summaryOf` wording) and `core/notifications` to resources and translate them.
+  *(`alarm_*` strings in all four languages, `alarm_limit_hint` as `plurals`; the title reuses `nav_alarms`, Retry / Back / Cancel `common_*`. `summaryOf` takes an `AlarmSummaryWording` (patterns read unformatted by `rememberAlarmSummaryWording()`, filled purely) and now owns the "Paused · …" wrapping. `core/notifications` had no user-facing text — its only literal is an `error(...)` message.)*
+- [x] Move `feature/example` strings to `example_`-prefixed keys in `values/` only.
+  *(Screen text, level badges and the fictional type names (`PollenType` lost its `displayName`); `ExampleUiState.Error.message` is now the exception's own text or `null`, worded by the screen — `ExampleViewModelTest` adapted.)*
+- [x] Run the hard-coded text grep over `commonMain`, `androidMain` and `iosMain`; convert every remaining user-facing hit and record the reviewed allowlist.
+  *(Allowlist (never shown): exception messages — `HttpStatusException`, `AlarmFailures.kt` (4), `AlarmApiService` `InvalidAlarmException` fallback, `NotificationPermissionController.android.kt` `error(...)`, `PlatformModule.ios.kt` `requireNotNull`; log line in `PollenFirebaseMessagingService`; lake names in `SwissLakes.kt`. No screen reads an exception's `message` — every error shown goes through `AppError.message()`.)*
+- [x] Complete CLAUDE.md "Localization" (what is and is not translated, key naming, the `feature/example` exemption, the grep and its allowlist).
+  *(Also "Error handling" (the example's message) and "Alarms" (`summaryOf`'s wording parameter and paused wrapping).)*
 
 ### Acceptance criteria
 
-- [ ] `AlarmSummaryTest` asserts keys/arguments or a fake wording, not English sentences, for "Paused", "Every day", "All pollen types" and both alarm types.
-- [ ] On the emulator in Italian, the permission explanation, the list, the editor, its dialogs, the limit hint and the toggle-failed snackbar are Italian, and TalkBack announces the switch and the day chips in Italian.
-- [ ] The hard-coded text grep (see header) over `commonMain`, `androidMain` and `iosMain` has no hits outside the allowlist.
-- [ ] `checkTranslations` passes with the `example_` keys present only in English.
+- [x] `AlarmSummaryTest` asserts keys/arguments or a fake wording, not English sentences, for "Paused", "Every day", "All pollen types" and both alarm types.
+  *(Marker wording `<daily %1$s>`, `<threshold %1$s..%2$s>`, `<every day>`, `<all types>`, `<paused> %1$s`; tests `a paused alarm is wrapped in the paused pattern`, `all seven days use the every-day word`, `every type selected uses the all-types word`, `a daily report fills the daily pattern with its time`, `a threshold alert fills the threshold pattern with its window` — all pass in `testDebugUnitTest`.)*
+- [x] On the emulator in Italian, the permission explanation, the list, the editor, its dialogs, the limit hint and the toggle-failed snackbar are Italian, and TalkBack announces the switch and the day chips in Italian.
+  *(API 36, 2026-10-08, app locale `it` via `cmd locale`, `uiautomator dump` + screenshot. Permission: "Le notifiche sono disattivate", both bodies, "Consenti notifiche" / "Apri impostazioni" (after two denials). Empty state "Ancora nessun allarme" / "Crea allarme". Editor "Nuovo allarme" / "Modifica allarme", type toggle, descriptions, sections, all three hints, time button "Orario del bollettino 08:00", "Inizio/Fine della fascia", time picker dialog, "Gli orari sono in ora svizzera.", "Salva", "Elimina allarme". Dialogs "Scartare le modifiche?" and "Eliminare l’allarme?". Rows "Bollettino giornaliero alle 08:00 · Ogni giorno · Tutti i tipi di polline", "In pausa · …", "Avviso di soglia 07:00–21:00 · lun–ven · Betulla, Graminacee ≥ Alto". Limit (nine alarms added through the dev API, removed afterwards): "Ha 10 allarmi, il massimo per un dispositivo. …" and the disabled "Crea allarme" FAB. Snackbar with the network off: "Impossibile sospendere l’allarme. Impossibile raggiungere il server. …". Spoken labels read from the accessibility tree, not by listening: switch "Allarme per Basel", day chips "lunedì" … "domenica". The row's click label "Modifica allarme" is not exposed by `uiautomator` and was checked in code only. App locale reset to system afterwards.)*
+- [x] The hard-coded text grep (see header) over `commonMain`, `androidMain` and `iosMain` has no hits outside the allowlist.
+  *(11 hits, all on the allowlist above; a broader sweep for `Text("…")`, `contentDescription = "…"`, `label = "…"`, `title = "…"`, `onClickLabel = "…"` literals finds none.)*
+- [x] `checkTranslations` passes with the `example_` keys present only in English.
+  *(17 `example_*` keys in `values/strings.xml`, none in `values-de|fr|it`; `./gradlew :composeApp:checkTranslations` → BUILD SUCCESSFUL.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
+- [x] Common quality gates.
+  *(`./gradlew :composeApp:testDebugUnitTest :server:test :composeApp:compileTestKotlinIosSimulatorArm64 :composeApp:checkTranslations :composeApp:assembleDebug` → BUILD SUCCESSFUL; 605 app + 340 server tests, 0 failed; iOS compile re-run with `--rerun-tasks`, green. Only the known KLIB resolver warnings; new test names have no commas; CLAUDE.md updated.)*
 
 ## Task 09-localized-push-notifications
 

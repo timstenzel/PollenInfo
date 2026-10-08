@@ -208,4 +208,88 @@
         <item quantity="one">Graph of your diary and %1$d pollen type, last 12 months</item>
         <item quantity="other">Graph of your diary and %1$d pollen types, last 12 months</item>
     </plurals>
+
+    <!-- Alarms: the list, its rows' summaries and the editor. %1$s in alarm_time_description is the
+         field's name, %2$s its time (HH:mm), read as one: "Report time 08:00". -->
+    <string name="alarm_permission_title">Notifications are disabled</string>
+    <string name="alarm_permission_body_request">Pollen alarms arrive as notifications. Allow PollenInfo to send notifications to set alarms.</string>
+    <string name="alarm_permission_body_settings">Pollen alarms arrive as notifications. Turn on notifications for PollenInfo in the system settings to set alarms.</string>
+    <string name="alarm_permission_allow">Allow notifications</string>
+    <string name="alarm_permission_open_settings">Open settings</string>
+    <string name="alarm_empty_title">No alarms yet</string>
+    <string name="alarm_empty_body">Create an alarm to get a daily pollen report, or a warning when a pollen type reaches a level you choose.</string>
+    <string name="alarm_create">Create alarm</string>
+    <string name="alarm_paused">Paused · %1$s</string>
+    <string name="alarm_switch_description">Alarm for %1$s</string>
+    <string name="alarm_edit_action">Edit alarm</string>
+    <string name="alarm_push_unavailable_title">Push notifications aren’t available on this device yet</string>
+    <string name="alarm_push_unavailable_body">Pollen alarms arrive as push notifications, which PollenInfo cannot receive on this device so far.</string>
+    <string name="alarm_load_failed">Your alarms could not be loaded.</string>
+    <string name="alarm_summary_daily">Daily report at %1$s</string>
+    <string name="alarm_summary_threshold">Threshold alert %1$s–%2$s</string>
+    <string name="alarm_summary_every_day">Every day</string>
+    <string name="alarm_summary_all_types">All pollen types</string>
+    <string name="alarm_editor_title_new">New alarm</string>
+    <string name="alarm_editor_title_edit">Edit alarm</string>
+    <string name="alarm_editor_load_failed">The alarm editor could not be loaded.</string>
+    <string name="alarm_discard_title">Discard changes?</string>
+    <string name="alarm_discard_text">Your changes to this alarm will not be saved.</string>
+    <string name="alarm_discard_confirm">Discard</string>
+    <string name="alarm_discard_keep">Keep editing</string>
+    <string name="alarm_delete_title">Delete alarm?</string>
+    <string name="alarm_delete_text">You will no longer get notifications from this alarm.</string>
+    <string name="alarm_delete_confirm">Delete</string>
+    <string name="alarm_type_daily">Daily report</string>
+    <string name="alarm_type_threshold">Threshold alert</string>
+    <string name="alarm_type_daily_description">A summary of the selected pollen types at one time on the chosen days.</string>
+    <string name="alarm_type_threshold_description">A notification as soon as a selected pollen type reaches the chosen level, at most once per type per day.</string>
+    <string name="alarm_section_station">Station</string>
+    <string name="alarm_section_species">Pollen types</string>
+    <string name="alarm_hint_no_species">Select at least one pollen type.</string>
+    <string name="alarm_section_minimum_daily">Send only from</string>
+    <string name="alarm_section_minimum_threshold">Notify from</string>
+    <string name="alarm_minimum_note_threshold">Sent when a selected type is at least %1$s.</string>
+    <string name="alarm_minimum_note_any">Sent every chosen day.</string>
+    <string name="alarm_minimum_note_daily">Sent only when a selected type is at least %1$s.</string>
+    <string name="alarm_section_days">Days</string>
+    <string name="alarm_hint_no_days">Select at least one day.</string>
+    <string name="alarm_section_time">Time</string>
+    <string name="alarm_report_time">Report time</string>
+    <string name="alarm_section_window">Active window</string>
+    <string name="alarm_window_start">Window start</string>
+    <string name="alarm_window_end">Window end</string>
+    <string name="alarm_hint_window">The end must be after the start.</string>
+    <string name="alarm_time_description">%1$s %2$s</string>
+    <string name="alarm_swiss_time">Times are Swiss time.</string>
+    <string name="alarm_save">Save</string>
+    <string name="alarm_saving">Saving…</string>
+    <string name="alarm_delete">Delete alarm</string>
+    <string name="alarm_deleting">Deleting…</string>
+    <string name="alarm_time_picker_confirm">OK</string>
+    <!-- %1$d is the most alarms a device can hold. -->
+    <plurals name="alarm_limit_hint">
+        <item quantity="one">You have %1$d alarm, the most a device can hold. Delete one to create another.</item>
+        <item quantity="other">You have %1$d alarms, the most a device can hold. Delete one to create another.</item>
+    </plurals>
+
+    <!-- The reference example feature (feature/example): English only, by decision, so the
+         translation check ignores the example_ prefix. -->
+    <string name="example_title">PollenInfo</string>
+    <string name="example_error_title">Something went wrong</string>
+    <string name="example_error_unexpected">An unexpected error occurred</string>
+    <string name="example_retry">Retry</string>
+    <string name="example_heading">Current pollen levels</string>
+    <!-- %1$s is the concentration as the domain holds it. -->
+    <string name="example_concentration">%1$s grains/m³</string>
+    <string name="example_level_none">None</string>
+    <string name="example_level_low">Low</string>
+    <string name="example_level_moderate">Moderate</string>
+    <string name="example_level_high">High</string>
+    <string name="example_level_very_high">Very High</string>
+    <string name="example_type_birch">Birch</string>
+    <string name="example_type_grass">Grass</string>
+    <string name="example_type_mugwort">Mugwort</string>
+    <string name="example_type_alder">Alder</string>
+    <string name="example_type_olive">Olive</string>
+    <string name="example_type_ragweed">Ragweed</string>
 </resources>

@@ -10,8 +10,9 @@ sealed interface ExampleUiState {
         val isRefreshing: Boolean = false,
     ) : ExampleUiState
 
+    /** [message] is the exception's own text, `null` when it has none; the screen words that case. */
     data class Error(
         val exception: Exception,
-        val message: String = exception.message ?: "An unexpected error occurred",
+        val message: String? = exception.message,
     ) : ExampleUiState
 }

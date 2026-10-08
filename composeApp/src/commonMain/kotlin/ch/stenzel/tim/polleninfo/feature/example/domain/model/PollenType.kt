@@ -1,10 +1,11 @@
 package ch.stenzel.tim.polleninfo.feature.example.domain.model
 
-enum class PollenType(val displayName: String) {
-    BIRCH("Birch"),
-    GRASS("Grass"),
-    MUGWORT("Mugwort"),
-    ALDER("Alder"),
-    OLIVE("Olive"),
-    RAGWEED("Ragweed"),
+/** Its display names are `example_type_*` resources, chosen by the screen. */
+enum class PollenType {
+    BIRCH,
+    GRASS,
+    MUGWORT,
+    ALDER,
+    OLIVE,
+    RAGWEED,
 }
