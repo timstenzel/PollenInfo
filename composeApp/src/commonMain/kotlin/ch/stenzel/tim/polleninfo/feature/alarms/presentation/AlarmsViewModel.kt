@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 /**
  * Never reads the permission itself: `AlarmsScreen` reads it through the platform controller on
  * every resume and hands the answer to [onPermissionState]. That is what keeps this testable without
- * a platform, as `OnboardingViewModel` does with location.
+ * a platform, as `StationPicker` does with location.
  *
  * The list and the permission are tracked separately. The list is loaded on the first `ENABLED`
  * state — never before, so a user who has not allowed notifications causes no backend contact and

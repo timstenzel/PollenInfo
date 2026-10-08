@@ -146,6 +146,11 @@ class TopLevelDestinationTest {
     }
 
     @Test
+    fun `the change-station screen is not a tab so the bar is hidden on it`() {
+        assertNull(currentTabOn(Screen.ChangeStation))
+    }
+
+    @Test
     fun `the bar is hidden on the example screen`() {
         assertNull(currentTabOn(Screen.Example))
     }

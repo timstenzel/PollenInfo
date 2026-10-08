@@ -35,4 +35,25 @@
     <string name="error_action_resume_alarm">Der Alarm konnte nicht wieder eingeschaltet werden.</string>
 
     <string name="home_feeling_save_error">Deine Antwort konnte nicht gespeichert werden. Bitte versuche es noch einmal.</string>
+
+    <string name="common_retry">Erneut versuchen</string>
+    <string name="common_back">Zurück</string>
+
+    <string name="station_picker_load_failed">Die Stationsliste konnte nicht geladen werden.</string>
+    <string name="station_picker_use_my_location">Meinen Standort verwenden</string>
+    <string name="station_picker_label">Station</string>
+    <string name="station_picker_location_denied">Der Standortzugriff ist ausgeschaltet. Erlaube ihn in den Einstellungen, um die nächstgelegene Station zu finden.</string>
+    <string name="station_picker_location_unavailable">Dein Standort konnte nicht bestimmt werden. Bitte wähle eine Station aus der Liste.</string>
+    <string name="station_picker_save_error">Deine Auswahl konnte nicht gespeichert werden. Bitte versuche es noch einmal.</string>
+
+    <string name="onboarding_title">Willkommen bei PollenInfo</string>
+    <string name="onboarding_intro">Wähle die Messstation, deren Pollenwerte du sehen möchtest.</string>
+    <string name="onboarding_continue">Weiter</string>
+
+    <string name="settings_section_station">Standardstation</string>
+    <string name="settings_station_action">Standardstation ändern</string>
+    <string name="settings_station_not_set">Nicht festgelegt</string>
+    <string name="change_station_title">Standardstation</string>
+    <string name="change_station_intro">Auf der Startseite siehst du die Pollenwerte dieser Station. Deine Alarme und das Tagebuch behalten ihre eigenen Stationen.</string>
+    <string name="change_station_save">Speichern</string>
 </resources>

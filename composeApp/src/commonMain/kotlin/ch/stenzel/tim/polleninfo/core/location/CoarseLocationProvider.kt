@@ -33,7 +33,7 @@ interface CoarseLocationProvider {
 /**
  * How long a lookup may take before it is treated as [CoarseLocationResult.Unavailable].
  *
- * Applied in common code (`OnboardingViewModel`), not in the actuals: one constant, one place it can
+ * Applied in common code (`StationPicker`), not in the actuals: one constant, one place it can
  * drift, and a timeout that is testable under virtual time in `commonTest` rather than only on a
  * device.
  */

@@ -35,4 +35,25 @@
     <string name="error_action_resume_alarm">Impossibile riattivare l’allarme.</string>
 
     <string name="home_feeling_save_error">Non è stato possibile salvare la Sua risposta. Riprovi.</string>
+
+    <string name="common_retry">Riprova</string>
+    <string name="common_back">Indietro</string>
+
+    <string name="station_picker_load_failed">Non è stato possibile caricare l’elenco delle stazioni.</string>
+    <string name="station_picker_use_my_location">Usa la mia posizione</string>
+    <string name="station_picker_label">Stazione</string>
+    <string name="station_picker_location_denied">L’accesso alla posizione è disattivato. Lo attivi nelle impostazioni per trovare la stazione più vicina.</string>
+    <string name="station_picker_location_unavailable">Non è stato possibile determinare la Sua posizione. Scelga una stazione manualmente.</string>
+    <string name="station_picker_save_error">Non è stato possibile salvare la Sua scelta. Riprovi.</string>
+
+    <string name="onboarding_title">Benvenuti in PollenInfo</string>
+    <string name="onboarding_intro">Scelga la stazione di misura di cui desidera vedere i livelli di pollini.</string>
+    <string name="onboarding_continue">Continua</string>
+
+    <string name="settings_section_station">Stazione predefinita</string>
+    <string name="settings_station_action">Modifica la stazione predefinita</string>
+    <string name="settings_station_not_set">Non impostata</string>
+    <string name="change_station_title">Stazione predefinita</string>
+    <string name="change_station_intro">La pagina iniziale mostra i livelli di pollini di questa stazione. I Suoi allarmi e il diario mantengono le proprie stazioni.</string>
+    <string name="change_station_save">Salva</string>
 </resources>

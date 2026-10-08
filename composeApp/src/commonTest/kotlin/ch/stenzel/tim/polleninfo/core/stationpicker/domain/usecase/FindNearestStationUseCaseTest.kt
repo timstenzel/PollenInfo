@@ -1,4 +1,4 @@
-package ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase
+package ch.stenzel.tim.polleninfo.core.stationpicker.domain.usecase
 
 import ch.stenzel.tim.polleninfo.core.station.allStations
 import ch.stenzel.tim.polleninfo.core.station.station

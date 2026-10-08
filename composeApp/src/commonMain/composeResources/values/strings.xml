@@ -47,4 +47,29 @@
 
     <!-- Home -->
     <string name="home_feeling_save_error">Your answer couldn’t be saved. Please try again.</string>
+
+    <!-- Shared by several screens. -->
+    <string name="common_retry">Retry</string>
+    <string name="common_back">Back</string>
+
+    <!-- Station picker: core/stationpicker, shared by onboarding and the change-station screen. -->
+    <string name="station_picker_load_failed">The station list could not be loaded.</string>
+    <string name="station_picker_use_my_location">Use my location</string>
+    <string name="station_picker_label">Station</string>
+    <string name="station_picker_location_denied">Location permission is off. Enable it in Settings to find your nearest station.</string>
+    <string name="station_picker_location_unavailable">Your location could not be determined. Please pick a station manually.</string>
+    <string name="station_picker_save_error">Could not save your selection. Please try again.</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Welcome to PollenInfo</string>
+    <string name="onboarding_intro">Choose the measuring station you want pollen levels for.</string>
+    <string name="onboarding_continue">Continue</string>
+
+    <!-- Settings: default station, and the screen that changes it. -->
+    <string name="settings_section_station">Default station</string>
+    <string name="settings_station_action">Change the default station</string>
+    <string name="settings_station_not_set">Not set</string>
+    <string name="change_station_title">Default station</string>
+    <string name="change_station_intro">Home shows the pollen levels at this station. Your alarms and the Diary keep their own stations.</string>
+    <string name="change_station_save">Save</string>
 </resources>

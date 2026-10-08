@@ -25,6 +25,7 @@ import ch.stenzel.tim.polleninfo.core.startup.StartupViewModel
 import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.core.station.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
+import ch.stenzel.tim.polleninfo.core.stationpicker.domain.usecase.FindNearestStationUseCase
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.repository.AlarmRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
@@ -39,8 +40,8 @@ import ch.stenzel.tim.polleninfo.feature.example.domain.repository.ExampleReposi
 import ch.stenzel.tim.polleninfo.feature.example.domain.usecase.GetPollenSnapshotUseCase
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleViewModel
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeViewModel
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingViewModel
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.ChangeStationViewModel
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -100,7 +101,8 @@ val presentationModule = module {
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
     // AppInfo comes from platformModule.
-    viewModel { SettingsViewModel(get()) }
+    viewModel { SettingsViewModel(get(), get(), get()) }
+    viewModel { ChangeStationViewModel(get(), get(), get(), get()) }
 }
 
 val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)

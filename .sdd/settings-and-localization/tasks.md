@@ -103,25 +103,26 @@ implementation; onboarding's text moves to string resources in all four language
 
 ### Implementation steps
 
-- [ ] Move `FindNearestStationUseCase` (and its test), `LocationError` and the selection/location logic out of `OnboardingViewModel` into `core/stationpicker` as a picker state holder that takes an initial selection and reports failures as `AppError`.
-- [ ] Move the picker composables (location button, dropdown, location error text) into `core/stationpicker/presentation` and embed them in onboarding; move all onboarding strings to resources and translate them.
-- [ ] Add `Screen.ChangeStation` (no tab, bottom bar hidden), `ChangeStationViewModel` (reads the stored station once for the preselection, `canSave` only for a different station and not while saving, `Done` on a buffered channel, `saveError` on failure, `Error(AppError)` + retry when the list fails) and `ChangeStationScreen` (top bar "Default station" with back, Save with progress).
-- [ ] Add the Default station section as the first section of Settings: observes `SelectedStationRepository`, resolves the name from `StationRepository`, falls back to the stored name; tapping navigates to `ChangeStation`.
-- [ ] Translate all new strings; update CLAUDE.md (onboarding, `core/stationpicker`, navigation, Settings).
+- [x] Move `FindNearestStationUseCase` (and its test), `LocationError` and the selection/location logic out of `OnboardingViewModel` into `core/stationpicker` as a picker state holder that takes an initial selection and reports failures as `AppError`.
+- [x] Move the picker composables (location button, dropdown, location error text) into `core/stationpicker/presentation` and embed them in onboarding; move all onboarding strings to resources and translate them.
+- [x] Add `Screen.ChangeStation` (no tab, bottom bar hidden), `ChangeStationViewModel` (reads the stored station once for the preselection, `canSave` only for a different station and not while saving, `Done` on a buffered channel, `saveError` on failure, `Error(AppError)` + retry when the list fails) and `ChangeStationScreen` (top bar "Default station" with back, Save with progress).
+- [x] Add the Default station section as the first section of Settings: observes `SelectedStationRepository`, resolves the name from `StationRepository`, falls back to the stored name; tapping navigates to `ChangeStation`.
+- [x] Translate all new strings; update CLAUDE.md (onboarding, `core/stationpicker`, navigation, Settings).
 
 ### Acceptance criteria
 
-- [ ] Picker tests (moved from `OnboardingViewModelTest`, virtual time) pin: initial selection present / absent / not listed; a manual pick cancels a running lookup; timeout → `UNAVAILABLE`; denial → `PERMISSION_DENIED`; both errors clear on a pick; a failed list is `Error(AppError)` and retry reloads it.
-- [ ] `OnboardingViewModelTest` still pins save → `Completed` exactly once and a failed save.
-- [ ] `ChangeStationViewModelTest` pins: stored station preselected; `canSave` false when unchanged, true after picking another, false while a gated save runs; success → `Done` exactly once and the fake repository holds the new station; failure → `saveError` and no `Done`.
-- [ ] `SettingsViewModelTest` pins the station row: stored name before the list arrives, the list's name after, the new name after the selection changes; `TopLevelDestinationTest` asserts `Screen.ChangeStation` maps to no tab.
-- [ ] On the emulator: Zürich → Bern from Settings returns to Settings showing Bern and Home shows Bern's readings; back without saving keeps Zürich; an existing Lugano alarm still shows Lugano; a new alarm starts on Bern; a Diary showing Lugano (picked in its dropdown) still shows Lugano.
-- [ ] On the emulator with the backend stopped, ChangeStation shows a translated error with Retry, and Retry loads the list once the backend runs again.
+- [x] Picker tests (moved from `OnboardingViewModelTest`, virtual time) pin: initial selection present / absent / not listed; a manual pick cancels a running lookup; timeout → `UNAVAILABLE`; denial → `PERMISSION_DENIED`; both errors clear on a pick; a failed list is `Error(AppError)` and retry reloads it.
+- [x] `OnboardingViewModelTest` still pins save → `Completed` exactly once and a failed save.
+- [x] `ChangeStationViewModelTest` pins: stored station preselected; `canSave` false when unchanged, true after picking another, false while a gated save runs; success → `Done` exactly once and the fake repository holds the new station; failure → `saveError` and no `Done`.
+- [x] `SettingsViewModelTest` pins the station row: stored name before the list arrives, the list's name after, the new name after the selection changes; `TopLevelDestinationTest` asserts `Screen.ChangeStation` maps to no tab.
+- [x] On the emulator: Zürich → Bern from Settings returns to Settings showing Bern and Home shows Bern's readings; back without saving keeps Zürich; an existing Lugano alarm still shows Lugano; a new alarm starts on Bern; a Diary showing Lugano (picked in its dropdown) still shows Lugano.
+- [x] On the emulator with the backend stopped, ChangeStation shows a translated error with Retry, and Retry loads the list once the backend runs again.
+  *(Verified 2026-10-08 on API 36. Zürich → Bern: Save disabled until Bern was picked, Settings then showed Bern and Home loaded Bern (backend logged `PBE/measurements`); back without saving kept Zürich; the Lugano alarm (created for the test) still read Lugano; a new alarm opened on Bern; the Diary set to Lugano still showed Lugano. Backend stopped: "The station list could not be loaded." + "Couldn’t reach the server. …" + Retry, and in de-CH "Die Stationsliste konnte nicht geladen werden." + "Der Server ist nicht erreichbar. …" + "Erneut versuchen"; Retry after restarting the backend loaded the list with Bern preselected. Default station, app locale and alarms restored afterwards.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
-- [ ] `grep -rn 'feature.onboarding' composeApp/src/commonMain/kotlin/ch/stenzel/tim/polleninfo/feature/settings` and the reverse return nothing.
+- [x] Common quality gates.
+- [x] `grep -rn 'feature.onboarding' composeApp/src/commonMain/kotlin/ch/stenzel/tim/polleninfo/feature/settings` and the reverse return nothing.
 
 ## Task 04-app-language-switching
 

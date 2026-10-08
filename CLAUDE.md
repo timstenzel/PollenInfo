@@ -289,9 +289,10 @@ data layer: the station list and the reading pipeline they consume live in `core
 those slices are mostly `presentation/`. `feature/alarms` is the full layering again, since nothing
 else reads alarms. `feature/diary` reads `core/history` and so has no `data/` either.
 
-- **`feature/onboarding`** — a form: one list fetched once, a user choice persisted through
-  `core/preferences`, and completion delivered as a one-shot event. Its own domain code is
-  `FindNearestStationUseCase`, which has no other consumer.
+- **`feature/onboarding`** — a form: the shared `core/stationpicker` (list, pick, location
+  shortcut), a user choice persisted through `core/preferences`, and completion delivered as a
+  one-shot event. `presentation/` only — its picking moved to `core/stationpicker` when the
+  change-station screen needed the same thing.
 - **`feature/home`** — a dashboard over a reading: a ViewModel that *observes* a stored selection
   and reloads on change, derived rules (worst severity, ordering) kept in a use case so they are
   tested without Compose, the full `Loading` / `Content(isRefreshing)` / `Error` cycle with
@@ -316,9 +317,10 @@ else reads alarms. `feature/diary` reads `core/history` and so has no `data/` ei
   and for a repository that recovers from the backend forgetting this install
   (`AlarmRepositoryImplTest`). See "Alarms" below.
 - **`feature/settings`** — a screen of mostly fixed text: `presentation/` only, with a
-  `SettingsUiState` that has no `Loading` or `Error` (nothing on it depends on the network). The
-  first screen whose text comes entirely from string resources — the model for that (see
-  "Localization"). See "Settings" below.
+  `SettingsUiState` that has no `Loading` or `Error` (its one network value, the station name, has
+  a stored fallback). The first screen whose text comes entirely from string resources — the model
+  for that (see "Localization"). Also the change-station screen, the second user of
+  `core/stationpicker`. See "Settings" below.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
 imports another feature, and nothing in `core/` imports a feature except the DI module that wires
@@ -340,6 +342,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
+| `core/stationpicker` | Choosing a station, shared by onboarding and the change-station screen: `FindNearestStationUseCase` (`domain/usecase`), and in `presentation/` the `StationPicker` state holder, `StationPickerState` (`Loading` / `Content(stations, selected, isLocating, locationError)` / `Error(AppError)`), `LocationError` and the `StationPickerContent` composable (see "Location") |
 | `core/appinfo` | `AppVersion(name, code)` and `AppInfo` (`version: AppVersion?`, `null` when the platform reports no complete version) — bound in `platformModule`: `AndroidAppInfo` (`PackageManager`, `PackageInfoCompat.getLongVersionCode`), `IosAppInfo` (`CFBundleShortVersionString` / `CFBundleVersion`; a non-integer build number counts as missing). Checked by hand; consumers use `FakeAppInfo` |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
@@ -459,8 +462,9 @@ Anything the screen should keep displaying — including error flags such as
 while nothing is stored, plus `suspend fun select(...): Result<Unit>` — a write can fail on IO, and
 the caller must react rather than move on to a screen with nothing to read.
 
-It lives in `core/` rather than in `feature/onboarding` because it already has three consumers:
-onboarding writes it, the startup gate reads it, and the home screen reads it to label itself.
+It lives in `core/` rather than in `feature/onboarding` because it has many consumers: onboarding
+and the change-station screen write it; the startup gate, Home, Settings, the Diary (once, for its
+initial station) and the alarm editor (for a new alarm's station) read it.
 
 `DataStoreSelectedStationRepository` is **deliberately logic-free** — it reads and writes two string
 keys and nothing else. It has no unit test: a real one would need a platform file path, and app
@@ -518,8 +522,22 @@ Both actuals bridge their platform's callback API through `suspendCancellableCor
 cancelling the calling coroutine reaches the platform (`CancellationSignal.cancel()` /
 `stopUpdatingLocation()`) instead of abandoning a request that keeps running.
 
+**The station picker.** Onboarding and the change-station screen choose a station the same way,
+so the logic lives once in `core/stationpicker`: `StationPicker(stationRepository,
+coarseLocationProvider, findNearestStation, scope, initialAbbr)` is a plain state holder — not a
+ViewModel — that each screen's ViewModel owns and drives on its `viewModelScope`. It loads the list
+(`Error(AppError)` + `retry()` if that fails), starts on `initialAbbr` (asked once, on the first load:
+`null` for onboarding, the stored station for change-station; a station no longer listed leaves
+nothing selected), and handles `onStationSelected` and `onPermissionResult`. It never persists — the
+screens' own Continue / Save do. Each ViewModel combines `picker.state` with its own fields into its
+UI state (`OnboardingUiState(picker, saveError)`, `ChangeStationUiState`). `StationPickerContent` is
+the shared screen body — spinner, the list error with Retry, or header slot, "Use my location", the
+location error, the dropdown and footer slot (where each screen puts its button) — and requests the
+location permission itself. `StationPickerTest` pins all of it under virtual time; the ViewModel
+tests pin only what each screen adds.
+
 **That cancellation is load-bearing, not just tidy.** Picking a station from the dropdown cancels any
-lookup still in flight (`OnboardingViewModel.locationJob`). The shortcut proposes and the user
+lookup still in flight (`StationPicker.locationJob`). The shortcut proposes and the user
 commits, so a fix that lands *after* they have already chosen must not re-pick for them — cancelling
 makes that impossible rather than something a guard has to remember to check, and it stops the device
 looking for a position nobody is waiting for. The two location messages clear on the same pick: an
@@ -534,14 +552,14 @@ deliberately no `getLastKnownLocation` fallback — a days-old fix from another 
 resolve to the wrong station.
 
 **The 10-second timeout is `LOCATION_TIMEOUT` in `commonMain` and is applied by
-`OnboardingViewModel`, not by either actual.** One constant that cannot drift between platforms, and
+`StationPicker`, not by either actual.** One constant that cannot drift between platforms, and
 one that `commonTest` can drive under virtual time with a fake that never answers.
 
 `rememberCoarseLocationPermissionRequester` is a **`@Composable expect fun`** and is the reason
 prompting is separate from looking up: Android's request needs an activity-scoped
 `ActivityResultLauncher`, which a Koin-injected class holding only the application context cannot
-provide. The screen prompts and hands the resulting boolean to `onPermissionResult(granted)`, so the
-ViewModel touches no platform API and is fully testable against `FakeCoarseLocationProvider`. (A
+provide. The screen prompts (inside `StationPickerContent`) and hands the resulting boolean to
+`onPermissionResult(granted)`, so the picker touches no platform API and is fully testable against `FakeCoarseLocationProvider`. (A
 composable `expect`/`actual` pair does work with the Compose compiler plugin here — verified against
 `compileTestKotlinIosSimulatorArm64`.)
 
@@ -600,9 +618,9 @@ event, not on the dot — accepted. While the card is up the list's bottom paddi
 measured height (plus its margin), so the last species row still scrolls fully above it.
 
 It **observes** the selection rather than taking its first value, unlike the startup gate below —
-see that section for why the two differ. There is deliberately no way to change the station from
-Home; the pin in its top bar is decorative, and station changes belong to the planned settings
-feature.
+see that section for why the two differ — so a station changed in Settings shows here at once.
+There is deliberately no way to change the station from Home; the pin in its top bar is decorative,
+and station changes belong to Settings (see "Settings").
 
 #### All stations
 
@@ -737,7 +755,7 @@ keeps its own saved state. There is no placeholder screen any more: the former `
 deleted when the last placeholder tab became Settings.
 
 **The bar is shown exactly when the current back-stack destination is a tab** — never on
-`Onboarding` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
+`Onboarding`, `AlarmEditor`, `ChangeStation` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
 matching tab (which is also the selected one) or `null` (bar hidden). It takes a
 `(KClass<out Screen>) -> Boolean` predicate rather than a `NavDestination`, so `AppNavigation`
 calls it with `destination.hasRoute(it)` and `TopLevelDestinationTest` with a plain class
@@ -1075,6 +1093,13 @@ The fifth tab, `feature/settings`: one scrolling screen (`SettingsScreen`, its `
 restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Settings"
 (`settings_title`). Section titles are `semantics { heading() }`. Top to bottom:
 
+- **Default station** (`settings_section_station`) — the home station's name in one full-width row
+  ≥ 48 dp (`onClickLabel` "Change the default station"), which opens `Screen.ChangeStation`.
+  `SettingsViewModel` **observes** `SelectedStationRepository`, so the row shows a new station as
+  soon as it is saved, and takes the name from `StationRepository` (fetched once); until the list
+  arrives, or if it fails, the name stored with the selection stands in — never an error for the
+  screen. "Not set" only while nothing is stored (unreachable past the startup gate).
+
 - **Impressum** (`settings_section_impressum`; "Mentions légales" / "Note legali") — "Developed by
   Tim Stenzel" (`settings_developed_by`, the name a code constant) and the contact address
   `developer.mobile.t3s@gmail.com`, a full-width row ≥ 48 dp that opens
@@ -1093,9 +1118,24 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
 
 Both links go through `LocalUriHandler`; a device with nothing to open them with swallows the tap
 rather than crash. Each row's icon is decorative and its `onClickLabel` says what a double tap does.
-`SettingsViewModel(appInfo)` holds no text — only the version passes through it
-(`SettingsViewModelTest`); the composable is checked by hand. The default station and the app
-language are planned as the first two sections.
+`SettingsViewModel(selectedStationRepository, stationRepository, appInfo)` holds no text — only the
+station name and the version pass through it (`SettingsViewModelTest`); the composable is checked by
+hand. The app language is planned as the second section.
+
+**Changing the default station.** `Screen.ChangeStation` — not a tab, so the bottom bar is hidden —
+is a `TopAppBar` "Default station" with a back arrow over `StationPickerContent` (see "Location"),
+a line saying Home follows this station while alarms and the Diary keep their own, and Save with a
+progress indicator. `ChangeStationViewModel(selectedStationRepository, stationRepository,
+coarseLocationProvider, findNearestStation)` reads the stored station **once**, as the picker's
+`initialAbbr` and as `ChangeStationUiState.storedAbbr`. `canSave` is a pick that differs from it and
+no save running; picks are ignored while a save runs. Save writes `SelectedStationRepository` and,
+on success, sends `ChangeStationEvent.Done` on a buffered `Channel` (`popBackStack` in
+`AppNavigation`); `isSaving` stays set, so it cannot save twice on the way out. A failed write keeps
+the screen with `saveError` (a `Boolean`, local storage, as on onboarding), cleared by the next pick.
+Back — arrow or gesture — leaves without saving. Only the home station changes: existing alarms keep
+their stations, a new alarm starts on the new one, and an open Diary keeps the station chosen in its
+dropdown. `ChangeStationViewModelTest` covers the preselection, `canSave` (gated save through
+`FakeSelectedStationRepository.writeGate`), `Done` once, a failed save and the list's retry.
 
 ### The startup gate
 
@@ -1120,8 +1160,9 @@ Two deliberate choices:
 ### Localization
 
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
-the bottom bar's tab names, the Settings screen, every error sentence (`error_*`, see "Error
-handling") and Home's feeling-save error. Everything else is still hard-coded English and
+the bottom bar's tab names, the Settings screen, onboarding, the change-station screen and the
+station picker they share, every error sentence (`error_*`, see "Error handling") and Home's
+feeling-save error. Everything else is still hard-coded English and
 moves over screen by screen.
 
 - **Resources.** Compose Multiplatform resources in
@@ -1133,7 +1174,9 @@ moves over screen by screen.
   that is all Compose resources substitute. Android-only text goes in
   `androidMain/res/values{,-de,-fr,-it}/strings.xml` (none yet).
 - **Fallback.** A device language other than de/fr/it gets `values/` (English).
-- **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`. Keys starting with `example_` are reserved
+- **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
+  `change_station_*`, `station_picker_*`, and `common_*` for words several screens share ("Retry",
+  "Back"). Keys starting with `example_` are reserved
   for the English-only reference feature.
 - **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
   are formal ("vous" / "Lei"); French typography puts a narrow no-break space (U+202F) before `? ! ;`

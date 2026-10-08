@@ -24,6 +24,7 @@ import ch.stenzel.tim.polleninfo.feature.diary.presentation.DiaryScreen
 import ch.stenzel.tim.polleninfo.feature.example.presentation.ExampleScreen
 import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.ChangeStationScreen
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsScreen
 import org.jetbrains.compose.resources.stringResource
 
@@ -119,7 +120,11 @@ private fun AppNavHost(
         }
 
         composable<Screen.Settings> {
-            SettingsScreen()
+            SettingsScreen(onChangeStation = { navController.navigate(Screen.ChangeStation) })
+        }
+
+        composable<Screen.ChangeStation> {
+            ChangeStationScreen(onDone = { navController.popBackStack() })
         }
 
         // The reference feature stays registered and unchanged; it is simply no longer the start

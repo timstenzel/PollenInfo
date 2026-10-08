@@ -34,7 +34,14 @@ sealed interface Screen {
     @Serializable
     data object Diary : Screen
 
-    /** Impressum, data source and app version. The fifth bottom-bar tab. */
+    /** Default station, Impressum, data source and app version. The fifth bottom-bar tab. */
     @Serializable
     data object Settings : Screen
+
+    /**
+     * Changes the default station, opened from Settings. Not a tab, so the bottom bar is hidden on
+     * it.
+     */
+    @Serializable
+    data object ChangeStation : Screen
 }

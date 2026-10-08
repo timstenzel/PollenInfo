@@ -1,8 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
-import ch.stenzel.tim.polleninfo.core.location.CoarseLocationResult
 import ch.stenzel.tim.polleninfo.core.location.FakeCoarseLocationProvider
-import ch.stenzel.tim.polleninfo.core.location.LOCATION_TIMEOUT
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.AppError
@@ -10,7 +8,8 @@ import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.expectedStationNamesAlphabetical
 import ch.stenzel.tim.polleninfo.core.station.station
-import ch.stenzel.tim.polleninfo.feature.onboarding.domain.usecase.FindNearestStationUseCase
+import ch.stenzel.tim.polleninfo.core.stationpicker.domain.usecase.FindNearestStationUseCase
+import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.StationPickerState
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -25,7 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -56,123 +54,33 @@ class OnboardingViewModelTest {
         FindNearestStationUseCase(),
     )
 
-    @Test
-    fun `starts in Loading before the station list arrives`() = runTest {
-        assertIs<OnboardingUiState.Loading>(viewModel().uiState.value)
-    }
+    // The picking itself — list, initial selection, location shortcut, timeout — is
+    // StationPicker's and is pinned in StationPickerTest. These tests pin what onboarding adds.
 
     @Test
-    fun `loads the stations on init and emits them alphabetically`() = runTest {
+    fun `wraps the picker which loads the stations on init`() = runTest {
         val viewModel = viewModel()
+        assertIs<StationPickerState.Loading>(viewModel.uiState.value.picker)
         advanceUntilIdle()
 
-        val state = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
-        assertEquals(expectedStationNamesAlphabetical, state.stations.map { it.name })
-        assertEquals(1, repository.callCount)
+        val picker = assertIs<StationPickerState.Content>(viewModel.uiState.value.picker)
+        assertEquals(expectedStationNamesAlphabetical, picker.stations.map { it.name })
+        assertNull(picker.selected, "onboarding starts on nothing")
     }
 
     @Test
-    fun `has nothing selected when the screen has just loaded`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        assertNull(assertIs<OnboardingUiState.Content>(viewModel.uiState.value).selected)
-    }
-
-    @Test
-    fun `emits a Network Error when the station list cannot be reached`() = runTest {
+    fun `retry reloads a station list that failed`() = runTest {
         repository.result = Result.Failure(IOException("Connection refused"))
-
         val viewModel = viewModel()
         advanceUntilIdle()
-
-        assertEquals(OnboardingUiState.Error(AppError.Network), viewModel.uiState.value)
-    }
-
-    @Test
-    fun `emits an Unknown Error for any other failure`() = runTest {
-        repository.result = Result.Failure(RuntimeException())
-
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        assertEquals(OnboardingUiState.Error(AppError.Unknown), viewModel.uiState.value)
-    }
-
-    @Test
-    fun `retrying from Error goes back through Loading`() = runTest {
-        repository.result = Result.Failure(RuntimeException("Connection refused"))
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.retry()
-
-        assertIs<OnboardingUiState.Loading>(viewModel.uiState.value)
-    }
-
-    @Test
-    fun `retry re-requests the stations and recovers from Error`() = runTest {
-        repository.result = Result.Failure(RuntimeException("Connection refused"))
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
+        assertEquals(StationPickerState.Error(AppError.Network), viewModel.uiState.value.picker)
 
         repository.result = Result.Success(listOf(station()))
         viewModel.retry()
         advanceUntilIdle()
 
-        val state = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
-        assertEquals(listOf("Zürich"), state.stations.map { it.name })
+        assertIs<StationPickerState.Content>(viewModel.uiState.value.picker)
         assertEquals(2, repository.callCount)
-    }
-
-    @Test
-    fun `records the station the user picks`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val bern = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
-            .stations.single { it.abbr == "PBE" }
-
-        viewModel.onStationSelected(bern)
-
-        assertEquals(bern, assertIs<OnboardingUiState.Content>(viewModel.uiState.value).selected)
-    }
-
-    @Test
-    fun `picking a second station replaces the first`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val stations = assertIs<OnboardingUiState.Content>(viewModel.uiState.value).stations
-
-        viewModel.onStationSelected(stations.first())
-        viewModel.onStationSelected(stations.last())
-
-        assertEquals(
-            stations.last(),
-            assertIs<OnboardingUiState.Content>(viewModel.uiState.value).selected,
-        )
-    }
-
-    @Test
-    fun `selecting a station leaves the offered list untouched`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val before = assertIs<OnboardingUiState.Content>(viewModel.uiState.value).stations
-
-        viewModel.onStationSelected(before[3])
-
-        assertEquals(before, assertIs<OnboardingUiState.Content>(viewModel.uiState.value).stations)
-    }
-
-    @Test
-    fun `a selection made while the screen is in Error is ignored`() = runTest {
-        repository.result = Result.Failure(RuntimeException("Connection refused"))
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onStationSelected(station())
-
-        assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
     }
 
     // --- confirming and persisting ---------------------------------------------------------
@@ -194,7 +102,7 @@ class OnboardingViewModelTest {
     fun `confirming stores the abbreviation and the display name of the selected station`() = runTest {
         val viewModel = viewModel()
         advanceUntilIdle()
-        val geneve = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
+        val geneve = viewModel.content()
             .stations.single { it.abbr == "PGE" }
 
         viewModel.onStationSelected(geneve)
@@ -229,8 +137,7 @@ class OnboardingViewModelTest {
         advanceUntilIdle()
 
         assertEquals(emptyList(), events, "a failed write must not navigate away")
-        val state = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
-        assertTrue(state.saveError)
+        assertTrue(viewModel.uiState.value.saveError)
         assertNull(selectedStationRepository.stored)
     }
 
@@ -240,13 +147,13 @@ class OnboardingViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
         val events = viewModel.collectEvents(this)
-        val bern = assertIs<OnboardingUiState.Content>(viewModel.uiState.value)
+        val bern = viewModel.content()
             .stations.single { it.abbr == "PBE" }
 
         viewModel.onStationSelected(bern)
         viewModel.onConfirm()
         advanceUntilIdle()
-        assertEquals(bern, assertIs<OnboardingUiState.Content>(viewModel.uiState.value).selected)
+        assertEquals(bern, viewModel.content().selected)
 
         selectedStationRepository.failWrite = false
         viewModel.onConfirm()
@@ -261,16 +168,17 @@ class OnboardingViewModelTest {
         selectedStationRepository.failWrite = true
         val viewModel = viewModel()
         advanceUntilIdle()
-        val stations = assertIs<OnboardingUiState.Content>(viewModel.uiState.value).stations
+        val stations = viewModel.content().stations
 
         viewModel.onStationSelected(stations.first())
         viewModel.onConfirm()
         advanceUntilIdle()
-        assertTrue(assertIs<OnboardingUiState.Content>(viewModel.uiState.value).saveError)
+        assertTrue(viewModel.uiState.value.saveError)
 
         viewModel.onStationSelected(stations.last())
+        advanceUntilIdle()
 
-        assertTrue(!assertIs<OnboardingUiState.Content>(viewModel.uiState.value).saveError)
+        assertTrue(!viewModel.uiState.value.saveError)
     }
 
     @Test
@@ -291,23 +199,6 @@ class OnboardingViewModelTest {
             assertEquals(2, events.size)
         }
 
-    // --- the location shortcut -------------------------------------------------------------
-
-    @Test
-    fun `a granted permission fills in the nearest station`() = runTest {
-        // The fake answers with a position near Winterthur.
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertEquals("PZH", state.selected?.abbr)
-        assertNull(state.locationError)
-        assertTrue(!state.isLocating)
-    }
-
     @Test
     fun `a successful lookup proposes a station without completing onboarding`() = runTest {
         val viewModel = viewModel()
@@ -319,237 +210,6 @@ class OnboardingViewModelTest {
 
         assertEquals(emptyList(), events, "the shortcut proposes; only Continue may commit")
         assertNull(selectedStationRepository.stored)
-    }
-
-    @Test
-    fun `the in-progress flag is set while the lookup runs and cleared when it ends`() = runTest {
-        locationProvider.answerDelay = 5.seconds
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        assertTrue(viewModel.content().isLocating, "set as soon as the lookup starts")
-
-        advanceTimeBy(1.seconds)
-        assertTrue(viewModel.content().isLocating, "and still set while the fix is outstanding")
-
-        advanceUntilIdle()
-        assertTrue(!viewModel.content().isLocating)
-        assertEquals("PZH", viewModel.content().selected?.abbr)
-    }
-
-    @Test
-    fun `a refused permission produces the permission error and asks for no position`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = false)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertEquals(LocationError.PERMISSION_DENIED, state.locationError)
-        assertTrue(!state.isLocating)
-        assertNull(state.selected)
-        assertEquals(0, locationProvider.callCount, "a refusal must not reach the platform")
-    }
-
-    @Test
-    fun `a permission revoked below the prompt produces the permission error`() = runTest {
-        locationProvider.result = CoarseLocationResult.PermissionDenied
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
-    }
-
-    @Test
-    fun `an unavailable position produces the could-not-determine error`() = runTest {
-        locationProvider.result = CoarseLocationResult.Unavailable
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertEquals(LocationError.UNAVAILABLE, state.locationError)
-        assertTrue(!state.isLocating)
-        assertNull(state.selected)
-    }
-
-    @Test
-    fun `a lookup that never answers produces the could-not-determine error once it times out`() =
-        runTest {
-            // Virtual time, not a real sleep: the ten seconds pass instantly.
-            locationProvider.neverAnswers = true
-            val viewModel = viewModel()
-            advanceUntilIdle()
-
-            viewModel.onPermissionResult(granted = true)
-            advanceTimeBy(LOCATION_TIMEOUT - 1.seconds)
-            assertTrue(viewModel.content().isLocating, "still waiting just before the deadline")
-            assertNull(viewModel.content().locationError)
-
-            advanceUntilIdle()
-
-            val state = viewModel.content()
-            assertEquals(LocationError.UNAVAILABLE, state.locationError)
-            assertTrue(!state.isLocating)
-        }
-
-    @Test
-    fun `a successful lookup clears a location error left by an earlier attempt`() = runTest {
-        locationProvider.result = CoarseLocationResult.Unavailable
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-        assertEquals(LocationError.UNAVAILABLE, viewModel.content().locationError)
-
-        locationProvider.result = CoarseLocationResult.Success(46.2000, 7.3000)
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertNull(state.locationError)
-        assertEquals("PSN", state.selected?.abbr)
-    }
-
-    @Test
-    fun `a lookup leaves the offered station list untouched`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val before = viewModel.content().stations
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        assertEquals(before, viewModel.content().stations)
-    }
-
-    // --- recovering from a failed lookup -----------------------------------------------------
-
-    @Test
-    fun `picking a station clears the location error it replaces`() = runTest {
-        locationProvider.result = CoarseLocationResult.PermissionDenied
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
-
-        viewModel.onStationSelected(viewModel.content().stations.first())
-
-        val state = viewModel.content()
-        assertNull(state.locationError, "the message must not outlive the pick that answers it")
-        assertEquals(state.stations.first(), state.selected)
-    }
-
-    @Test
-    fun `retrying the lookup clears the previous error as soon as the attempt starts`() = runTest {
-        locationProvider.result = CoarseLocationResult.Unavailable
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-        assertEquals(LocationError.UNAVAILABLE, viewModel.content().locationError)
-
-        locationProvider.answerDelay = 5.seconds
-        viewModel.onPermissionResult(granted = true)
-
-        // Not "once the retry succeeds" — the stale message would otherwise read as this attempt
-        // having already failed.
-        val state = viewModel.content()
-        assertNull(state.locationError)
-        assertTrue(state.isLocating)
-    }
-
-    @Test
-    fun `the location shortcut still works after the permission was refused`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = false)
-        advanceUntilIdle()
-        // Nothing about the refusal blocks another attempt: the action is bound to isLocating
-        // alone, so the device may still prompt if it permits one.
-        assertTrue(!viewModel.content().isLocating)
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertEquals(1, locationProvider.callCount)
-        assertEquals("PZH", state.selected?.abbr)
-        assertNull(state.locationError)
-    }
-
-    @Test
-    fun `a repeated refusal leaves the permission message in place`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = false)
-        viewModel.onPermissionResult(granted = false)
-        advanceUntilIdle()
-
-        assertEquals(LocationError.PERMISSION_DENIED, viewModel.content().locationError)
-    }
-
-    // --- the manual path is never overruled by a lookup ---------------------------------------
-
-    @Test
-    fun `a fix that lands after a manual pick leaves the picked station in place`() = runTest {
-        // The fake would answer with a position near Winterthur — i.e. propose PZH — but only
-        // after the user has already picked Bern.
-        locationProvider.answerDelay = 5.seconds
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val bern = viewModel.content().stations.single { it.abbr == "PBE" }
-
-        viewModel.onPermissionResult(granted = true)
-        advanceTimeBy(1.seconds)
-        viewModel.onStationSelected(bern)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertEquals(bern, state.selected, "a late fix must not silently re-pick for the user")
-        assertTrue(!state.isLocating)
-        assertNull(state.locationError)
-    }
-
-    @Test
-    fun `a manual pick stops the lookup rather than letting it run on`() = runTest {
-        locationProvider.answerDelay = 5.seconds
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        advanceTimeBy(1.seconds)
-        viewModel.onStationSelected(viewModel.content().stations.first())
-        advanceUntilIdle()
-
-        assertTrue(locationProvider.wasCancelled, "cancellation must reach the platform request")
-    }
-
-    @Test
-    fun `a failed lookup that lands after a manual pick raises no error`() = runTest {
-        locationProvider.result = CoarseLocationResult.Unavailable
-        locationProvider.answerDelay = 5.seconds
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        val sion = viewModel.content().stations.single { it.abbr == "PSN" }
-
-        viewModel.onPermissionResult(granted = true)
-        viewModel.onStationSelected(sion)
-        advanceUntilIdle()
-
-        val state = viewModel.content()
-        assertNull(state.locationError, "the lookup was called off; it has nothing left to report")
-        assertEquals(sion, state.selected)
     }
 
     @Test
@@ -569,23 +229,10 @@ class OnboardingViewModelTest {
         assertEquals(listOf(OnboardingEvent.Completed), events)
     }
 
-    @Test
-    fun `a permission answer arriving before the stations are loaded is ignored`() = runTest {
-        repository.result = Result.Failure(RuntimeException("Connection refused"))
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onPermissionResult(granted = true)
-        advanceUntilIdle()
-
-        // There is no list to find a nearest station in, so there is nothing to say.
-        assertIs<OnboardingUiState.Error>(viewModel.uiState.value)
-        assertEquals(0, locationProvider.callCount)
-    }
 }
 
-private fun OnboardingViewModel.content(): OnboardingUiState.Content =
-    assertIs<OnboardingUiState.Content>(uiState.value)
+private fun OnboardingViewModel.content(): StationPickerState.Content =
+    assertIs<StationPickerState.Content>(uiState.value.picker)
 
 /**
  * Drains the one-shot event channel into a list for the duration of [scope].
@@ -594,6 +241,7 @@ private fun OnboardingViewModel.content(): OnboardingUiState.Content =
  * with the test scope. Asserting on list *size* is what proves "exactly once" — a state flag would
  * replay on every re-emission and show up here as duplicates.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 private fun OnboardingViewModel.collectEvents(scope: TestScope): List<OnboardingEvent> {
     val received = mutableListOf<OnboardingEvent>()
     // UnconfinedTestDispatcher so the collector is already subscribed when this returns, rather

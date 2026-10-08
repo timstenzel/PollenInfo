@@ -38,4 +38,25 @@
     <string name="error_action_resume_alarm">Impossible de réactiver l’alarme.</string>
 
     <string name="home_feeling_save_error">Votre réponse n’a pas pu être enregistrée. Veuillez réessayer.</string>
+
+    <string name="common_retry">Réessayer</string>
+    <string name="common_back">Retour</string>
+
+    <string name="station_picker_load_failed">La liste des stations n’a pas pu être chargée.</string>
+    <string name="station_picker_use_my_location">Utiliser ma position</string>
+    <string name="station_picker_label">Station</string>
+    <string name="station_picker_location_denied">L’accès à la position est désactivé. Activez-le dans les réglages pour trouver la station la plus proche.</string>
+    <string name="station_picker_location_unavailable">Votre position n’a pas pu être déterminée. Veuillez choisir une station manuellement.</string>
+    <string name="station_picker_save_error">Votre choix n’a pas pu être enregistré. Veuillez réessayer.</string>
+
+    <string name="onboarding_title">Bienvenue dans PollenInfo</string>
+    <string name="onboarding_intro">Choisissez la station de mesure dont vous souhaitez connaître les niveaux de pollen.</string>
+    <string name="onboarding_continue">Continuer</string>
+
+    <string name="settings_section_station">Station par défaut</string>
+    <string name="settings_station_action">Modifier la station par défaut</string>
+    <string name="settings_station_not_set">Non définie</string>
+    <string name="change_station_title">Station par défaut</string>
+    <string name="change_station_intro">L’accueil affiche les niveaux de pollen de cette station. Vos alarmes et le journal conservent leurs propres stations.</string>
+    <string name="change_station_save">Enregistrer</string>
 </resources>

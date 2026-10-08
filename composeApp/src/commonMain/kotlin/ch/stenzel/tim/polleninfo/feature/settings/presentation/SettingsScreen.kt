@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +45,9 @@ import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_link_action
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_url
 import ch.stenzel.tim.polleninfo.resources.settings_section_data_source
 import ch.stenzel.tim.polleninfo.resources.settings_section_impressum
+import ch.stenzel.tim.polleninfo.resources.settings_section_station
+import ch.stenzel.tim.polleninfo.resources.settings_station_action
+import ch.stenzel.tim.polleninfo.resources.settings_station_not_set
 import ch.stenzel.tim.polleninfo.resources.settings_title
 import ch.stenzel.tim.polleninfo.resources.settings_version
 import org.jetbrains.compose.resources.stringResource
@@ -55,21 +59,24 @@ private const val DEVELOPER_EMAIL = "developer.mobile.t3s@gmail.com"
 private const val CONTACT_URI = "mailto:$DEVELOPER_EMAIL?subject=PollenInfo"
 
 /**
- * The Settings tab: one scrolling screen of sections — Impressum, Data source — and the version
- * line at the bottom.
+ * The Settings tab: one scrolling screen of sections — Default station, Impressum, Data source —
+ * and the version line at the bottom. Tapping the default station calls [onChangeStation].
  *
  * The scroll state is saveable, so it survives a tab switch through `navigateToTab`'s saved state.
  */
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
+fun SettingsScreen(
+    onChangeStation: () -> Unit,
+    viewModel: SettingsViewModel = koinViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    SettingsContent(uiState)
+    SettingsContent(uiState, onChangeStation)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsContent(uiState: SettingsUiState) {
+private fun SettingsContent(uiState: SettingsUiState, onChangeStation: () -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) }) { padding ->
         Column(
             modifier = Modifier
@@ -78,11 +85,44 @@ private fun SettingsContent(uiState: SettingsUiState) {
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 8.dp),
         ) {
+            StationSection(uiState.stationName, onChangeStation)
+            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             ImpressumSection()
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             DataSourceSection()
             uiState.version?.let { VersionLine(it) }
         }
+    }
+}
+
+/** The default station, as one row that opens the change-station screen. */
+@Composable
+private fun StationSection(stationName: String?, onChangeStation: () -> Unit) {
+    SectionTitle(stringResource(Res.string.settings_section_station))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClickLabel = stringResource(Res.string.settings_station_action),
+                role = Role.Button,
+                onClick = onChangeStation,
+            )
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            // Station names are shown as published, in every language.
+            text = stationName ?: stringResource(Res.string.settings_station_not_set),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

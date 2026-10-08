@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
  * from a composition. A Koin-injected class holds the *application* context and therefore cannot
  * prompt at all. Splitting the prompt from the lookup is what keeps the ViewModel free of platform
  * APIs: the screen prompts, then hands the resulting boolean to
- * `OnboardingViewModel.onPermissionResult`.
+ * `StationPicker.onPermissionResult`.
  *
  * If the permission is already granted, [onResult] is answered `true` without showing anything.
  */
