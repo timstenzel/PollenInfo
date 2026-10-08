@@ -878,7 +878,10 @@ is labelled, counted back from the last so the latest is always named (`dateLabe
 at draw time, tested in `DateLabelStepTest`) — 2 dp lines in each species' palette colour, and on top of them the feeling line,
 3 dp in `colorScheme.onSurface` with a dot on every answered day — and is one `clearAndSetSemantics` node announced as
 `diaryChartDescription(...)`: "Graph of your diary and 7 pollen types, last 30 days" ("last 7 days",
-"last 12 months" for the other ranges).
+"last 12 months" for the other ranges). It stays pure by returning a `DiaryChartDescription(resource,
+speciesCount)` — one plural per range (`diary_chart_description_week|month|year`), the count as both
+quantity and argument — which the chart resolves with `resolve()`; `DiaryChartGeometryTest` pins the
+resource and count, not the sentence.
 
 **Species colours** are `SpeciesPalette.kt` in `:theme` — 7 categorical colours, each with an
 explicit light and dark value and its WCAG contrast against `surfaceLight` / `surfaceDark` recorded
@@ -1191,10 +1194,11 @@ Two deliberate choices:
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
 the bottom bar's tab names, Home (feeling prompt included), All stations (the map's spoken
 description included), the reading composables in `core/ui/severity` they share, the Settings
-screen, onboarding, the change-station screen and the station picker they share, every error
+screen, onboarding, the change-station screen and the station picker they share, the Diary (chart
+description, axis words and the no-answers hint included), every error
 sentence (`error_*`, see "Error handling"), the Android notification channel names, and the
 vocabulary every screen shares — pollen-type, severity and feeling words, month and weekday names
-and date forms (below). Everything else (the Diary, Alarms) is still hard-coded English and moves
+and date forms (below). Everything else (Alarms) is still hard-coded English and moves
 over screen by screen.
 
 - **Vocabulary lookups.** Each has a composable form and a `StringResource` form for code outside
@@ -1263,7 +1267,7 @@ over screen by screen.
     language. Compile-verified only; needs `CFBundleLocalizations` (see "iOS wrapper configuration").
 - **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
   `change_station_*`, `station_picker_*`, `species_*`, `severity_*`, `feeling_*`, `date_*`,
-  `alarm_*`, `all_stations_*`, `reading_*` (the reading composables of `core/ui/severity`:
+  `alarm_*`, `all_stations_*`, `diary_*`, `reading_*` (the reading composables of `core/ui/severity`:
   reading age, refresh caption, species list), and `common_*` for words several screens share ("Retry",
   "Back"). Keys starting with `example_` are reserved
   for the English-only reference feature.

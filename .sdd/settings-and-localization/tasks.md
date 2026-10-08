@@ -236,20 +236,27 @@ app's language.
 
 ### Implementation steps
 
-- [ ] Move every user-visible and spoken string of `feature/diary` to resources, with plurals for counts.
-- [ ] Keep `diaryChartDescription` pure: it returns a resource key with arguments (count, range) or takes its wording as a parameter; adapt its tests in `DiaryChartGeometryTest`.
-- [ ] Translate them.
+- [x] Move every user-visible and spoken string of `feature/diary` to resources, with plurals for counts.
+  *(`diary_*` strings; the title reuses `nav_diary`, Retry `common_retry`; the no-answers hint takes `home_feeling_question` and `nav_home` as arguments so it always quotes the prompt and tab as shown; the chart description is three `plurals`, one per range.)*
+- [x] Keep `diaryChartDescription` pure: it returns a resource key with arguments (count, range) or takes its wording as a parameter; adapt its tests in `DiaryChartGeometryTest`.
+  *(Returns `DiaryChartDescription(resource: PluralStringResource, speciesCount)`; `DiaryChart` calls `resolve()`.)*
+- [x] Translate them.
 
 ### Acceptance criteria
 
-- [ ] The `diaryChartDescription` tests in `DiaryChartGeometryTest` assert the key and arguments (count, range) for week, month and year instead of English sentences.
-- [ ] On the emulator in French the Diary's texts, buttons, filters, empty-state hint and medical note are French.
-- [ ] With TalkBack in German the chart is announced in German with the correct count and range.
-- [ ] The hard-coded text grep (see header), restricted to `feature/diary`, has no hits outside the allowlist.
+- [x] The `diaryChartDescription` tests in `DiaryChartGeometryTest` assert the key and arguments (count, range) for week, month and year instead of English sentences.
+  *(`the description follows the range` (week/month/year resources) and `the description passes the species count as its quantity and argument` (7, 1, 0) — both pass in `testDebugUnitTest`.)*
+- [x] On the emulator in French the Diary's texts, buttons, filters, empty-state hint and medical note are French.
+  *(API 36, 2026-10-08, `uiautomator dump` + screenshot: title "Journal", "Station", "Semaine" / "Mois" / "Année", intro "Comparez votre ressenti avec les niveaux de pollen d’une station.*", hint "Répondez à « Comment vous sentez-vous aujourd’hui ? » dans l’onglet Accueil pour voir votre courbe ici.", "Types de pollen" with French species names, axis words (Très élevé … Nul, Très mal … Très bien), dates "9 sept.", note "* Ceci n’est pas un diagnostic médical. …". "Non mesuré ici" could not be shown live — every station currently has a value for all seven types in every range — and the load-failure heading was not provoked; both are resource-backed and covered by `checkTranslations`.)*
+- [x] With TalkBack in German the chart is announced in German with the correct count and range.
+  *(Checked in the accessibility tree TalkBack reads, not by listening: "Grafik deines Tagebuchs und von 7 Pollenarten, letzte 30 Tage" / "… letzte 7 Tage" / "… letzte 12 Monate", and after unchecking six types "Grafik deines Tagebuchs und von 1 Pollenart, letzte 12 Monate".)*
+- [x] The hard-coded text grep (see header), restricted to `feature/diary`, has no hits outside the allowlist.
+  *(Only KDoc lines remain (`DiaryChart`, `DiaryChartDescription`, `DiaryChartGeometry`, `DiaryUiState`, `DiaryScreen`); a broader any-quoted-word sweep also finds only comments.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
+- [x] Common quality gates.
+  *(`./gradlew :composeApp:testDebugUnitTest :server:test :composeApp:compileTestKotlinIosSimulatorArm64 :composeApp:checkTranslations :composeApp:assembleDebug` → BUILD SUCCESSFUL; 942 tests (app + server), 0 failed. Only the known KLIB resolver warnings; new test names have no commas; CLAUDE.md updated (Diary chart description, Localization done-list, `diary_*` prefix).)*
 
 ## Task 08-translate-alarms-and-example
 

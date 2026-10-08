@@ -161,4 +161,28 @@
         <item>sam</item>
         <item>dim</item>
     </string-array>
+
+    <!-- Diary -->
+    <string name="diary_station_label">Station</string>
+    <string name="diary_range_week">Semaine</string>
+    <string name="diary_range_month">Mois</string>
+    <string name="diary_range_year">Année</string>
+    <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.*</string>
+    <string name="diary_no_entries_hint">Répondez à « %1$s » dans l’onglet %2$s pour voir votre courbe ici.</string>
+    <string name="diary_species_heading">Types de pollen</string>
+    <string name="diary_not_measured">Non mesuré ici</string>
+    <string name="diary_disclaimer">* Ceci n’est pas un diagnostic médical. Si vous soupçonnez une allergie au pollen, veuillez consulter un médecin.</string>
+    <string name="diary_load_failed">L’historique des pollens n’a pas pu être chargé.</string>
+    <plurals name="diary_chart_description_week">
+        <item quantity="one">Graphique de votre journal et de %1$d type de pollen, 7 derniers jours</item>
+        <item quantity="other">Graphique de votre journal et de %1$d types de pollen, 7 derniers jours</item>
+    </plurals>
+    <plurals name="diary_chart_description_month">
+        <item quantity="one">Graphique de votre journal et de %1$d type de pollen, 30 derniers jours</item>
+        <item quantity="other">Graphique de votre journal et de %1$d types de pollen, 30 derniers jours</item>
+    </plurals>
+    <plurals name="diary_chart_description_year">
+        <item quantity="one">Graphique de votre journal et de %1$d type de pollen, 12 derniers mois</item>
+        <item quantity="other">Graphique de votre journal et de %1$d types de pollen, 12 derniers mois</item>
+    </plurals>
 </resources>

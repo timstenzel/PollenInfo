@@ -56,6 +56,23 @@ import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.diary_disclaimer
+import ch.stenzel.tim.polleninfo.resources.diary_intro
+import ch.stenzel.tim.polleninfo.resources.diary_load_failed
+import ch.stenzel.tim.polleninfo.resources.diary_no_entries_hint
+import ch.stenzel.tim.polleninfo.resources.diary_not_measured
+import ch.stenzel.tim.polleninfo.resources.diary_range_month
+import ch.stenzel.tim.polleninfo.resources.diary_range_week
+import ch.stenzel.tim.polleninfo.resources.diary_range_year
+import ch.stenzel.tim.polleninfo.resources.diary_species_heading
+import ch.stenzel.tim.polleninfo.resources.diary_station_label
+import ch.stenzel.tim.polleninfo.resources.home_feeling_question
+import ch.stenzel.tim.polleninfo.resources.nav_diary
+import ch.stenzel.tim.polleninfo.resources.nav_home
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -95,7 +112,7 @@ private fun DiaryContent(
     actions: DiaryActions,
     onRetry: () -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text("Diary") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_diary)) }) }) { padding ->
         val modifier = Modifier.fillMaxSize().padding(padding)
         when (uiState) {
             is DiaryUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
@@ -113,7 +130,7 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
         RangeSelector(selected = content.range, onSelected = actions.onRangeSelected)
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Compare how you felt with the pollen levels at a station.*",
+            text = stringResource(Res.string.diary_intro),
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(16.dp))
@@ -138,7 +155,11 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
                     tonalElevation = 2.dp,
                 ) {
                     Text(
-                        text = NO_ENTRIES_HINT,
+                        text = stringResource(
+                            Res.string.diary_no_entries_hint,
+                            stringResource(Res.string.home_feeling_question),
+                            stringResource(Res.string.nav_home),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -148,7 +169,7 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "Pollen types",
+            text = stringResource(Res.string.diary_species_heading),
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.semantics { heading() },
         )
@@ -164,7 +185,7 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            text = DISCLAIMER,
+            text = stringResource(Res.string.diary_disclaimer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -182,7 +203,7 @@ private fun StationDropdown(stations: List<Station>, selectedAbbr: String, onSel
             value = stations.firstOrNull { it.abbr == selectedAbbr }?.name ?: selectedAbbr,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Station") },
+            label = { Text(stringResource(Res.string.diary_station_label)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -238,7 +259,7 @@ private fun SpeciesCheckboxRow(species: Species, checked: Boolean, measured: Boo
             )
             if (!measured) {
                 Text(
-                    text = "Not measured here",
+                    text = stringResource(Res.string.diary_not_measured),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -257,16 +278,16 @@ private fun RangeSelector(selected: HistoryRange, onSelected: (HistoryRange) -> 
                 onClick = { onSelected(range) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = HistoryRange.entries.size),
             ) {
-                Text(range.label())
+                Text(stringResource(range.labelResource()))
             }
         }
     }
 }
 
-private fun HistoryRange.label(): String = when (this) {
-    HistoryRange.WEEK -> "Week"
-    HistoryRange.MONTH -> "Month"
-    HistoryRange.YEAR -> "Year"
+private fun HistoryRange.labelResource(): StringResource = when (this) {
+    HistoryRange.WEEK -> Res.string.diary_range_week
+    HistoryRange.MONTH -> Res.string.diary_range_month
+    HistoryRange.YEAR -> Res.string.diary_range_year
 }
 
 @Composable
@@ -281,7 +302,7 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "The pollen history could not be loaded.",
+            text = stringResource(Res.string.diary_load_failed),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
@@ -293,14 +314,9 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
     }
 }
 
 /** Material's opacity for disabled content. */
 private const val DISABLED_ALPHA = 0.38f
-
-private const val NO_ENTRIES_HINT = "Answer 'How do you feel today?' on Home to see your line here."
-
-private const val DISCLAIMER =
-    "* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor."

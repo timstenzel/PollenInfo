@@ -184,4 +184,28 @@
         <item>Sat</item>
         <item>Sun</item>
     </string-array>
+
+    <!-- Diary -->
+    <string name="diary_station_label">Station</string>
+    <string name="diary_range_week">Week</string>
+    <string name="diary_range_month">Month</string>
+    <string name="diary_range_year">Year</string>
+    <string name="diary_intro">Compare how you felt with the pollen levels at a station.*</string>
+    <string name="diary_no_entries_hint">Answer “%1$s” on %2$s to see your line here.</string>
+    <string name="diary_species_heading">Pollen types</string>
+    <string name="diary_not_measured">Not measured here</string>
+    <string name="diary_disclaimer">* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor.</string>
+    <string name="diary_load_failed">The pollen history could not be loaded.</string>
+    <plurals name="diary_chart_description_week">
+        <item quantity="one">Graph of your diary and %1$d pollen type, last 7 days</item>
+        <item quantity="other">Graph of your diary and %1$d pollen types, last 7 days</item>
+    </plurals>
+    <plurals name="diary_chart_description_month">
+        <item quantity="one">Graph of your diary and %1$d pollen type, last 30 days</item>
+        <item quantity="other">Graph of your diary and %1$d pollen types, last 30 days</item>
+    </plurals>
+    <plurals name="diary_chart_description_year">
+        <item quantity="one">Graph of your diary and %1$d pollen type, last 12 months</item>
+        <item quantity="other">Graph of your diary and %1$d pollen types, last 12 months</item>
+    </plurals>
 </resources>

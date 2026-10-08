@@ -55,7 +55,7 @@ fun DiaryChart(
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val feelingColor = MaterialTheme.colorScheme.onSurface
     val colors = speciesIds.associateWith { speciesColor(it) }
-    val description = diaryChartDescription(speciesIds.size, range)
+    val description = diaryChartDescription(speciesIds.size, range).resolve()
     // Resolved here: the draw lambda below is not composable.
     val severityWords = DiaryLevels.map { it.label() }
     val feelingWords = Feeling.entries.associateWith { it.label() }

@@ -158,4 +158,28 @@
         <item>sab</item>
         <item>dom</item>
     </string-array>
+
+    <!-- Diary -->
+    <string name="diary_station_label">Stazione</string>
+    <string name="diary_range_week">Settimana</string>
+    <string name="diary_range_month">Mese</string>
+    <string name="diary_range_year">Anno</string>
+    <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.*</string>
+    <string name="diary_no_entries_hint">Risponda a «%1$s» nella scheda %2$s per vedere qui la Sua linea.</string>
+    <string name="diary_species_heading">Tipi di polline</string>
+    <string name="diary_not_measured">Non misurato qui</string>
+    <string name="diary_disclaimer">* Questa non è una diagnosi medica. Se sospetta un’allergia ai pollini, si rivolga a un medico.</string>
+    <string name="diary_load_failed">Non è stato possibile caricare lo storico dei pollini.</string>
+    <plurals name="diary_chart_description_week">
+        <item quantity="one">Grafico del Suo diario e di %1$d tipo di polline, ultimi 7 giorni</item>
+        <item quantity="other">Grafico del Suo diario e di %1$d tipi di polline, ultimi 7 giorni</item>
+    </plurals>
+    <plurals name="diary_chart_description_month">
+        <item quantity="one">Grafico del Suo diario e di %1$d tipo di polline, ultimi 30 giorni</item>
+        <item quantity="other">Grafico del Suo diario e di %1$d tipi di polline, ultimi 30 giorni</item>
+    </plurals>
+    <plurals name="diary_chart_description_year">
+        <item quantity="one">Grafico del Suo diario e di %1$d tipo di polline, ultimi 12 mesi</item>
+        <item quantity="other">Grafico del Suo diario e di %1$d tipi di polline, ultimi 12 mesi</item>
+    </plurals>
 </resources>

@@ -5,6 +5,10 @@ import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryDay
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.diary_chart_description_month
+import ch.stenzel.tim.polleninfo.resources.diary_chart_description_week
+import ch.stenzel.tim.polleninfo.resources.diary_chart_description_year
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
@@ -325,15 +329,16 @@ class DiaryChartGeometryTest {
     }
 
     @Test
-    fun `the description names the species count and the period`() {
-        assertEquals("Graph of your diary and 7 pollen types, last 30 days", diaryChartDescription(7, HistoryRange.MONTH))
-        assertEquals("Graph of your diary and 1 pollen type, last 30 days", diaryChartDescription(1, HistoryRange.MONTH))
+    fun `the description passes the species count as its quantity and argument`() {
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_month, 7), diaryChartDescription(7, HistoryRange.MONTH))
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_month, 1), diaryChartDescription(1, HistoryRange.MONTH))
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_month, 0), diaryChartDescription(0, HistoryRange.MONTH))
     }
 
     @Test
     fun `the description follows the range`() {
-        assertEquals("Graph of your diary and 7 pollen types, last 7 days", diaryChartDescription(7, HistoryRange.WEEK))
-        assertEquals("Graph of your diary and 7 pollen types, last 30 days", diaryChartDescription(7, HistoryRange.MONTH))
-        assertEquals("Graph of your diary and 7 pollen types, last 12 months", diaryChartDescription(7, HistoryRange.YEAR))
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_week, 7), diaryChartDescription(7, HistoryRange.WEEK))
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_month, 7), diaryChartDescription(7, HistoryRange.MONTH))
+        assertEquals(DiaryChartDescription(Res.plurals.diary_chart_description_year, 7), diaryChartDescription(7, HistoryRange.YEAR))
     }
 }
