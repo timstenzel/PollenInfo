@@ -1,9 +1,17 @@
 package ch.stenzel.tim.polleninfo.core.ui.severity
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
+import ch.stenzel.tim.polleninfo.core.ui.format.DateWording
+import ch.stenzel.tim.polleninfo.core.ui.format.ResourceText
 import ch.stenzel.tim.polleninfo.core.ui.format.englishDates
 import ch.stenzel.tim.polleninfo.core.ui.format.germanDates
 import ch.stenzel.tim.polleninfo.core.ui.format.italianDates
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.reading_age_fresh
+import ch.stenzel.tim.polleninfo.resources.reading_age_stale_earlier
+import ch.stenzel.tim.polleninfo.resources.reading_age_stale_today
+import ch.stenzel.tim.polleninfo.resources.reading_refreshed_earlier
+import ch.stenzel.tim.polleninfo.resources.reading_refreshed_today
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.datetime.Instant
@@ -11,29 +19,35 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 
+/**
+ * The sentences are translations, so these pin which one is chosen and what goes into it — the
+ * times on a 24-hour clock and the dates in the language of the given [DateWording].
+ */
 class ReadingAgeLabelTest {
+
+    private fun earlier(date: String) = ResourceText(Res.string.reading_age_stale_earlier, listOf(date))
 
     @Test
     fun `a fresh reading states its time on a 24-hour clock`() {
-        assertEquals("Data from 09:00", ReadingAge.Fresh(LocalTime(9, 0)).label(englishDates))
-        assertEquals("Data from 17:05", ReadingAge.Fresh(LocalTime(17, 5)).label(englishDates))
+        assertEquals(ResourceText(Res.string.reading_age_fresh, listOf("09:00")), ReadingAge.Fresh(LocalTime(9, 0)).label(englishDates))
+        assertEquals(ResourceText(Res.string.reading_age_fresh, listOf("17:05")), ReadingAge.Fresh(LocalTime(17, 5)).label(englishDates))
     }
 
     @Test
     fun `a stale reading from an earlier day names its date rather than a time`() {
-        assertEquals("Data from 29 July", ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(englishDates))
-        assertEquals("Data from 1 August", ReadingAge.Stale.Earlier(LocalDate(2026, 8, 1)).label(englishDates))
+        assertEquals(earlier("29 July"), ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(englishDates))
+        assertEquals(earlier("1 August"), ReadingAge.Stale.Earlier(LocalDate(2026, 8, 1)).label(englishDates))
     }
 
     @Test
     fun `an earlier day's date is in the app's language`() {
-        assertEquals("Data from 29 luglio", ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(italianDates))
-        assertEquals("Data from 29. Juli", ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(germanDates))
+        assertEquals(earlier("29 luglio"), ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(italianDates))
+        assertEquals(earlier("29. Juli"), ReadingAge.Stale.Earlier(LocalDate(2026, 7, 29)).label(germanDates))
     }
 
     @Test
     fun `a stale reading from today names its time rather than today's date`() {
-        assertEquals("Data from 06:00 today", ReadingAge.Stale.Today(LocalTime(6, 0)).label(englishDates))
+        assertEquals(ResourceText(Res.string.reading_age_stale_today, listOf("06:00")), ReadingAge.Stale.Today(LocalTime(6, 0)).label(englishDates))
     }
 
     @Test
@@ -45,7 +59,7 @@ class ReadingAgeLabelTest {
             timeZone = TimeZone.UTC,
         )
 
-        assertEquals("Refreshed 10:42", label)
+        assertEquals(ResourceText(Res.string.reading_refreshed_today, listOf("10:42")), label)
     }
 
     @Test
@@ -57,7 +71,7 @@ class ReadingAgeLabelTest {
             timeZone = TimeZone.UTC,
         )
 
-        assertEquals("Refreshed 31 July, 22:10", label)
+        assertEquals(ResourceText(Res.string.reading_refreshed_earlier, listOf("31 July", "22:10")), label)
     }
 
     @Test
@@ -69,7 +83,7 @@ class ReadingAgeLabelTest {
             timeZone = TimeZone.of("Europe/Zurich"),
         )
 
-        assertEquals("Refreshed 10:42", label)
+        assertEquals(ResourceText(Res.string.reading_refreshed_today, listOf("10:42")), label)
     }
 
     @Test
@@ -81,6 +95,6 @@ class ReadingAgeLabelTest {
             timeZone = TimeZone.UTC,
         )
 
-        assertEquals("Refreshed 31. Juli, 22:10", label)
+        assertEquals(ResourceText(Res.string.reading_refreshed_earlier, listOf("31. Juli", "22:10")), label)
     }
 }

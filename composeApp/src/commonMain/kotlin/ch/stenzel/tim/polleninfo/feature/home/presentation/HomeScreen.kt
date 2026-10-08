@@ -43,6 +43,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.format.resolve
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -51,15 +52,19 @@ import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesRow
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.home_driven_by
+import ch.stenzel.tim.polleninfo.resources.home_load_failed
 import kotlinx.datetime.Clock
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The pollen situation at the station the user chose.
  *
  * There is deliberately no way to change the station from here — the pin in the top bar is
- * decorative. Station changes belong to the planned settings feature; until then, clearing the
- * app's data is the only route back to onboarding.
+ * decorative. Station changes belong to Settings.
  */
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = koinViewModel()) {
@@ -151,7 +156,7 @@ private fun ReadingView(content: HomeUiState.Content, bottomInset: Dp, modifier:
         ReadingAgeView(readingAgeOf(content.measuredAt, now))
         Spacer(Modifier.height(8.dp))
         Text(
-            text = refreshedLabel(content.refreshedAt, now, rememberDateWording()),
+            text = refreshedLabel(content.refreshedAt, now, rememberDateWording()).resolve(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -194,7 +199,7 @@ private fun OverallSeverityView(severity: PollenSeverity, drivenBy: SpeciesReadi
         if (drivenBy != null) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Driven by ${speciesName(drivenBy.id, drivenBy.name)}",
+                text = stringResource(Res.string.home_driven_by, speciesName(drivenBy.id, drivenBy.name)),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -209,7 +214,7 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "The pollen readings could not be loaded.",
+            text = stringResource(Res.string.home_load_failed),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
@@ -221,6 +226,6 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
     }
 }

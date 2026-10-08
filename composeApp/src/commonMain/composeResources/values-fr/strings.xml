@@ -42,6 +42,35 @@
     <string name="error_action_resume_alarm">Impossible de réactiver l’alarme.</string>
 
     <string name="home_feeling_save_error">Votre réponse n’a pas pu être enregistrée. Veuillez réessayer.</string>
+    <string name="home_load_failed">Les mesures de pollen n’ont pas pu être chargées.</string>
+    <string name="home_driven_by">Pollen dominant : %1$s</string>
+    <string name="home_feeling_question">Comment vous sentez-vous aujourd’hui ?</string>
+    <string name="home_feeling_dismiss">Pas aujourd’hui</string>
+
+    <!-- All stations -->
+    <string name="all_stations_load_failed">Les stations n’ont pas pu être chargées.</string>
+    <string name="all_stations_row_loading">Chargement…</string>
+    <string name="all_stations_row_no_reading">Sans mesure</string>
+    <string name="all_stations_detail_loading">Chargement de la mesure de cette station…</string>
+    <string name="all_stations_detail_unavailable">Aucune mesure n’est disponible pour cette station pour le moment.</string>
+    <string name="all_stations_stale">Mesure non actuelle</string>
+    <string name="all_stations_expanded">Développé</string>
+    <string name="all_stations_collapsed">Réduit</string>
+    <plurals name="all_stations_map_description">
+        <item quantity="one">Carte de %1$d station de mesure du pollen. Sélectionnez une station dans la liste ci-dessous.</item>
+        <item quantity="other">Carte de %1$d stations de mesure du pollen. Sélectionnez une station dans la liste ci-dessous.</item>
+    </plurals>
+
+    <!-- Reading -->
+    <string name="reading_age_fresh">Données de %1$s</string>
+    <string name="reading_age_stale_today">Données d’aujourd’hui à %1$s</string>
+    <string name="reading_age_stale_earlier">Données du %1$s</string>
+    <string name="reading_not_current">Ces mesures ne sont pas actuelles.</string>
+    <string name="reading_refreshed_today">Actualisé à %1$s</string>
+    <string name="reading_refreshed_earlier">Actualisé le %1$s à %2$s</string>
+    <string name="reading_all_species">Tous les pollens</string>
+    <string name="reading_concentration_unit">concentration en %1$s</string>
+    <string name="reading_no_data">Sans données</string>
 
     <string name="common_retry">Réessayer</string>
     <string name="common_back">Retour</string>

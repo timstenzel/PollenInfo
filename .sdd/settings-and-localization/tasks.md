@@ -205,20 +205,28 @@ language, with all accessibility text translated.
 
 ### Implementation steps
 
-- [ ] Move every user-visible and spoken string of `feature/home`, `feature/allstations`, `core/ui/severity`, `core/ui/feeling` and `navigation/` to resources (plurals where a count appears).
-- [ ] Translate them (Swiss Standard German with "du", formal fr/it, French typography).
-- [ ] Update CLAUDE.md where it quotes these strings as English-only facts.
+- [x] Move every user-visible and spoken string of `feature/home`, `feature/allstations`, `core/ui/severity`, `core/ui/feeling` and `navigation/` to resources (plurals where a count appears).
+  *(`home_*`, `all_stations_*` (map description as `plurals`), `reading_*`; the All stations title reuses `nav_all_stations`. `ReadingAge.label` / `refreshedLabel` stay pure and return `ResourceText(resource, args)` (`core/ui/format`); `core/ui/feeling` and `navigation/` were already resource-backed.)*
+- [x] Translate them (Swiss Standard German with "du", formal fr/it, French typography).
+  *(Italian dates take "del giorno" / "il giorno" so the article never depends on the day — "Dati del 8 ottobre" was caught on the emulator.)*
+- [x] Update CLAUDE.md where it quotes these strings as English-only facts.
+  *(Localization: done-so-far list, `ResourceText` under "Formatters stay pure", key prefixes `all_stations_*` / `reading_*`; package table rows for `core/ui/format` and `core/ui/severity`.)*
 
 ### Acceptance criteria
 
-- [ ] On the emulator in German the feeling prompt asks "Wie fühlst du dich heute?"; in French it uses "vous" with a narrow non-breaking space before "?".
-- [ ] With TalkBack in Italian, the five tabs, the map and a stale row's icon are announced in Italian; the map's sentence is the Italian translation of "Map of 15 pollen stations. Select a station in the list below." with the count 15.
-- [ ] Home's stale warning and "Refreshed" caption appear in each of the four languages with the localized date.
-- [ ] The hard-coded text grep (see header), restricted to `feature/home`, `feature/allstations`, `core/ui` and `navigation`, has no hits outside the allowlist.
+- [x] On the emulator in German the feeling prompt asks "Wie fühlst du dich heute?"; in French it uses "vous" with a narrow non-breaking space before "?".
+  *(API 36, 2026-10-08, emulator clock moved forward a day so today's prompt was unanswered, restored afterwards. German: "Wie fühlst du dich heute?", close button "Heute nicht". French: "Comment vous sentez-vous aujourd’hui ?" — the dumped text has bytes `e2 80 af 3f`, U+202F before "?".)*
+- [x] With TalkBack in Italian, the five tabs, the map and a stale row's icon are announced in Italian; the map's sentence is the Italian translation of "Map of 15 pollen stations. Select a station in the list below." with the count 15.
+  *(Checked in the accessibility tree TalkBack reads (`uiautomator dump`), not by listening to TalkBack: tabs "Home", "Tutte le stazioni", "Diario", "Allarmi", "Impostazioni"; map "Mappa di 15 stazioni polliniche. Selezioni una stazione nell’elenco qui sotto."; six stale rows' icons "Valore non aggiornato".)*
+- [x] Home's stale warning and "Refreshed" caption appear in each of the four languages with the localized date.
+  *(Clock moved forward one day and then another with the app open, so the reading was from an earlier day and the refresh too. en "Data from 8 October" / "These readings are not current." / "Refreshed 9 October, 21:40"; de "Daten vom 8. Oktober" / "Diese Messwerte sind nicht aktuell." / "Aktualisiert am 9. Oktober, 21:40"; fr "Données du 8 octobre" / "Ces mesures ne sont pas actuelles." / "Actualisé le 9 octobre à 21:40"; it "Dati del giorno 8 ottobre" / "Questi valori non sono aggiornati." / "Aggiornato il giorno 10 ottobre alle 21:41" (after the fix). Same warning in an expanded All stations row.)*
+- [x] The hard-coded text grep (see header), restricted to `feature/home`, `feature/allstations`, `core/ui` and `navigation`, has no hits outside the allowlist.
+  *(Hits: `SwissLakes.kt` "Lac de Neuchâtel", "Lago di Lugano" only. Allowlist: `SwissLakes` lake names (`Lake.name`, for reading the data, never shown); also, from a broader any-quoted-word sweep, `SwissOutlineIcon` `name = "SwissOutline"` (ImageVector id), `DateWording` `require` messages and format plumbing, `AppErrorText` sentence joining, species ids in `SpeciesColors` / `SpeciesNames`.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
+- [x] Common quality gates.
+  *(`./gradlew :composeApp:testDebugUnitTest :server:test :composeApp:compileTestKotlinIosSimulatorArm64 :composeApp:checkTranslations :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL, 88 tasks executed; 602 app + 340 server tests, 0 failed; re-run green after the Italian fix. No compiler warnings besides the KLIB resolver notes; no test name has a comma; CLAUDE.md updated.)*
 
 ## Task 07-translate-diary
 

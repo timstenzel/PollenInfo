@@ -39,6 +39,35 @@
     <string name="error_action_resume_alarm">Impossibile riattivare l’allarme.</string>
 
     <string name="home_feeling_save_error">Non è stato possibile salvare la Sua risposta. Riprovi.</string>
+    <string name="home_load_failed">Non è stato possibile caricare i valori dei pollini.</string>
+    <string name="home_driven_by">Polline principale: %1$s</string>
+    <string name="home_feeling_question">Come si sente oggi?</string>
+    <string name="home_feeling_dismiss">Non oggi</string>
+
+    <!-- All stations -->
+    <string name="all_stations_load_failed">Non è stato possibile caricare le stazioni.</string>
+    <string name="all_stations_row_loading">Caricamento…</string>
+    <string name="all_stations_row_no_reading">Nessun valore</string>
+    <string name="all_stations_detail_loading">Caricamento del valore di questa stazione…</string>
+    <string name="all_stations_detail_unavailable">Al momento non è disponibile alcun valore per questa stazione.</string>
+    <string name="all_stations_stale">Valore non aggiornato</string>
+    <string name="all_stations_expanded">Espanso</string>
+    <string name="all_stations_collapsed">Compresso</string>
+    <plurals name="all_stations_map_description">
+        <item quantity="one">Mappa di %1$d stazione pollinica. Selezioni una stazione nell’elenco qui sotto.</item>
+        <item quantity="other">Mappa di %1$d stazioni polliniche. Selezioni una stazione nell’elenco qui sotto.</item>
+    </plurals>
+
+    <!-- Reading. "del giorno" / "il giorno": the article must not depend on the day ("dell’8", "l’11"). -->
+    <string name="reading_age_fresh">Dati delle %1$s</string>
+    <string name="reading_age_stale_today">Dati di oggi alle %1$s</string>
+    <string name="reading_age_stale_earlier">Dati del giorno %1$s</string>
+    <string name="reading_not_current">Questi valori non sono aggiornati.</string>
+    <string name="reading_refreshed_today">Aggiornato alle %1$s</string>
+    <string name="reading_refreshed_earlier">Aggiornato il giorno %1$s alle %2$s</string>
+    <string name="reading_all_species">Tutti i pollini</string>
+    <string name="reading_concentration_unit">concentrazione in %1$s</string>
+    <string name="reading_no_data">Nessun dato</string>
 
     <string name="common_retry">Riprova</string>
     <string name="common_back">Indietro</string>

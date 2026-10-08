@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.ui.feeling.label
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.home_feeling_dismiss
+import ch.stenzel.tim.polleninfo.resources.home_feeling_question
 import ch.stenzel.tim.polleninfo.resources.home_feeling_save_error
 import org.jetbrains.compose.resources.stringResource
 
@@ -46,12 +48,12 @@ fun FeelingPrompt(
         Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "How do you feel today?",
+                    text = stringResource(Res.string.home_feeling_question),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Not today")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.home_feeling_dismiss))
                 }
             }
             Row(

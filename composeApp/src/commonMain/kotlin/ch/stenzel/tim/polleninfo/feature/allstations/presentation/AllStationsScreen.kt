@@ -53,6 +53,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.format.resolve
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -61,10 +62,22 @@ import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesRow
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.all_stations_collapsed
+import ch.stenzel.tim.polleninfo.resources.all_stations_detail_loading
+import ch.stenzel.tim.polleninfo.resources.all_stations_detail_unavailable
+import ch.stenzel.tim.polleninfo.resources.all_stations_expanded
+import ch.stenzel.tim.polleninfo.resources.all_stations_load_failed
+import ch.stenzel.tim.polleninfo.resources.all_stations_row_loading
+import ch.stenzel.tim.polleninfo.resources.all_stations_row_no_reading
+import ch.stenzel.tim.polleninfo.resources.all_stations_stale
+import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.nav_all_stations
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -135,9 +148,8 @@ private fun AllStationsContent(
     onStationClick: (String) -> Unit,
 ) {
     Scaffold(
-        // The title matches the tab's accessibility name, so what is announced and what is shown
-        // cannot disagree.
-        topBar = { TopAppBar(title = { Text("All stations") }) },
+        // The tab's own name, so what is announced and what is shown cannot disagree.
+        topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_all_stations)) }) },
     ) { padding ->
         val modifier = Modifier.fillMaxSize().padding(padding)
         when (uiState) {
@@ -185,7 +197,7 @@ private fun ContentView(
             // that is how the user sees that a refresh happened. Absent until the first round is in.
             content.refreshedAt?.let { refreshedAt ->
                 Text(
-                    text = refreshedLabel(refreshedAt, now, rememberDateWording()),
+                    text = refreshedLabel(refreshedAt, now, rememberDateWording()).resolve(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -245,12 +257,15 @@ private fun StationList(
  */
 @Composable
 private fun StationRow(reading: StationReading, expanded: Boolean, now: Instant, onClick: () -> Unit) {
+    // Resolved here: the semantics block is not composable.
+    val expandedWord = stringResource(Res.string.all_stations_expanded)
+    val collapsedWord = stringResource(Res.string.all_stations_collapsed)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {
-                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                stateDescription = if (expanded) expandedWord else collapsedWord
             }
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
@@ -261,7 +276,7 @@ private fun StationRow(reading: StationReading, expanded: Boolean, now: Instant,
                 is StationReading.Pending -> {
                     PendingBar(Modifier.weight(1f))
                     Spacer(Modifier.width(16.dp))
-                    SeverityWord("Loading…", muted = true)
+                    SeverityWord(stringResource(Res.string.all_stations_row_loading), muted = true)
                 }
 
                 is StationReading.Available -> {
@@ -275,7 +290,7 @@ private fun StationRow(reading: StationReading, expanded: Boolean, now: Instant,
                 is StationReading.Unavailable -> {
                     SeverityBar(null, SeverityBarSize.Compact, Modifier.weight(1f))
                     Spacer(Modifier.width(16.dp))
-                    SeverityWord("No reading")
+                    SeverityWord(stringResource(Res.string.all_stations_row_no_reading))
                 }
             }
             // The collapsed row has no room for Home's full warning, but an old reading must still
@@ -311,9 +326,9 @@ private fun StationDetail(reading: StationReading, now: Instant) {
                 }
             }
 
-            is StationReading.Pending -> DetailMessage("Loading this station's reading…")
+            is StationReading.Pending -> DetailMessage(stringResource(Res.string.all_stations_detail_loading))
 
-            is StationReading.Unavailable -> DetailMessage("No reading available for this station right now.")
+            is StationReading.Unavailable -> DetailMessage(stringResource(Res.string.all_stations_detail_unavailable))
         }
     }
 }
@@ -356,7 +371,7 @@ private fun StaleIcon() {
     Icon(
         imageVector = Icons.Default.Warning,
         // Announced, not decorative: a screen-reader user needs the same warning as a sighted one.
-        contentDescription = "Reading not current",
+        contentDescription = stringResource(Res.string.all_stations_stale),
         tint = MaterialTheme.colorScheme.error,
         modifier = Modifier.size(STALE_ICON_SIZE),
     )
@@ -366,7 +381,7 @@ private fun StaleIcon() {
 private fun ErrorView(message: String, onRetry: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "The stations could not be loaded.",
+            text = stringResource(Res.string.all_stations_load_failed),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
@@ -378,7 +393,7 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
     }
 }
 

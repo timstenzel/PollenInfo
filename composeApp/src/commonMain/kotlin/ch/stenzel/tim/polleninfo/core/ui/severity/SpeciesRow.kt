@@ -15,18 +15,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.reading_all_species
+import ch.stenzel.tim.polleninfo.resources.reading_concentration_unit
+import ch.stenzel.tim.polleninfo.resources.reading_no_data
+import org.jetbrains.compose.resources.stringResource
 
 /** The unit is stated once here, so the numbers on the rows can stay bare and scannable. */
 @Composable
 fun SpeciesListHeading(unit: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Text(
-            text = "All species",
+            text = stringResource(Res.string.reading_all_species),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "concentration in $unit",
+            text = stringResource(Res.string.reading_concentration_unit, unit),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -51,7 +56,7 @@ fun SpeciesRow(reading: SpeciesReading) {
             // Fixed widths, so the bars all end at the same x and the words and numbers each form
             // a column down the list.
             Text(
-                text = reading.severity?.label() ?: "No data",
+                text = reading.severity?.label() ?: stringResource(Res.string.reading_no_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(SEVERITY_WORD_WIDTH),

@@ -34,10 +34,13 @@ import ch.stenzel.tim.polleninfo.feature.allstations.map.SWISS_BORDER
 import ch.stenzel.tim.polleninfo.feature.allstations.map.SWISS_LAKES
 import ch.stenzel.tim.polleninfo.feature.allstations.map.SwissMapProjection
 import ch.stenzel.tim.polleninfo.feature.allstations.map.nearestStation
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.all_stations_map_description
 import ch.stenzel.tim.polleninfo.theme.mapWaterDark
 import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeDark
 import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeLight
 import ch.stenzel.tim.polleninfo.theme.mapWaterLight
+import org.jetbrains.compose.resources.pluralStringResource
 
 /**
  * Switzerland's outline and its big lakes, with one dot per station at its true position, coloured
@@ -74,7 +77,7 @@ fun SwissMap(
     val lakeStroke = if (darkTheme) mapWaterEdgeDark else mapWaterEdgeLight
     val positions = stations.associate { it.station.abbr to it.station.position }
     val currentOnStationClick by rememberUpdatedState(onStationClick)
-    val description = "Map of ${stations.size} pollen stations. Select a station in the list below."
+    val description = pluralStringResource(Res.plurals.all_stations_map_description, stations.size, stations.size)
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Spacer(

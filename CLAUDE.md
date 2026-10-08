@@ -337,8 +337,8 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`, `DiaryRepository`, the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` — the user's answers, **on the device only** (see "Diary answers") |
 | `core/ui/feeling` | `Feeling.label()` (+`labelResource()`) — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
-| `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
-| `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization") |
+| `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
+| `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
@@ -1189,11 +1189,13 @@ Two deliberate choices:
 ### Localization
 
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
-the bottom bar's tab names, the Settings screen, onboarding, the change-station screen and the
-station picker they share, every error sentence (`error_*`, see "Error handling") and Home's
-feeling-save error, the Android notification channel names, and the vocabulary every screen shares —
-pollen-type, severity and feeling words, month and weekday names and date forms (below). Everything
-else is still hard-coded English and moves over screen by screen.
+the bottom bar's tab names, Home (feeling prompt included), All stations (the map's spoken
+description included), the reading composables in `core/ui/severity` they share, the Settings
+screen, onboarding, the change-station screen and the station picker they share, every error
+sentence (`error_*`, see "Error handling"), the Android notification channel names, and the
+vocabulary every screen shares — pollen-type, severity and feeling words, month and weekday names
+and date forms (below). Everything else (the Diary, Alarms) is still hard-coded English and moves
+over screen by screen.
 
 - **Vocabulary lookups.** Each has a composable form and a `StringResource` form for code outside
   Compose (`getString`, the push service later): `speciesName(id, fallback)` /
@@ -1219,7 +1221,10 @@ else is still hard-coded English and moves over screen by screen.
   kotlinx-datetime's `MonthNames.ENGLISH_*` / `DayOfWeekNames.ENGLISH_*` in app code.
 - **Formatters stay pure.** A function that words something (`ReadingAge.label(dates)`,
   `refreshedLabel`, `summaryOf`) takes the `DateWording` and the resolved words as parameters; the
-  screen resolves them in composition. That is why `HomeUiState.Content.drivenBy` is the
+  screen resolves them in composition. Where the sentence itself is a translation it returns a
+  `ResourceText(resource, args)` (`core/ui/format`) — the `StringResource` and its formatted
+  arguments — which the screen turns into text with `resolve()` (`load()` outside Compose), so
+  `ReadingAgeLabelTest` pins the chosen sentence and its arguments without loading a resource. That is why `HomeUiState.Content.drivenBy` is the
   `SpeciesReading` itself — the screen names it — and why a chart resolves its labels before its
   draw lambda, which is not composable.
 
@@ -1258,7 +1263,8 @@ else is still hard-coded English and moves over screen by screen.
     language. Compile-verified only; needs `CFBundleLocalizations` (see "iOS wrapper configuration").
 - **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
   `change_station_*`, `station_picker_*`, `species_*`, `severity_*`, `feeling_*`, `date_*`,
-  `alarm_*`, and `common_*` for words several screens share ("Retry",
+  `alarm_*`, `all_stations_*`, `reading_*` (the reading composables of `core/ui/severity`:
+  reading age, refresh caption, species list), and `common_*` for words several screens share ("Retry",
   "Back"). Keys starting with `example_` are reserved
   for the English-only reference feature.
 - **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
