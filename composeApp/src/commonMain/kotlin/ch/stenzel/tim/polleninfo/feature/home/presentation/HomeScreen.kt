@@ -39,8 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -48,6 +50,7 @@ import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesListHeading
 import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesRow
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
+import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import kotlinx.datetime.Clock
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -148,7 +151,7 @@ private fun ReadingView(content: HomeUiState.Content, bottomInset: Dp, modifier:
         ReadingAgeView(readingAgeOf(content.measuredAt, now))
         Spacer(Modifier.height(8.dp))
         Text(
-            text = refreshedLabel(content.refreshedAt, now),
+            text = refreshedLabel(content.refreshedAt, now, rememberDateWording()),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -178,7 +181,7 @@ private fun StationTitle(stationName: String) {
 }
 
 @Composable
-private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
+private fun OverallSeverityView(severity: PollenSeverity, drivenBy: SpeciesReading?) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -191,7 +194,7 @@ private fun OverallSeverityView(severity: PollenSeverity, drivenBy: String?) {
         if (drivenBy != null) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Driven by $drivenBy",
+                text = "Driven by ${speciesName(drivenBy.id, drivenBy.name)}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -162,7 +162,7 @@ class HomeViewModel(
                     stationName = station.name,
                     measuredAt = result.data.measuredAt,
                     overallSeverity = result.data.overallSeverity,
-                    drivenBy = result.data.drivenBy?.name,
+                    drivenBy = result.data.drivenBy,
                     unit = result.data.unit,
                     species = result.data.species,
                     refreshedAt = clock.now(),

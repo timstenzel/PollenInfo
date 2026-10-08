@@ -237,7 +237,8 @@ the boundary and the UTC → local conversion are tested without a ViewModel or 
   icon: "Data from 29 July — These readings are not current." If the reading is from the same
   local calendar day it is `Stale.Today(localTime)` and names the time instead ("Data from 06:00
   today"), since a warning naming today's date reads as a contradiction; otherwise
-  `Stale.Earlier(localDate)`.
+  `Stale.Earlier(localDate)`. The date is in the app's language (`DateWording.fullDate`, see
+  "Localization"), the time always `HH:mm`.
 
 Both are in the **device's** time zone, not the source's UTC. The stale warning is the counterpart
 of the backend serving its last known reading through an upstream outage with no maximum age: if the
@@ -334,9 +335,10 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
 | `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`, `DiaryRepository`, the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` — the user's answers, **on the device only** (see "Diary answers") |
-| `core/ui/feeling` | `Feeling.label()` — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
-| `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for |
-| `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()`, `ReadingAge.label()` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
+| `core/ui/feeling` | `Feeling.label()` (+`labelResource()`) — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
+| `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
+| `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel`, `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
+| `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization") |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
@@ -869,8 +871,11 @@ line (`FeelingLine`) split the same way at every unanswered day, with `dots` on 
 (answers outside the days shown are ignored); one grid line per severity and one `FeelingTick` per
 feeling at its level's height; date labels thinned per range — every day for a week, every 7th day counted back from
 yesterday for a month, the first of each month for a year. `DiaryChart` draws it on a canvas —
-severity words on the left, feeling words on the right, dates below ("4 Sep"; the month alone,
-"Oct", for a year), 2 dp lines in each species' palette colour, and on top of them the feeling line,
+severity words on the left, feeling words on the right, dates below in the app's language
+(`DateWording.shortDate`, "4 Sep"; for a year `monthOnly`, the month alone, "Oct") — where the
+language's words are too wide for every tick (German's twelve months on a phone), only every n-th
+is labelled, counted back from the last so the latest is always named (`dateLabelStep`, measured
+at draw time, tested in `DateLabelStepTest`) — 2 dp lines in each species' palette colour, and on top of them the feeling line,
 3 dp in `colorScheme.onSurface` with a dot on every answered day — and is one `clearAndSetSemantics` node announced as
 `diaryChartDescription(...)`: "Graph of your diary and 7 pollen types, last 30 days" ("last 7 days",
 "last 12 months" for the other ranges).
@@ -912,14 +917,17 @@ has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at leas
 an alarm to describe (cached after that; the abbreviation or species id stands in if one fails), so
 the iOS path makes no network call at all.
 
-Each row is the station name over `summaryOf(alarm, speciesNames)` (`AlarmSummary.kt`), e.g. "Daily
+Each row is the station name over `summaryOf(alarm, speciesNames, severityLabels, dates)` (`AlarmSummary.kt`), e.g. "Daily
 report at 08:00 · Mon–Fri · Birch, Grasses ≥ Moderate" or "Threshold alert 07:00–21:00 · Every day ·
 Birch, Grasses ≥ High" — the same three parts for both types: types in display order ("All pollen types"
 when every one is selected), the minimum only when it is not "Any", and days collapsed by
-`daysSummary` — "Every day", runs of three or more as a range ("Mon–Fri"), shorter runs listed
-("Sat, Sun"). Severity words come from `PollenSeverity.label()`; `minimumLabel()` calls `NONE`
-"Any". It sits in `presentation/`, not `domain/`, because it is wording. A paused alarm's summary is
-prefixed "Paused · ".
+`daysSummary` — "Every day", otherwise `DateWording.weekdays`: runs of three or more as a range
+("Mon–Fri", "Mo–Fr"), shorter runs listed ("Sat, Sun"). Pollen-type names, severity words
+(`PollenSeverity.label()`; `minimumLabel()` calls `NONE` "Any") and weekdays are in the app's
+language: the ViewModel puts only the backend's names by id (`AlarmListItem.speciesNames`) in the
+state, and the screen resolves the words and calls the pure `summaryOf`. It sits in
+`presentation/`, not `domain/`, because it is wording. A paused alarm's summary is prefixed
+"Paused · ".
 
 **Tapping a row** opens `Screen.AlarmEditor(id)` (`onEditAlarm`). **Its `Switch` pauses or resumes
 the alarm optimistically**: `AlarmsViewModel.onEnabledToggled(id, enabled)` flips the row at once and
@@ -1183,15 +1191,45 @@ Two deliberate choices:
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
 the bottom bar's tab names, the Settings screen, onboarding, the change-station screen and the
 station picker they share, every error sentence (`error_*`, see "Error handling") and Home's
-feeling-save error, and the Android notification channel names. Everything else is still hard-coded English and
-moves over screen by screen.
+feeling-save error, the Android notification channel names, and the vocabulary every screen shares —
+pollen-type, severity and feeling words, month and weekday names and date forms (below). Everything
+else is still hard-coded English and moves over screen by screen.
+
+- **Vocabulary lookups.** Each has a composable form and a `StringResource` form for code outside
+  Compose (`getString`, the push service later): `speciesName(id, fallback)` /
+  `speciesNameResource(id)` in `core/ui/species` (`species_*`, keyed by the backend's ids; an id
+  the app does not know shows the server's English name rather than nothing — pinned by
+  `SpeciesNamesTest`), `PollenSeverity.label()` / `labelResource()` (`severity_*`),
+  `minimumLabel()` / `minimumLabelResource()` in `feature/alarms` (`alarm_minimum_any`, the other
+  bands share `severity_*`) and `Feeling.label()` / `labelResource()` (`feeling_*`). The server's
+  `name` fields stay in the domain models and are only ever the fallback. Station names are never
+  translated.
+- **Dates.** `core/ui/format/DateWording` is a pure value — 12 full and 12 short month names, 7
+  full and 7 short weekday names (Monday first), and `dayMonthPattern` (`%1$s %2$s`, German
+  `%1$s. %2$s`) — with the forms as functions: `fullDate` "29 July" / "29. Juli" / "29 juillet" /
+  "29 luglio" (stale reading, refresh caption), `shortDate` "4 Sep" / "4. Sep." / "4 sept." / "4 set"
+  and `monthOnly` "Oct" / "Okt." / "oct." / "ott" (Diary axis), `weekdayShort` / `weekdayFull` (day
+  chips, spoken full) and `weekdays(days)` ranges "Mo–Fr" and lists "Sa, So" (alarm summaries).
+  Abbreviations carry their own full stop. The names are `string-array` resources
+  (`date_months_full`, `date_months_short`, `date_weekdays_full`, `date_weekdays_short`) plus
+  `date_day_month`; composables build it with `rememberDateWording()`, suspending code with
+  `loadDateWording()`. Times are `formatTime` — `HH:mm` in every language. `DateWordingTest`
+  pins every form against literal per-language fixtures (`DateWordingFixtures.kt` in
+  `commonTest`, to be kept in step with the resources) — no resource loading in tests. Never use
+  kotlinx-datetime's `MonthNames.ENGLISH_*` / `DayOfWeekNames.ENGLISH_*` in app code.
+- **Formatters stay pure.** A function that words something (`ReadingAge.label(dates)`,
+  `refreshedLabel`, `summaryOf`) takes the `DateWording` and the resolved words as parameters; the
+  screen resolves them in composition. That is why `HomeUiState.Content.drivenBy` is the
+  `SpeciesReading` itself — the screen names it — and why a chart resolves its labels before its
+  draw lambda, which is not composable.
 
 - **Resources.** Compose Multiplatform resources in
   `composeApp/src/commonMain/composeResources/values{,-de,-fr,-it}/strings.xml`; the generated
   accessor is `ch.stenzel.tim.polleninfo.resources.Res` (`compose.resources { packageOfResClass }`
   in `composeApp/build.gradle.kts`), internal to the module, so `commonTest` can compare
   `Res.string.x` values (`StringResource` has value equality). Composables use
-  `stringResource(Res.string.x, args…)`. Placeholders are positional only — `%1$s`, `%2$d` — since
+  `stringResource(Res.string.x, args…)` (`stringArrayResource(Res.array.x)` for a
+  `string-array`). Placeholders are positional only — `%1$s`, `%2$d` — since
   that is all Compose resources substitute. Android-only text goes in
   `androidMain/res/values{,-de,-fr,-it}/strings.xml` — the notification channel names, and
   `app_name` (`values/` only, `translatable="false"`).
@@ -1219,7 +1257,8 @@ moves over screen by screen.
     global domain's `AppleLanguages` is the device list and would make System default read as a
     language. Compile-verified only; needs `CFBundleLocalizations` (see "iOS wrapper configuration").
 - **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
-  `change_station_*`, `station_picker_*`, and `common_*` for words several screens share ("Retry",
+  `change_station_*`, `station_picker_*`, `species_*`, `severity_*`, `feeling_*`, `date_*`,
+  `alarm_*`, and `common_*` for words several screens share ("Retry",
   "Back"). Keys starting with `example_` are reserved
   for the English-only reference feature.
 - **Style.** German is Swiss Standard German — "ss", never "ß" — and says "du". French and Italian
@@ -1228,7 +1267,8 @@ moves over screen by screen.
   names and "PollenInfo" are never translated.
 - **The check.** `./gradlew :composeApp:checkTranslations` (a dependency of `check`) compares each
   language file with `values/` in the same resource set and fails, listing every problem, on a
-  missing or extra key, a different placeholder multiset per key, a blank value, or "ß" in a
+  missing or extra key, a different placeholder multiset per key, a `string-array` with another
+  number of items, a blank value (or array item), or "ß" in a
   `values-de` file. `example_` keys and `translatable="false"` keys are exempt from parity. It is
   `CheckTranslationsTask` in `composeApp/build.gradle.kts`, with plain file inputs, so it works with
   the configuration cache.

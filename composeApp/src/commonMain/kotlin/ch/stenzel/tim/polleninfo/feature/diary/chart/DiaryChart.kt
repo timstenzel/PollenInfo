@@ -22,18 +22,18 @@ import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryDay
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.ui.feeling.label
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
+import kotlin.math.ceil
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.format.MonthNames
-import kotlinx.datetime.format.Padding
-import kotlinx.datetime.format.char
 
 /**
  * The diary graph: one line per species in its palette colour, and the user's [entries] as the
  * feeling line, all on one scale (None at the bottom, Very high at the top). Severity words label
- * the left side, feeling words the right — "Very bad" level with "Very high" — and dates run below:
- * "4 Sep" for a week or a month, the month alone ("Oct") for a year, whose ticks are month starts.
+ * the left side, feeling words the right — "Very bad" level with "Very high" — and dates run below
+ * in the app's language: "4 Sep" ("4. Sep.") for a week or a month, the month alone ("Oct") for a
+ * year, whose ticks are month starts.
  *
  * The feeling line is drawn last, thicker and in `onSurface`, with a dot on every answered day, so
  * it stays distinguishable among the species lines and a single answer between gaps is still seen.
@@ -56,6 +56,10 @@ fun DiaryChart(
     val feelingColor = MaterialTheme.colorScheme.onSurface
     val colors = speciesIds.associateWith { speciesColor(it) }
     val description = diaryChartDescription(speciesIds.size, range)
+    // Resolved here: the draw lambda below is not composable.
+    val severityWords = DiaryLevels.map { it.label() }
+    val feelingWords = Feeling.entries.associateWith { it.label() }
+    val dates = rememberDateWording()
 
     Canvas(
         modifier = modifier
@@ -63,8 +67,8 @@ fun DiaryChart(
             .height(CHART_HEIGHT)
             .clearAndSetSemantics { contentDescription = description },
     ) {
-        val levelLabels = DiaryLevels.map { textMeasurer.measure(it.label(), labelStyle) }
-        val feelingLabels = Feeling.entries.associateWith { textMeasurer.measure(it.label(), labelStyle) }
+        val levelLabels = severityWords.map { textMeasurer.measure(it, labelStyle) }
+        val feelingLabels = feelingWords.mapValues { (_, word) -> textMeasurer.measure(word, labelStyle) }
         // A dot on the first or last day is centred on the plot's edge; its radius keeps it off the labels.
         val gutterStart = levelLabels.maxOf { it.size.width } + LABEL_GAP.toPx() + FEELING_DOT_RADIUS.toPx()
         val gutterEnd = feelingLabels.values.maxOf { it.size.width } + LABEL_GAP.toPx() + FEELING_DOT_RADIUS.toPx()
@@ -75,7 +79,7 @@ fun DiaryChart(
         val plotHeight = size.height - top - dateLabelHeight - LABEL_GAP.toPx()
 
         val geometry = diaryChartGeometry(days, speciesIds, range, plotWidth, plotHeight, entries)
-        val dateFormat = if (range == HistoryRange.YEAR) MONTH_TICK_FORMAT else DATE_TICK_FORMAT
+        val dateLabel: (LocalDate) -> String = if (range == HistoryRange.YEAR) dates::monthOnly else dates::shortDate
         fun at(x: Float, y: Float) = Offset(gutterStart + x, top + y)
 
         geometry.levelTicks.forEach { tick ->
@@ -89,8 +93,12 @@ fun DiaryChart(
             drawText(label, topLeft = Offset(size.width - label.size.width, top + tick.y - label.size.height / 2f))
         }
 
-        geometry.dateTicks.forEach { tick ->
-            val label = textMeasurer.measure(dateFormat.format(tick.date), labelStyle)
+        val dateLabels = geometry.dateTicks.map { textMeasurer.measure(dateLabel(it.date), labelStyle) }
+        val step = dateLabelStep(geometry.dateTicks.map { it.x }, dateLabels.map { it.size.width.toFloat() }, LABEL_GAP.toPx())
+        geometry.dateTicks.forEachIndexed { index, tick ->
+            // Counted back from the last tick, so the most recent date is always labelled.
+            if ((geometry.dateTicks.lastIndex - index) % step != 0) return@forEachIndexed
+            val label = dateLabels[index]
             val x = (gutterStart + tick.x - label.size.width / 2f)
                 .coerceIn(gutterStart, size.width - label.size.width)
             drawText(label, topLeft = Offset(x, top + plotHeight + LABEL_GAP.toPx()))
@@ -124,6 +132,18 @@ fun DiaryChart(
     }
 }
 
+/**
+ * Every how many date ticks a label is drawn, so labels of [widths] centred on [xs] never touch:
+ * 1 while the narrowest spacing between ticks fits the widest label plus [gap], more once the
+ * language's words are longer ("März", "sept.") than the plot has room for.
+ */
+internal fun dateLabelStep(xs: List<Float>, widths: List<Float>, gap: Float): Int {
+    val spacing = xs.zipWithNext { a, b -> b - a }.minOrNull() ?: return 1
+    if (spacing <= 0f) return 1
+    val needed = (widths.maxOrNull() ?: 0f) + gap
+    return maxOf(1, ceil(needed / spacing).toInt())
+}
+
 /** Bottom to top, matching `PollenSeverity`'s order and so [LevelTick.level]'s ordinal. */
 private val DiaryLevels = PollenSeverity.entries
 
@@ -132,15 +152,3 @@ private val LABEL_GAP = 6.dp
 private val SPECIES_LINE_WIDTH = 2.dp
 private val FEELING_LINE_WIDTH = 3.dp
 private val FEELING_DOT_RADIUS = 4.5.dp
-
-/** "4 Sep". */
-private val DATE_TICK_FORMAT = LocalDate.Format {
-    dayOfMonth(Padding.NONE)
-    char(' ')
-    monthName(MonthNames.ENGLISH_ABBREVIATED)
-}
-
-/** "Oct". */
-private val MONTH_TICK_FORMAT = LocalDate.Format {
-    monthName(MonthNames.ENGLISH_ABBREVIATED)
-}

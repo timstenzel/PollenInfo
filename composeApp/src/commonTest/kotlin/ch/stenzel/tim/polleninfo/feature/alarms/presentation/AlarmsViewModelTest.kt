@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.core.preferences.FakeNotificationPermissionPref
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
+import ch.stenzel.tim.polleninfo.core.species.allSpecies
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.FakeAlarmRepository
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
@@ -192,17 +193,15 @@ class AlarmsViewModelTest {
     }
 
     @Test
-    fun `rows name the station and summarise the alarm`() = runTest {
+    fun `rows name the station and carry the pollen-type names for the summary`() = runTest {
         val viewModel = loadedViewModel(
             listOf(dailyAlarm(stationAbbr = "PZH"), thresholdAlarm(stationAbbr = "PBE")),
         )
 
         val content = assertIs<AlarmsUiState.Content>(viewModel.uiState.value)
         assertEquals(listOf("Zürich", "Bern"), content.alarms.map { it.stationName })
-        assertEquals(
-            listOf("Daily report at 08:00 · Mon–Fri · Birch, Grasses", "Threshold alert 07:00–21:00 · Every day · Hazel ≥ High"),
-            content.alarms.map { it.summary },
-        )
+        assertEquals(allSpecies.associate { it.id to it.name }, content.alarms.first().speciesNames)
+        assertEquals(allSpecies.map { it.id }, content.alarms.first().speciesNames.keys.toList())
     }
 
     @Test
@@ -216,13 +215,13 @@ class AlarmsViewModelTest {
     }
 
     @Test
-    fun `a failing species list falls back to the species ids`() = runTest {
+    fun `a failing species list leaves the rows without pollen-type names`() = runTest {
         species.result = Result.Failure(RuntimeException("offline"))
 
         val viewModel = loadedViewModel(listOf(dailyAlarm()))
 
         val content = assertIs<AlarmsUiState.Content>(viewModel.uiState.value)
-        assertEquals("Daily report at 08:00 · Mon–Fri · BIRCH, GRASSES", content.alarms.single().summary)
+        assertEquals(emptyMap(), content.alarms.single().speciesNames)
     }
 
     @Test

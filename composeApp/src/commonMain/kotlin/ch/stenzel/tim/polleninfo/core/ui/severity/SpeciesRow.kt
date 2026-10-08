@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
+import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 
 /** The unit is stated once here, so the numbers on the rows can stay bare and scannable. */
 @Composable
@@ -42,7 +43,7 @@ fun SpeciesListHeading(unit: String) {
 @Composable
 fun SpeciesRow(reading: SpeciesReading) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = reading.name, style = MaterialTheme.typography.bodyLarge)
+        Text(text = speciesName(reading.id, reading.name), style = MaterialTheme.typography.bodyLarge)
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SeverityBar(reading.severity, SeverityBarSize.Compact, Modifier.weight(1f))

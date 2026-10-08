@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 
 /**
  * A fresh reading gets an unobtrusive caption. A stale one gets a warning in the error container
@@ -26,9 +27,10 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
  */
 @Composable
 fun ReadingAgeView(age: ReadingAge) {
+    val text = age.label(rememberDateWording())
     when (age) {
         is ReadingAge.Fresh -> Text(
-            text = age.label(),
+            text = text,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -47,7 +49,7 @@ fun ReadingAgeView(age: ReadingAge) {
                 Icon(imageVector = Icons.Default.Warning, contentDescription = null)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(text = age.label(), style = MaterialTheme.typography.titleSmall)
+                    Text(text = text, style = MaterialTheme.typography.titleSmall)
                     Text(
                         text = "These readings are not current.",
                         style = MaterialTheme.typography.bodyMedium,

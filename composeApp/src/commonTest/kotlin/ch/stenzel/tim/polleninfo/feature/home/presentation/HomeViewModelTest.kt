@@ -112,7 +112,7 @@ class HomeViewModelTest {
 
         val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
         assertEquals(listOf("Grasses", "Birch", "Ash"), state.species.map { it.name })
-        assertEquals("Grasses", state.drivenBy)
+        assertEquals("Grasses", state.drivenBy?.name)
         assertEquals("grains/m3", state.unit)
     }
 

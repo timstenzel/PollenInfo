@@ -145,7 +145,7 @@ compose.resources {
 
 val checkTranslations = tasks.register<CheckTranslationsTask>("checkTranslations") {
     group = "verification"
-    description = "Fails when a translation is missing, extra, blank, has other placeholders or uses ß."
+    description = "Fails when a translation is missing, extra, blank, has other placeholders or items, or uses ß."
     stringFiles.from(
         fileTree("src/commonMain/composeResources") { include("values*/strings.xml") },
         fileTree("src/androidMain/res") { include("values*/strings.xml") },
@@ -159,8 +159,8 @@ tasks.named("check") { dependsOn(checkTranslations) }
 /**
  * Compares every `values-<lang>/strings.xml` with the English `values/strings.xml` next to it — the
  * Compose resources and the Android resources each form their own set. Fails, listing every problem,
- * when a key is missing or extra in a language, a key's placeholders differ (as a multiset), a value
- * is blank, or a German value contains "ß" (Swiss Standard German writes "ss").
+ * when a key is missing or extra in a language, a key's placeholders differ (as a multiset), a
+ * string array has another number of items, a value is blank, or a German value contains "ß" (Swiss Standard German writes "ss").
  *
  * Keys starting with `example_` (the English-only reference feature) and `translatable="false"`
  * keys are exempt from the parity check. Inputs are plain files, so the task is
@@ -177,7 +177,13 @@ abstract class CheckTranslationsTask : DefaultTask() {
     @get:OutputFile
     abstract val marker: RegularFileProperty
 
-    private class Entry(val placeholders: List<String>, val blank: Boolean, val exempt: Boolean, val text: String)
+    private class Entry(
+        val placeholders: List<String>,
+        val blank: Boolean,
+        val exempt: Boolean,
+        val text: String,
+        val items: Int?,
+    )
 
     @TaskAction
     fun check() {
@@ -210,6 +216,8 @@ abstract class CheckTranslationsTask : DefaultTask() {
                         english.exempt -> problems += "${label(file)}: '$key' is not translated and must not appear here"
                         entry.placeholders != english.placeholders ->
                             problems += "${label(file)}: '$key' has placeholders ${entry.placeholders}, English has ${english.placeholders}"
+                        entry.items != english.items ->
+                            problems += "${label(file)}: '$key' has ${entry.items} items, English has ${english.items}"
                     }
                     if (entry.blank) problems += "${label(file)}: '$key' is blank"
                     if (dir.startsWith("values-de") && 'ß' in entry.text) problems += "${label(file)}: '$key' contains ß, write ss"
@@ -224,14 +232,17 @@ abstract class CheckTranslationsTask : DefaultTask() {
 
     private fun label(file: java.io.File) = "${file.parentFile.parentFile.name}/${file.parentFile.name}/${file.name}"
 
-    /** `string` and `plurals` by name; a plural's placeholders are those of all its items together. */
+    /**
+     * `string`, `plurals` and `string-array` by name; a plural's or array's placeholders are those of
+     * all its items together, and an array's item count must match English too.
+     */
     private fun parse(file: java.io.File): Map<String, Entry> {
         val document = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
         val nodes = document.documentElement.childNodes
         val result = linkedMapOf<String, Entry>()
         for (i in 0 until nodes.length) {
             val element = nodes.item(i) as? org.w3c.dom.Element ?: continue
-            if (element.tagName != "string" && element.tagName != "plurals") continue
+            if (element.tagName !in setOf("string", "plurals", "string-array")) continue
             val name = element.getAttribute("name")
             val texts = if (element.tagName == "string") {
                 listOf(element.textContent)
@@ -244,6 +255,7 @@ abstract class CheckTranslationsTask : DefaultTask() {
                 blank = texts.isEmpty() || texts.any { it.isBlank() },
                 exempt = name.startsWith("example_") || element.getAttribute("translatable") == "false",
                 text = texts.joinToString("\n"),
+                items = if (element.tagName == "string-array") texts.size else null,
             )
         }
         return result

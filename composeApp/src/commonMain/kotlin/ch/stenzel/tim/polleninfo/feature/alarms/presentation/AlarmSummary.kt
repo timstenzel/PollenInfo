@@ -1,13 +1,17 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
+import androidx.compose.runtime.Composable
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
-import ch.stenzel.tim.polleninfo.core.ui.severity.label
+import ch.stenzel.tim.polleninfo.core.ui.format.DateWording
+import ch.stenzel.tim.polleninfo.core.ui.format.formatTime
+import ch.stenzel.tim.polleninfo.core.ui.severity.labelResource
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.alarm_minimum_any
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.format.char
-import kotlinx.datetime.isoDayNumber
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The one line a list row says about [alarm], e.g.
@@ -16,56 +20,48 @@ import kotlinx.datetime.isoDayNumber
  * types, so a list of both scans alike. The station is not part of it: the row shows that as its
  * headline.
  *
- * [speciesNames] maps species ids to display names in the order the app lists pollen types; the
- * selected ones are named in that order, and an id missing from it is shown as itself rather than
- * dropped. Selecting every known type reads "All pollen types". A minimum of
- * [PollenSeverity.NONE] ("Any") adds nothing, since the report is then always sent; a threshold
- * alert never has it.
+ * [speciesNames] maps species ids to display names — already in the app's language — in the order
+ * the app lists pollen types; the selected ones are named in that order, and an id missing from it
+ * is shown as itself rather than dropped. Selecting every known type reads "All pollen types". A
+ * minimum of [PollenSeverity.NONE] ("Any") adds nothing, since the report is then always sent; a
+ * threshold alert never has it.
  *
- * Lives beside the screen rather than in `domain/` because it is wording, and it takes the severity
- * words from `PollenSeverity.label()` so the list cannot spell a band differently from the rest of
- * the app.
+ * Lives beside the screen rather than in `domain/` because it is wording. The screen resolves the
+ * words — [severityLabels] from `PollenSeverity.label()`, so the list cannot spell a band
+ * differently from the rest of the app, and the weekday names from [dates] — so this stays pure.
  */
-fun summaryOf(alarm: Alarm, speciesNames: Map<String, String>): String {
+fun summaryOf(
+    alarm: Alarm,
+    speciesNames: Map<String, String>,
+    severityLabels: Map<PollenSeverity, String>,
+    dates: DateWording,
+): String {
     val type = when (val schedule = alarm.schedule) {
         is AlarmSchedule.Daily -> "Daily report at ${formatTime(schedule.at)}"
         is AlarmSchedule.Threshold -> "Threshold alert ${formatTime(schedule.from)}–${formatTime(schedule.until)}"
     }
     return listOf(
         type,
-        daysSummary(alarm.days),
-        speciesSummary(alarm.species, speciesNames) + severitySuffix(alarm.minSeverity),
+        daysSummary(alarm.days, dates),
+        speciesSummary(alarm.species, speciesNames) + severitySuffix(alarm.minSeverity, severityLabels),
     ).joinToString(SEPARATOR)
 }
 
 /**
- * Days in week order, Monday first. Every day is "Every day"; a run of three or more consecutive
- * days collapses to a range ("Mon–Fri"), and shorter runs are listed ("Sat, Sun").
+ * Days in week order, Monday first, in the language of [dates]. Every day is "Every day";
+ * otherwise [DateWording.weekdays] collapses runs of three or more ("Mon–Fri") and lists the rest
+ * ("Sat, Sun").
  */
-fun daysSummary(days: Set<DayOfWeek>): String {
-    if (days.size == DayOfWeek.entries.size) return "Every day"
-    val runs = mutableListOf<MutableList<DayOfWeek>>()
-    DayOfWeek.entries.filter { it in days }.forEach { day ->
-        val run = runs.lastOrNull()
-        if (run != null && run.last().isoDayNumber + 1 == day.isoDayNumber) run += day else runs += mutableListOf(day)
-    }
-    return runs.joinToString(", ") { run ->
-        if (run.size >= MIN_RANGE_LENGTH) {
-            "${run.first().shortName()}–${run.last().shortName()}"
-        } else {
-            run.joinToString(", ") { it.shortName() }
-        }
-    }
-}
-
-/** `HH:mm`, the 24-hour form Swiss time is written in. */
-fun formatTime(time: LocalTime): String = TIME_FORMAT.format(time)
-
-/** The three-letter English abbreviation, as on the editor's day chips. */
-fun DayOfWeek.shortName(): String = SHORT_DAY_NAMES[isoDayNumber - 1]
+fun daysSummary(days: Set<DayOfWeek>, dates: DateWording): String =
+    if (days.size == DayOfWeek.entries.size) "Every day" else dates.weekdays(days)
 
 /** What the editor calls a minimum severity: [PollenSeverity.NONE] is "Any", not "None". */
-fun PollenSeverity.minimumLabel(): String = if (this == PollenSeverity.NONE) "Any" else label()
+@Composable
+fun PollenSeverity.minimumLabel(): String = stringResource(minimumLabelResource())
+
+/** The resource behind [minimumLabel]; the other severities share `PollenSeverity.label()`'s words. */
+fun PollenSeverity.minimumLabelResource(): StringResource =
+    if (this == PollenSeverity.NONE) Res.string.alarm_minimum_any else labelResource()
 
 private fun speciesSummary(selected: Set<String>, speciesNames: Map<String, String>): String {
     if (speciesNames.isNotEmpty() && selected.containsAll(speciesNames.keys)) return "All pollen types"
@@ -74,18 +70,7 @@ private fun speciesSummary(selected: Set<String>, speciesNames: Map<String, Stri
     return (known + unknown).joinToString(", ")
 }
 
-private fun severitySuffix(minSeverity: PollenSeverity): String =
-    if (minSeverity == PollenSeverity.NONE) "" else " ≥ ${minSeverity.label()}"
-
-/** Indexed by ISO day number, Monday first. A list rather than a `when`: `DayOfWeek` is an expect enum. */
-private val SHORT_DAY_NAMES = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+private fun severitySuffix(minSeverity: PollenSeverity, severityLabels: Map<PollenSeverity, String>): String =
+    if (minSeverity == PollenSeverity.NONE) "" else " ≥ ${severityLabels.getValue(minSeverity)}"
 
 private const val SEPARATOR = " · "
-
-private const val MIN_RANGE_LENGTH = 3
-
-private val TIME_FORMAT = LocalTime.Format {
-    hour()
-    char(':')
-    minute()
-}

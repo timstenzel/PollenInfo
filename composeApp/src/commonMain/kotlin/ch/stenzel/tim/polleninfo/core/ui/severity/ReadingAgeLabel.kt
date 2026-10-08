@@ -1,28 +1,24 @@
 package ch.stenzel.tim.polleninfo.core.ui.severity
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
+import ch.stenzel.tim.polleninfo.core.ui.format.DateWording
+import ch.stenzel.tim.polleninfo.core.ui.format.formatTime
 import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.format.MonthNames
-import kotlinx.datetime.format.Padding
-import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 
 /**
  * The words for a [ReadingAge]: "Data from 09:00" for a fresh reading; for a stale one "Data from
  * 06:00 today" if it is from today, otherwise "Data from 29 July".
  *
- * Kept apart from the composable so the wording can be tested without UI. Formatted with
- * kotlinx-datetime's own format builders, since `String.format` and `java.time` do not exist in
- * shared code. The clock is always 24-hour — the app's audience is Swiss.
+ * Kept apart from the composable so the wording can be tested without UI. The date is in the
+ * language of [dates]; the clock is always 24-hour — the app's audience is Swiss.
  */
-fun ReadingAge.label(): String = when (this) {
+fun ReadingAge.label(dates: DateWording): String = when (this) {
     // Not "Updated": beside the refresh time that word would not say which of the two it means.
-    is ReadingAge.Fresh -> "Data from ${TIME_FORMAT.format(localTime)}"
-    is ReadingAge.Stale.Today -> "Data from ${TIME_FORMAT.format(localTime)} today"
-    is ReadingAge.Stale.Earlier -> "Data from ${DATE_FORMAT.format(localDate)}"
+    is ReadingAge.Fresh -> "Data from ${formatTime(localTime)}"
+    is ReadingAge.Stale.Today -> "Data from ${formatTime(localTime)} today"
+    is ReadingAge.Stale.Earlier -> "Data from ${dates.fullDate(localDate)}"
 }
 
 /**
@@ -35,25 +31,14 @@ fun ReadingAge.label(): String = when (this) {
 fun refreshedLabel(
     refreshedAt: Instant,
     now: Instant,
+    dates: DateWording,
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ): String {
     val local = refreshedAt.toLocalDateTime(timeZone)
-    val time = TIME_FORMAT.format(local.time)
+    val time = formatTime(local.time)
     return if (local.date == now.toLocalDateTime(timeZone).date) {
         "Refreshed $time"
     } else {
-        "Refreshed ${DATE_FORMAT.format(local.date)}, $time"
+        "Refreshed ${dates.fullDate(local.date)}, $time"
     }
-}
-
-private val TIME_FORMAT = LocalTime.Format {
-    hour()
-    char(':')
-    minute()
-}
-
-private val DATE_FORMAT = LocalDate.Format {
-    dayOfMonth(Padding.NONE)
-    char(' ')
-    monthName(MonthNames.ENGLISH_FULL)
 }

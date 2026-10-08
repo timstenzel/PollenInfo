@@ -50,12 +50,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.notifications.NotificationPermissionState
 import ch.stenzel.tim.polleninfo.core.notifications.rememberNotificationPermissionController
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.loadMessage
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.severity.label
+import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
 import kotlinx.coroutines.flow.filter
 import org.koin.compose.viewmodel.koinViewModel
@@ -298,13 +302,17 @@ private fun AlarmRows(
     onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
     modifier: Modifier,
 ) {
+    val dates = rememberDateWording()
+    val severityLabels = PollenSeverity.entries.associateWith { it.label() }
     // Room below the last row, so the create button never covers it.
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp)) {
         items(alarms, key = { it.alarm.id }) { item ->
             val enabled = item.alarm.enabled
+            val speciesNames = item.speciesNames.mapValues { (id, name) -> speciesName(id, name) }
+            val summary = summaryOf(item.alarm, speciesNames, severityLabels, dates)
             ListItem(
                 headlineContent = { Text(item.stationName) },
-                supportingContent = { Text(if (enabled) item.summary else "Paused · ${item.summary}") },
+                supportingContent = { Text(if (enabled) summary else "Paused · $summary") },
                 trailingContent = {
                     Switch(
                         checked = enabled,

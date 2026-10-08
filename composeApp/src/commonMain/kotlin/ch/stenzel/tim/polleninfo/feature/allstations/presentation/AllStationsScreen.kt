@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -184,7 +185,7 @@ private fun ContentView(
             // that is how the user sees that a refresh happened. Absent until the first round is in.
             content.refreshedAt?.let { refreshedAt ->
                 Text(
-                    text = refreshedLabel(refreshedAt, now),
+                    text = refreshedLabel(refreshedAt, now, rememberDateWording()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),

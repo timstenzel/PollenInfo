@@ -61,6 +61,9 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.format.formatTime
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import kotlinx.datetime.DayOfWeek
@@ -266,7 +269,7 @@ private fun EditingForm(
                 FilterChip(
                     selected = species.id in form.species,
                     onClick = { onSpeciesToggled(species.id) },
-                    label = { Text(species.name) },
+                    label = { Text(speciesName(species.id, species.name)) },
                     enabled = enabled,
                 )
             }
@@ -301,6 +304,7 @@ private fun EditingForm(
         )
 
         SectionHeading("Days")
+        val dates = rememberDateWording()
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DayOfWeek.entries.forEach { day ->
                 FilterChip(
@@ -309,7 +313,7 @@ private fun EditingForm(
                     // "Mon" would be read as a word; the full name is what a screen reader says. Set
                     // on the label, which the chip merges into its own node, so it stays one stop.
                     label = {
-                        Text(day.shortName(), modifier = Modifier.semantics { contentDescription = day.fullName() })
+                        Text(dates.weekdayShort(day), modifier = Modifier.semantics { contentDescription = dates.weekdayFull(day) })
                     },
                     enabled = enabled,
                 )
@@ -515,4 +519,3 @@ private fun TimeField(
     }
 }
 
-private fun DayOfWeek.fullName(): String = name.lowercase().replaceFirstChar { it.uppercase() }

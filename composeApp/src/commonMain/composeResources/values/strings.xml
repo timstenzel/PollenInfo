@@ -78,4 +78,72 @@
     <string name="change_station_title">Default station</string>
     <string name="change_station_intro">Home shows the pollen levels at this station. Your alarms and the Diary keep their own stations.</string>
     <string name="change_station_save">Save</string>
+
+    <!-- Vocabulary: pollen types (keyed by the server's species ids), severity and feeling words. -->
+    <string name="species_alder">Alder</string>
+    <string name="species_birch">Birch</string>
+    <string name="species_hazel">Hazel</string>
+    <string name="species_beech">Beech</string>
+    <string name="species_ash">Ash</string>
+    <string name="species_oak">Oak</string>
+    <string name="species_grasses">Grasses</string>
+    <string name="severity_none">None</string>
+    <string name="severity_low">Low</string>
+    <string name="severity_moderate">Moderate</string>
+    <string name="severity_high">High</string>
+    <string name="severity_very_high">Very high</string>
+    <string name="alarm_minimum_any">Any</string>
+    <string name="feeling_very_bad">Very bad</string>
+    <string name="feeling_bad">Bad</string>
+    <string name="feeling_good">Good</string>
+    <string name="feeling_very_good">Very good</string>
+
+    <!-- Dates (core/ui/format/DateWording): %1$s is the day of the month, %2$s the month name. Weekdays Monday first. -->
+    <string name="date_day_month">%1$s %2$s</string>
+    <string-array name="date_months_full">
+        <item>January</item>
+        <item>February</item>
+        <item>March</item>
+        <item>April</item>
+        <item>May</item>
+        <item>June</item>
+        <item>July</item>
+        <item>August</item>
+        <item>September</item>
+        <item>October</item>
+        <item>November</item>
+        <item>December</item>
+    </string-array>
+    <string-array name="date_months_short">
+        <item>Jan</item>
+        <item>Feb</item>
+        <item>Mar</item>
+        <item>Apr</item>
+        <item>May</item>
+        <item>Jun</item>
+        <item>Jul</item>
+        <item>Aug</item>
+        <item>Sep</item>
+        <item>Oct</item>
+        <item>Nov</item>
+        <item>Dec</item>
+    </string-array>
+    <string-array name="date_weekdays_full">
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+        <item>Sunday</item>
+    </string-array>
+    <string-array name="date_weekdays_short">
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+        <item>Thu</item>
+        <item>Fri</item>
+        <item>Sat</item>
+        <item>Sun</item>
+    </string-array>
 </resources>

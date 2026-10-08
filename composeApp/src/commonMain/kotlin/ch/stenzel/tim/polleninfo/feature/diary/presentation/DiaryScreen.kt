@@ -54,6 +54,7 @@ import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
+import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -231,7 +232,7 @@ private fun SpeciesCheckboxRow(species: Species, checked: Boolean, measured: Boo
         Spacer(Modifier.width(12.dp))
         Column {
             Text(
-                text = species.name,
+                text = speciesName(species.id, species.name),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (measured) 1f else DISABLED_ALPHA),
             )

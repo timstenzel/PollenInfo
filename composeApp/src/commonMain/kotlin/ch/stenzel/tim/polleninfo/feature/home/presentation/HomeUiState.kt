@@ -21,8 +21,8 @@ sealed interface HomeUiState {
 
     /**
      * [species] arrives already ordered by `GetStationMeasurementUseCase`; the screen renders it as
-     * is. [drivenBy] names the taxon behind [overallSeverity] and is `null` only when nothing was
-     * measured at all.
+     * is. [drivenBy] is the taxon behind [overallSeverity] — the screen names it in the app's language —
+     * and is `null` only when nothing was measured at all.
      *
      * [measuredAt] is carried as the raw instant rather than as a `ReadingAge`: whether a reading
      * is fresh depends on when the screen is looked at, not on when the state was built, so the
@@ -43,7 +43,7 @@ sealed interface HomeUiState {
         override val stationName: String,
         val measuredAt: Instant,
         val overallSeverity: PollenSeverity,
-        val drivenBy: String?,
+        val drivenBy: SpeciesReading?,
         val unit: String,
         val species: List<SpeciesReading>,
         val refreshedAt: Instant,

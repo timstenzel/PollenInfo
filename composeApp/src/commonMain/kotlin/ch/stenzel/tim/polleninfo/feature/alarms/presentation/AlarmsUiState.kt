@@ -33,9 +33,13 @@ sealed interface AlarmsUiState {
     data class Error(val error: AppError) : AlarmsUiState
 }
 
-/** One row of the list: the alarm, its station's display name and a one-line summary. */
+/**
+ * One row of the list: the alarm and its station's display name. [speciesNames] are the backend's
+ * pollen-type names by id in display order (empty if they could not be loaded); the screen words
+ * the row's summary from them in the app's language with `summaryOf`.
+ */
 data class AlarmListItem(
     val alarm: Alarm,
     val stationName: String,
-    val summary: String,
+    val speciesNames: Map<String, String>,
 )

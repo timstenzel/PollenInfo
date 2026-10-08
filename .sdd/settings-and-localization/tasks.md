@@ -173,23 +173,29 @@ it later.
 
 ### Implementation steps
 
-- [ ] Add species-name resources keyed by species id with a composable lookup that falls back to the server's name for an unknown id, plus `speciesNameResource(id): StringResource?` for non-composable callers; use it everywhere a species name is shown.
-- [ ] Make `PollenSeverity.label()`, `minimumLabel()` and `Feeling.label()` resource-backed, each with a `StringResource` accessor usable outside Compose.
-- [ ] Add `core/ui/format`: a pure `DateWording` (month and weekday names full/short, per-language date forms) with pure formatting functions, built both by a composable (`rememberDateWording()`) and by a `suspend` builder using `getString` (for the push service).
-- [ ] Use it in `ReadingAgeLabel` (full date), `DiaryChart` (short date, month only), `AlarmSummary` / `daysSummary` and the editor's day chips (short labels, spoken full names), replacing the English name tables.
-- [ ] Translate all of it; update CLAUDE.md "Localization" (vocabulary lookups, `DateWording`).
+- [x] Add species-name resources keyed by species id with a composable lookup that falls back to the server's name for an unknown id, plus `speciesNameResource(id): StringResource?` for non-composable callers; use it everywhere a species name is shown.
+- [x] Make `PollenSeverity.label()`, `minimumLabel()` and `Feeling.label()` resource-backed, each with a `StringResource` accessor usable outside Compose.
+- [x] Add `core/ui/format`: a pure `DateWording` (month and weekday names full/short, per-language date forms) with pure formatting functions, built both by a composable (`rememberDateWording()`) and by a `suspend` builder using `getString` (for the push service).
+- [x] Use it in `ReadingAgeLabel` (full date), `DiaryChart` (short date, month only), `AlarmSummary` / `daysSummary` and the editor's day chips (short labels, spoken full names), replacing the English name tables.
+- [x] Translate all of it; update CLAUDE.md "Localization" (vocabulary lookups, `DateWording`).
 
 ### Acceptance criteria
 
-- [ ] `DateWordingTest` pins, for literal en/de/fr/it fixtures: "29 July" / "29. Juli" / "29 juillet" / "29 luglio"; "4 Sep" / "4. Sep." / "4 sept." / "4 set"; the month-only form; the weekday range ("Mon–Fri" / "Mo–Fr" / "lun–ven" / "lun–ven") and short list ("Sat, Sun" / "Sa, So").
-- [ ] `AlarmSummaryTest` and `ReadingAgeLabelTest` pass against `DateWording` and the label lookups, and every time they produce is `HH:mm`.
-- [ ] A test pins that an unknown species id falls back to the given server name.
-- [ ] On the emulator in German: Home shows "Birke", "Gräser" and "Mässig"; the Diary year view shows German month labels; in French an alarm summary shows the French weekday range and severity words; times everywhere are 24-hour; station names read e.g. "Genève", "Zürich" in every language.
-- [ ] `grep -rnE 'MonthNames\.ENGLISH|DayOfWeekNames\.ENGLISH' composeApp/src/commonMain` returns nothing.
+- [x] `DateWordingTest` pins, for literal en/de/fr/it fixtures: "29 July" / "29. Juli" / "29 juillet" / "29 luglio"; "4 Sep" / "4. Sep." / "4 sept." / "4 set"; the month-only form; the weekday range ("Mon–Fri" / "Mo–Fr" / "lun–ven" / "lun–ven") and short list ("Sat, Sun" / "Sa, So").
+  *(DateWordingTest: 14 tests, 0 failures — full, short, month-only, weekday short/full, ranges "Mon–Fri" / "Mo–Fr" / "lun–ven" / "lun–ven", lists "Sat, Sun" / "Sa, So" / "sam, dim" / "sab, dom", `HH:mm`, and the 12/7-name guard.)*
+- [x] `AlarmSummaryTest` and `ReadingAgeLabelTest` pass against `DateWording` and the label lookups, and every time they produce is `HH:mm`.
+  *(AlarmSummaryTest 19, ReadingAgeLabelTest 8 tests, 0 failures — English, German, Italian and French fixtures; every time `HH:mm`.)*
+- [x] A test pins that an unknown species id falls back to the given server name.
+  *(SpeciesNamesTest: 4 tests, 0 failures — `MUGWORT` → "Mugwort" without resolving anything.)*
+- [x] On the emulator in German: Home shows "Birke", "Gräser" and "Mässig"; the Diary year view shows German month labels; in French an alarm summary shows the French weekday range and severity words; times everywhere are 24-hour; station names read e.g. "Genève", "Zürich" in every language.
+  *(Verified 2026-10-08 on API 36. German: Home showed "Erle", "Birke", "Gräser", "Keine" and "Driven by Erle"; no station had anything above None today, so "Mässig" was checked on the Diary's severity axis, drawn by the same `PollenSeverity.label()`; the Diary year axis read "Dez. Feb. Apr. Juni Aug. Okt." — the German labels first overlapped, fixed with `dateLabelStep`. French, two alarms seeded through the API: "Threshold alert 07:00–21:30 · lun–ven · Bouleau, Graminées ≥ Élevé" (Genève) and "Daily report at 08:00 · sam, dim · Aulne ≥ Modéré" (Zürich); the editor's day chips read lun…dim, announced lundi…dimanche. Times 24-hour throughout. Alarms deleted, app language and notification permission reset afterwards.)*
+- [x] `grep -rnE 'MonthNames\.ENGLISH|DayOfWeekNames\.ENGLISH' composeApp/src/commonMain` returns nothing.
+  *(No output, exit 1.)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
+- [x] Common quality gates.
+  *(`./gradlew :composeApp:testDebugUnitTest :server:test :composeApp:compileTestKotlinIosSimulatorArm64 :composeApp:checkTranslations :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL; 602 app + 340 server tests, 0 failed; no compiler warnings besides the KLIB resolver notes; no test name has a comma; CLAUDE.md updated. `checkTranslations` now also covers `string-array` item counts — verified by deleting one Italian weekday: "'date_weekdays_short' has 6 items, English has 7", then reverted.)*
 
 ## Task 06-translate-home-all-stations-and-navigation
 

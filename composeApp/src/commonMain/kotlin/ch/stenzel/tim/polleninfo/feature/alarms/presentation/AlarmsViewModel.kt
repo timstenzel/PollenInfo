@@ -184,7 +184,7 @@ class AlarmsViewModel(
                 AlarmListItem(
                     alarm = alarm,
                     stationName = names[alarm.stationAbbr] ?: alarm.stationAbbr,
-                    summary = summaryOf(alarm, species),
+                    speciesNames = species,
                 )
             },
         )

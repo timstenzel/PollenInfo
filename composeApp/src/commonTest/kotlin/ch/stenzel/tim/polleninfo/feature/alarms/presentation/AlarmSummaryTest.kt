@@ -2,10 +2,17 @@ package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
+import ch.stenzel.tim.polleninfo.core.ui.format.englishDates
+import ch.stenzel.tim.polleninfo.core.ui.format.frenchDates
+import ch.stenzel.tim.polleninfo.core.ui.format.germanDates
+import ch.stenzel.tim.polleninfo.core.ui.severity.labelResource
 import ch.stenzel.tim.polleninfo.feature.alarms.WEEKDAYS
 import ch.stenzel.tim.polleninfo.feature.alarms.dailyAlarm
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.Alarm
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
+import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.alarm_minimum_any
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.datetime.DayOfWeek
@@ -14,6 +21,27 @@ import kotlinx.datetime.LocalTime
 class AlarmSummaryTest {
 
     private val speciesNames = allSpecies.associate { it.id to it.name }
+
+    private val englishSeverities = mapOf(
+        PollenSeverity.NONE to "None",
+        PollenSeverity.LOW to "Low",
+        PollenSeverity.MODERATE to "Moderate",
+        PollenSeverity.HIGH to "High",
+        PollenSeverity.VERY_HIGH to "Very high",
+    )
+
+    private val frenchSeverities = mapOf(
+        PollenSeverity.NONE to "Nul",
+        PollenSeverity.LOW to "Faible",
+        PollenSeverity.MODERATE to "Modéré",
+        PollenSeverity.HIGH to "Élevé",
+        PollenSeverity.VERY_HIGH to "Très élevé",
+    )
+
+    private fun summaryOf(alarm: Alarm, speciesNames: Map<String, String>) =
+        summaryOf(alarm, speciesNames, englishSeverities, englishDates)
+
+    private fun daysSummary(days: Set<DayOfWeek>) = daysSummary(days, englishDates)
 
     // --- Threshold summary ---
 
@@ -96,13 +124,6 @@ class AlarmSummaryTest {
         )
     }
 
-    @Test
-    fun `times are written with two digit hours and minutes`() {
-        assertEquals("06:05", formatTime(LocalTime(6, 5)))
-        assertEquals("00:00", formatTime(LocalTime(0, 0)))
-        assertEquals("23:59", formatTime(LocalTime(23, 59)))
-    }
-
     // --- Day ranges ---
 
     @Test
@@ -146,13 +167,34 @@ class AlarmSummaryTest {
         assertEquals("Thu", daysSummary(setOf(DayOfWeek.THURSDAY)))
     }
 
+    @Test
+    fun `days are named in the app's language`() {
+        assertEquals("Mo–Fr", daysSummary(WEEKDAYS, germanDates))
+        assertEquals("Sa, So", daysSummary(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY), germanDates))
+    }
+
+    @Test
+    fun `a French summary uses French weekdays and severity words with 24-hour times`() {
+        val alarm = thresholdAlarm().copy(
+            species = setOf("BIRCH", "GRASSES"),
+            days = WEEKDAYS,
+            schedule = AlarmSchedule.Threshold(LocalTime(7, 0), LocalTime(21, 30)),
+        )
+        val names = mapOf("BIRCH" to "Bouleau", "GRASSES" to "Graminées", "OAK" to "Chêne")
+
+        assertEquals(
+            "Threshold alert 07:00–21:30 · lun–ven · Bouleau, Graminées ≥ Élevé",
+            summaryOf(alarm, names, frenchSeverities, frenchDates),
+        )
+    }
+
     // --- Severity wording ---
 
     @Test
     fun `the minimum NONE is called Any and the others use the shared severity words`() {
-        assertEquals(
-            listOf("Any", "Low", "Moderate", "High", "Very high"),
-            PollenSeverity.entries.map { it.minimumLabel() },
-        )
+        assertEquals(Res.string.alarm_minimum_any, PollenSeverity.NONE.minimumLabelResource())
+        (PollenSeverity.entries - PollenSeverity.NONE).forEach { severity ->
+            assertEquals(severity.labelResource(), severity.minimumLabelResource(), severity.name)
+        }
     }
 }
