@@ -88,6 +88,10 @@ kotlin {
             // not be able to take them away.
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
+            // The app language (AppCompatDelegate.setApplicationLocales), which is the system's
+            // per-app language setting on API 33+ and stored by AppCompat below. MainActivity must be
+            // an AppCompatActivity for it to apply.
+            implementation(libs.androidx.appcompat)
             // Push tokens for pollen alarms. This is the one place the app needs Google Play
             // services; location deliberately stays on the platform provider.
             implementation(project.dependencies.platform(libs.firebase.bom))

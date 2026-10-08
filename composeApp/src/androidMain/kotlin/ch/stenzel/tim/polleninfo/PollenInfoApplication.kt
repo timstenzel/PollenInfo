@@ -12,7 +12,7 @@ import org.koin.core.context.startKoin
  * Not in `MainActivity.onCreate`: the activity is recreated on every configuration change — a dark
  * mode switch, a rotation — and a second `startKoin` throws `KoinApplicationAlreadyStartedException`.
  * The channels must exist before the first push arrives, which may be in a process FCM started with
- * no activity at all.
+ * no activity at all. `MainActivity` creates them again, which renames them after a language change.
  */
 class PollenInfoApplication : Application() {
     override fun onCreate() {

@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
 import ch.stenzel.tim.polleninfo.core.appinfo.IosAppInfo
+import ch.stenzel.tim.polleninfo.core.language.IosLanguageRepository
+import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.location.CoarseLocationProvider
 import ch.stenzel.tim.polleninfo.core.location.IosCoarseLocationProvider
 import ch.stenzel.tim.polleninfo.core.push.PushTokenProvider
@@ -26,6 +28,7 @@ actual val platformModule: Module = module {
     single<CoarseLocationProvider> { IosCoarseLocationProvider() }
     single<PushTokenProvider> { UnavailablePushTokenProvider() }
     single<AppInfo> { IosAppInfo() }
+    single<LanguageRepository> { IosLanguageRepository() }
 }
 
 /**

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android-only text. Checked against values-de, values-fr and values-it by
+  ./gradlew :composeApp:checkTranslations, like the Compose resources.
+-->
+<resources>
+    <string name="app_name" translatable="false">PollenInfo</string>
+
+    <!-- Notification channels, as listed in the system's notification settings for the app. -->
+    <string name="notification_channel_daily_report">Daily reports</string>
+    <string name="notification_channel_threshold_alert">Threshold alerts</string>
+</resources>

@@ -3,6 +3,9 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
 import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.appinfo.FakeAppInfo
+import ch.stenzel.tim.polleninfo.core.language.AppLanguage
+import ch.stenzel.tim.polleninfo.core.language.FakeLanguageRepository
+import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
@@ -21,7 +24,9 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -44,7 +49,8 @@ class SettingsViewModelTest {
     private fun viewModel(
         stationRepository: StationRepository = FakeStationRepository(),
         appInfo: AppInfo = FakeAppInfo(AppVersion(name = "1.0.0-debug", code = 1)),
-    ) = SettingsViewModel(selectedStationRepository, stationRepository, appInfo)
+        languageRepository: LanguageRepository = FakeLanguageRepository(),
+    ) = SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo)
 
     @Test
     fun `shows the version the platform reports`() {
@@ -119,11 +125,86 @@ class SettingsViewModelTest {
         val viewModel = SettingsViewModel(
             FakeSelectedStationRepository(initial = null),
             FakeStationRepository(),
+            FakeLanguageRepository(),
             FakeAppInfo(version = null),
         )
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.stationName)
+    }
+
+    @Test
+    fun `shows the language the platform reports`() {
+        val viewModel = viewModel(languageRepository = FakeLanguageRepository(current = AppLanguage.IT))
+
+        assertEquals(AppLanguage.IT, viewModel.uiState.value.language)
+    }
+
+    @Test
+    fun `opens and closes the language dialog`() {
+        val viewModel = viewModel()
+        assertFalse(viewModel.uiState.value.showLanguageDialog)
+
+        viewModel.onLanguageRowClicked()
+        assertTrue(viewModel.uiState.value.showLanguageDialog)
+
+        viewModel.onLanguageDialogDismissed()
+        assertFalse(viewModel.uiState.value.showLanguageDialog)
+    }
+
+    @Test
+    fun `selecting a language sets it on the platform and closes the dialog`() {
+        val languages = FakeLanguageRepository(current = AppLanguage.SYSTEM)
+        val viewModel = viewModel(languageRepository = languages)
+        viewModel.onLanguageRowClicked()
+
+        viewModel.onLanguageSelected(AppLanguage.FR)
+
+        assertEquals(listOf(AppLanguage.FR), languages.setCalls)
+        assertEquals(AppLanguage.FR, viewModel.uiState.value.language)
+        assertFalse(viewModel.uiState.value.showLanguageDialog)
+    }
+
+    @Test
+    fun `selecting the current language closes the dialog without setting it`() {
+        val languages = FakeLanguageRepository(current = AppLanguage.DE)
+        val viewModel = viewModel(languageRepository = languages)
+        viewModel.onLanguageRowClicked()
+
+        viewModel.onLanguageSelected(AppLanguage.DE)
+
+        assertEquals(emptyList(), languages.setCalls)
+        assertFalse(viewModel.uiState.value.showLanguageDialog)
+    }
+
+    @Test
+    fun `shows no restart note where a change applies immediately`() {
+        val viewModel = viewModel(languageRepository = FakeLanguageRepository(appliesImmediately = true))
+
+        viewModel.onLanguageSelected(AppLanguage.DE)
+
+        assertFalse(viewModel.uiState.value.languageAppliesOnRestart)
+    }
+
+    @Test
+    fun `shows the restart note only after a change where it applies at the next launch`() {
+        val viewModel = viewModel(languageRepository = FakeLanguageRepository(appliesImmediately = false))
+        assertFalse(viewModel.uiState.value.languageAppliesOnRestart)
+
+        viewModel.onLanguageSelected(AppLanguage.DE)
+
+        assertTrue(viewModel.uiState.value.languageAppliesOnRestart)
+    }
+
+    @Test
+    fun `reads the language again on resume after it changed outside the app`() {
+        val languages = FakeLanguageRepository(current = AppLanguage.FR)
+        val viewModel = viewModel(languageRepository = languages)
+
+        languages.current = AppLanguage.DE
+        viewModel.onResume()
+
+        assertEquals(AppLanguage.DE, viewModel.uiState.value.language)
     }
 }
 

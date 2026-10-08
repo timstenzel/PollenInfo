@@ -343,6 +343,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 | `core/stationpicker` | Choosing a station, shared by onboarding and the change-station screen: `FindNearestStationUseCase` (`domain/usecase`), and in `presentation/` the `StationPicker` state holder, `StationPickerState` (`Loading` / `Content(stations, selected, isLocating, locationError)` / `Error(AppError)`), `LocationError` and the `StationPickerContent` composable (see "Location") |
+| `core/language` | `AppLanguage` (`SYSTEM`, `EN`, `DE`, `FR`, `IT`, each with its BCP 47 `tag`; the pure `fromTag`, primary subtag only, anything unsupported → `SYSTEM`) and `LanguageRepository` (`current`, `set`, `appliesImmediately`) — bound in `platformModule`: `AndroidLanguageRepository`, `IosLanguageRepository`; Android's `appLanguageContext()` sits in `androidMain` (see "Localization"). Consumers use `FakeLanguageRepository` |
 | `core/appinfo` | `AppVersion(name, code)` and `AppInfo` (`version: AppVersion?`, `null` when the platform reports no complete version) — bound in `platformModule`: `AndroidAppInfo` (`PackageManager`, `PackageInfoCompat.getLongVersionCode`), `IosAppInfo` (`CFBundleShortVersionString` / `CFBundleVersion`; a non-integer build number counts as missing). Checked by hand; consumers use `FakeAppInfo` |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
@@ -389,6 +390,8 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` | The cleartext development backend on `localhost` |
 | `NSLocationWhenInUseUsageDescription`      | A sentence explaining the station shortcut | `rememberCoarseLocationPermissionRequester` — **mandatory**: without it `CLLocationManager` silently never prompts, so the shortcut fails with no error to debug |
 | `NSLocationDefaultAccuracyReduced`         | `true` | `IosCoarseLocationProvider` — the direct expression of "coarse is enough": iOS then never asks for precise access at all |
+| `CFBundleLocalizations`                    | `en`, `de`, `fr`, `it` | `IosLanguageRepository` — iOS only switches an app to a language its bundle declares |
+| `CFBundleDevelopmentRegion`                | `en`   | English as the fallback for every other device language, as `values/` is on Android |
 | `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (a whole number) | `IosAppInfo` — Settings' version line; hidden if either is missing or the build number is not a whole number |
 
 The notification permission (`IosNotificationPermissionController`) needs no `Info.plist` key.
@@ -482,6 +485,11 @@ use `FakeNotificationPermissionPreferences`.
 the device alone; clearing app data loses access to them. Same rules again:
 `DataStoreDeviceRegistrationRepository` is logic-free, consumers use
 `FakeDeviceRegistrationRepository`.
+
+**The app language is deliberately not here.** It belongs to the platform, so it can never disagree
+with the platform's own setting: Android's per-app language (AppCompat stores it below API 33),
+iOS's `AppleLanguages` default. `core/language/LanguageRepository` reads and writes it there — see
+"Localization".
 
 #### Diary answers
 
@@ -578,7 +586,7 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
 `appModules`. It provides the `DataStore<Preferences>`, the `CoarseLocationProvider`, the
-`PushTokenProvider` and `AppInfo`. The DataStore factory needs a file path and an IO dispatcher, neither of which
+`PushTokenProvider`, `AppInfo` and the `LanguageRepository`. The DataStore factory needs a file path and an IO dispatcher, neither of which
 exists in `commonMain`; the two providers are different platform classes on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
 Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
@@ -1071,7 +1079,10 @@ without them is out of scope, and location deliberately stays on the platform pr
 - **Receiving.** `PollenInfoApplication` creates the two channels on every start —
   `daily_report` ("Daily reports") and `threshold_alert` ("Threshold alerts"), default importance,
   `core/push/NotificationChannels.kt` — before any push can arrive, since FCM may start the process
-  with no activity. Their ids are the server's `PushChannel` ids. In the background the system shows
+  with no activity. Their names are Android string resources (`notification_channel_*`) read
+  through `appLanguageContext()`, and `MainActivity.onCreate` creates them again — a language change
+  re-creates the activity, and re-creating an existing channel updates only its name, keeping what
+  the user set. Their ids are the server's `PushChannel` ids. In the background the system shows
   a notification message itself, on the channel the message names, with `ic_notification` (the
   manifest's `default_notification_icon`) and a tap that opens the launcher activity. In the
   foreground FCM shows nothing, so `PollenFirebaseMessagingService.onMessageReceived` posts it on the
@@ -1099,7 +1110,16 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
   soon as it is saved, and takes the name from `StationRepository` (fetched once); until the list
   arrives, or if it fails, the name stored with the selection stands in — never an error for the
   screen. "Not set" only while nothing is stored (unreachable past the startup gate).
-
+- **Language** (`settings_section_language`) — the current choice in the same kind of row
+  (`onClickLabel` "Change the language"), which opens an `AlertDialog` of radio rows (a
+  `selectableGroup`, Cancel to close): System default (`settings_language_system`, translated),
+  English, Deutsch, Français, Italiano — each in its own name, a code constant, so a user can find
+  their language whatever the app is in. Choosing one sets it through `LanguageRepository` and
+  closes the dialog; choosing the current one only closes it. On Android the screen is re-created
+  in the new language at once (its ViewModel survives, so does every tab's); on iOS a note
+  (`settings_language_restart_note`) says the change applies the next time the app is opened.
+  The screen re-reads the language on every `RESUMED`, so a change in Android's per-app language
+  screen shows in the row on return.
 - **Impressum** (`settings_section_impressum`; "Mentions légales" / "Note legali") — "Developed by
   Tim Stenzel" (`settings_developed_by`, the name a code constant) and the contact address
   `developer.mobile.t3s@gmail.com`, a full-width row ≥ 48 dp that opens
@@ -1118,9 +1138,10 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
 
 Both links go through `LocalUriHandler`; a device with nothing to open them with swallows the tap
 rather than crash. Each row's icon is decorative and its `onClickLabel` says what a double tap does.
-`SettingsViewModel(selectedStationRepository, stationRepository, appInfo)` holds no text — only the
-station name and the version pass through it (`SettingsViewModelTest`); the composable is checked by
-hand. The app language is planned as the second section.
+`SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo)` holds
+no text — only the station name, the language (`language`, `showLanguageDialog`,
+`languageAppliesOnRestart` once a change was made where it does not apply immediately) and the
+version pass through it (`SettingsViewModelTest`); the composable is checked by hand.
 
 **Changing the default station.** `Screen.ChangeStation` — not a tab, so the bottom bar is hidden —
 is a `TopAppBar` "Default station" with a back arrow over `StationPickerContent` (see "Location"),
@@ -1162,7 +1183,7 @@ Two deliberate choices:
 The app is being translated into German, French and Italian; English is the default. **Done so far:**
 the bottom bar's tab names, the Settings screen, onboarding, the change-station screen and the
 station picker they share, every error sentence (`error_*`, see "Error handling") and Home's
-feeling-save error. Everything else is still hard-coded English and
+feeling-save error, and the Android notification channel names. Everything else is still hard-coded English and
 moves over screen by screen.
 
 - **Resources.** Compose Multiplatform resources in
@@ -1172,8 +1193,31 @@ moves over screen by screen.
   `Res.string.x` values (`StringResource` has value equality). Composables use
   `stringResource(Res.string.x, args…)`. Placeholders are positional only — `%1$s`, `%2$d` — since
   that is all Compose resources substitute. Android-only text goes in
-  `androidMain/res/values{,-de,-fr,-it}/strings.xml` (none yet).
-- **Fallback.** A device language other than de/fr/it gets `values/` (English).
+  `androidMain/res/values{,-de,-fr,-it}/strings.xml` — the notification channel names, and
+  `app_name` (`values/` only, `translatable="false"`).
+- **Fallback.** A device language other than de/fr/it gets `values/` (English). That is all
+  "System default" is: no language set, so resource resolution picks `values-de|fr|it` for a
+  matching device language and English otherwise.
+- **Choosing the language** (Settings, see there) goes through `core/language`:
+  - **Android** — `AndroidLanguageRepository` over `AppCompatDelegate.getApplicationLocales()` /
+    `setApplicationLocales(…)` (`androidx.appcompat`, explicit in `androidMain`). That is the
+    system's per-app language on API 33+ — `res/xml/locales_config.xml` (en, de, fr, it) is its
+    `android:localeConfig` and must list exactly `AppLanguage`'s languages — and below API 33
+    AppCompat stores it itself through the manifest's `AppLocalesMetadataHolderService`
+    (`autoStoreLocales`). It applies only to an `AppCompatActivity`, which is why `MainActivity` is
+    one (the manifest theme is `Theme.AppCompat.DayNight.NoActionBar` for the same reason). A change
+    re-creates the activity in place, like any configuration change.
+  - **Text outside an activity** (notification channels, later the push service) uses
+    `Context.appLanguageContext()` (`core/language/LocalizedContext.kt`, `androidMain`): the
+    application context on API 33+, where the system localizes it, and below that a
+    `createConfigurationContext` wrapper in the chosen locales. Below API 33 AppCompat only loads
+    its stored choice once an activity has been created, so in a process FCM started without one
+    it falls back to the device language.
+  - **iOS** — `IosLanguageRepository` writes `AppleLanguages` = `[tag]` in
+    `NSUserDefaults.standardUserDefaults` (removes it for System default), which iOS reads at launch:
+    `appliesImmediately = false`. It reads back from the app's own persistent domain only, since the
+    global domain's `AppleLanguages` is the device list and would make System default read as a
+    language. Compile-verified only; needs `CFBundleLocalizations` (see "iOS wrapper configuration").
 - **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
   `change_station_*`, `station_picker_*`, and `common_*` for words several screens share ("Retry",
   "Back"). Keys starting with `example_` are reserved

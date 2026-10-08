@@ -14,6 +14,11 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_section_language">Language</string>
+    <string name="settings_language_action">Change the language</string>
+    <!-- The other choices are each named in their own language, in code. -->
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_restart_note">The new language applies the next time you open the app.</string>
     <string name="settings_section_impressum">Impressum</string>
     <!-- %1$s is the developer's name. -->
     <string name="settings_developed_by">Developed by %1$s</string>
@@ -51,6 +56,7 @@
     <!-- Shared by several screens. -->
     <string name="common_retry">Retry</string>
     <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
 
     <!-- Station picker: core/stationpicker, shared by onboarding and the change-station screen. -->
     <string name="station_picker_load_failed">The station list could not be loaded.</string>

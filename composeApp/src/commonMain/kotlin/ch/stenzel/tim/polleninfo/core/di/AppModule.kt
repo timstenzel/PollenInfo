@@ -101,7 +101,7 @@ val presentationModule = module {
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
     // AppInfo comes from platformModule.
-    viewModel { SettingsViewModel(get(), get(), get()) }
+    viewModel { SettingsViewModel(get(), get(), get(), get()) }
     viewModel { ChangeStationViewModel(get(), get(), get(), get()) }
 }
 

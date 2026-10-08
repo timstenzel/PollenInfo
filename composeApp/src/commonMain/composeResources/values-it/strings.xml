@@ -8,6 +8,10 @@
     <string name="nav_settings">Impostazioni</string>
 
     <string name="settings_title">Impostazioni</string>
+    <string name="settings_section_language">Lingua</string>
+    <string name="settings_language_action">Cambiare la lingua</string>
+    <string name="settings_language_system">Lingua del sistema</string>
+    <string name="settings_language_restart_note">La nuova lingua sarà applicata alla prossima apertura dell’app.</string>
     <string name="settings_section_impressum">Note legali</string>
     <string name="settings_developed_by">Sviluppato da %1$s</string>
     <string name="settings_email_action">Scrivere un’e-mail</string>
@@ -38,6 +42,7 @@
 
     <string name="common_retry">Riprova</string>
     <string name="common_back">Indietro</string>
+    <string name="common_cancel">Annulla</string>
 
     <string name="station_picker_load_failed">Non è stato possibile caricare l’elenco delle stazioni.</string>
     <string name="station_picker_use_my_location">Usa la mia posizione</string>

@@ -3,6 +3,8 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
+import ch.stenzel.tim.polleninfo.core.language.AppLanguage
+import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
@@ -22,14 +24,20 @@ import kotlinx.coroutines.launch
  * The station is **observed**, so the row shows a new default as soon as the change-station screen
  * has stored it. Its name comes from the station list, fetched once; until that arrives, or if it
  * fails, the name stored with the selection stands in — never an error for the whole screen.
+ *
+ * The language is the platform's setting, read through [LanguageRepository]. It can also change
+ * outside the app (Android's per-app language screen), so [onResume] reads it again.
  */
 class SettingsViewModel(
     selectedStationRepository: SelectedStationRepository,
     private val stationRepository: StationRepository,
+    private val languageRepository: LanguageRepository,
     appInfo: AppInfo,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SettingsUiState(version = appInfo.version))
+    private val _uiState = MutableStateFlow(
+        SettingsUiState(language = languageRepository.current, version = appInfo.version),
+    )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     /** `null` until the list has arrived, and for good if it failed. */
@@ -45,5 +53,32 @@ class SettingsViewModel(
                 selected?.let { stored -> stations?.firstOrNull { it.abbr == stored.abbr }?.name ?: stored.name }
             }.collect { name -> _uiState.update { it.copy(stationName = name) } }
         }
+    }
+
+    fun onLanguageRowClicked() {
+        _uiState.update { it.copy(showLanguageDialog = true) }
+    }
+
+    fun onLanguageDialogDismissed() {
+        _uiState.update { it.copy(showLanguageDialog = false) }
+    }
+
+    /** Closes the dialog and, unless [language] is already the current one, chooses it. */
+    fun onLanguageSelected(language: AppLanguage) {
+        val changed = language != _uiState.value.language
+        _uiState.update { it.copy(showLanguageDialog = false) }
+        if (!changed) return
+        languageRepository.set(language)
+        _uiState.update {
+            it.copy(
+                language = language,
+                languageAppliesOnRestart = it.languageAppliesOnRestart || !languageRepository.appliesImmediately,
+            )
+        }
+    }
+
+    /** Reads the language again whenever the screen resumes — it may have been changed in system settings. */
+    fun onResume() {
+        _uiState.update { it.copy(language = languageRepository.current) }
     }
 }

@@ -134,27 +134,34 @@ channel names follow the choice.
 
 ### Implementation steps
 
-- [ ] Add `core/language`: `AppLanguage` with tags and a pure `fromTag`, the `LanguageRepository` interface, and `FakeLanguageRepository` in `commonTest`.
-- [ ] Android: add `androidx.appcompat` explicitly in `androidMain`, make `MainActivity` an `AppCompatActivity`, add `locales_config.xml` + `android:localeConfig`, the AppCompat locales metadata service with `autoStoreLocales`, and `AndroidLanguageRepository`; bind in `platformModule`.
-- [ ] Android: add one helper that returns a context localized to the app's chosen language (the application context on API 33+, a `createConfigurationContext` wrapper from `AppCompatDelegate.getApplicationLocales()` below) — task 09's push service reuses it.
-- [ ] Move the notification channel names to Android string resources (`values`, `-de`, `-fr`, `-it`), create the channels through the localized context, and re-create them after a language change so their names update.
-- [ ] iOS: `IosLanguageRepository` writing/removing `AppleLanguages`; bind in `platformModule`.
-- [ ] Settings: the Language section (second, after Default station) shows the current choice; a radio dialog lists the five options, each named in its own language, with the current one marked; the "applies the next time you open the app" note shows when the platform does not apply immediately.
-- [ ] Update CLAUDE.md: "Localization" (mechanism per platform, System default fallback, style rules), "Persisted user selections" (the language is owned by the platform, not DataStore), "iOS wrapper configuration" (`CFBundleLocalizations` en/de/fr/it, `CFBundleDevelopmentRegion` en).
+- [x] Add `core/language`: `AppLanguage` with tags and a pure `fromTag`, the `LanguageRepository` interface, and `FakeLanguageRepository` in `commonTest`.
+- [x] Android: add `androidx.appcompat` explicitly in `androidMain`, make `MainActivity` an `AppCompatActivity`, add `locales_config.xml` + `android:localeConfig`, the AppCompat locales metadata service with `autoStoreLocales`, and `AndroidLanguageRepository`; bind in `platformModule`.
+- [x] Android: add one helper that returns a context localized to the app's chosen language (the application context on API 33+, a `createConfigurationContext` wrapper from `AppCompatDelegate.getApplicationLocales()` below) — task 09's push service reuses it.
+- [x] Move the notification channel names to Android string resources (`values`, `-de`, `-fr`, `-it`), create the channels through the localized context, and re-create them after a language change so their names update.
+- [x] iOS: `IosLanguageRepository` writing/removing `AppleLanguages`; bind in `platformModule`.
+- [x] Settings: the Language section (second, after Default station) shows the current choice; a radio dialog lists the five options, each named in its own language, with the current one marked; the "applies the next time you open the app" note shows when the platform does not apply immediately.
+- [x] Update CLAUDE.md: "Localization" (mechanism per platform, System default fallback, style rules), "Persisted user selections" (the language is owned by the platform, not DataStore), "iOS wrapper configuration" (`CFBundleLocalizations` en/de/fr/it, `CFBundleDevelopmentRegion` en).
 
 ### Acceptance criteria
 
-- [ ] `AppLanguageTest` pins `fromTag`: `de`, `de-CH`, `fr-CH`, `it`, `en-GB` map to their language; `es`, `null` and `""` map to `SYSTEM`.
-- [ ] `SettingsViewModelTest` pins: the current language comes from the repository; selecting one calls `set`; the restart note is shown only when the repository does not apply immediately.
-- [ ] On an Android 13+ emulator: the dialog marks the current choice; choosing Français switches Settings to French at once, still on Settings, and returning to Home shows its readings without a full-screen reload; the system per-app language screen then shows Français, and changing it there to Deutsch is reflected in the app's Language row.
-- [ ] On a fresh install with the emulator in German, onboarding appears in German; with the emulator in Spanish, in English.
-- [ ] After switching the app to German, Android's notification settings list the two channels with German names — verified on an API 33+ and an API < 33 emulator.
-- [ ] On Settings the sections read top to bottom: Default station, Language, Impressum, Data source, version.
+- [x] `AppLanguageTest` pins `fromTag`: `de`, `de-CH`, `fr-CH`, `it`, `en-GB` map to their language; `es`, `null` and `""` map to `SYSTEM`.
+  *(AppLanguageTest: 5 tests, 0 failures — also `rm-CH` → SYSTEM and every language round-trips its own tag.)*
+- [x] `SettingsViewModelTest` pins: the current language comes from the repository; selecting one calls `set`; the restart note is shown only when the repository does not apply immediately.
+  *(SettingsViewModelTest: 15 tests, 0 failures — 7 new: language from the repository, dialog open/close, select → `set` and close, current language → no `set`, no note when immediate, note only after a change when not immediate, re-read on resume.)*
+- [x] On an Android 13+ emulator: the dialog marks the current choice; choosing Français switches Settings to French at once, still on Settings, and returning to Home shows its readings without a full-screen reload; the system per-app language screen then shows Français, and changing it there to Deutsch is reflected in the app's Language row.
+  *(Verified 2026-10-08 on API 36: the dialog marked "System default"; Français switched Settings to French at once, still on Settings (`cmd locale get-app-locales` → `[fr]`); Home then showed its readings with "Refreshed 21:02" unchanged — no reload; the system "App language" screen had Français selected and listed exactly Deutsch / English / Français / Italiano; choosing Deutsch (Schweiz) there gave `[de-CH]` and the app's Language row read "Deutsch".)*
+- [x] On a fresh install with the emulator in German, onboarding appears in German; with the emulator in Spanish, in English.
+  *(Verified 2026-10-08 on API 36: system `de-CH`, uninstall + install → "Willkommen bei PollenInfo … Weiter"; system `es-US,en-US`, uninstall + install → "Welcome to PollenInfo … Continue". Emulator restored to `en-US` and re-onboarded on Basel; the uninstalls wiped the emulator's diary answers and device id.)*
+- [ ] ~~After switching the app to German, Android's notification settings list the two channels with German names — verified on an API 33+ and an API < 33 emulator.~~ *(skipped: only an API 36 system image is installed and there is no `sdkmanager` to fetch an API < 33 one. The API 33+ half passed on 2026-10-08: with the app in German, Android's notification settings listed "Tagesberichte" and "Grenzwert-Warnungen".)*
+- [x] On Settings the sections read top to bottom: Default station, Language, Impressum, Data source, version.
+  *(Verified on API 36: Default station, Language, Impressum, Data source, then "Version 1.0.0-debug (1)".)*
 
 ### Quality gates
 
-- [ ] Common quality gates.
-- [ ] The merged debug manifest contains `android:localeConfig` and the AppCompat locales metadata service with `autoStoreLocales` set to `true`.
+- [x] Common quality gates.
+  *(`./gradlew :composeApp:testDebugUnitTest :server:test :composeApp:compileTestKotlinIosSimulatorArm64 :composeApp:checkTranslations :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL; 576 app + 340 server tests, 0 failed; no compiler warnings besides the pre-existing KLIB resolver notes; new test names have no commas; CLAUDE.md updated.)*
+- [x] The merged debug manifest contains `android:localeConfig` and the AppCompat locales metadata service with `autoStoreLocales` set to `true`.
+  *(`build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml` has `android:localeConfig="@xml/locales_config"` and `AppLocalesMetadataHolderService` with `autoStoreLocales` = `true`.)*
 
 ## Task 05-localized-vocabulary-and-dates
 

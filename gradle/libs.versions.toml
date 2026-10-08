@@ -12,6 +12,7 @@ navigationCompose = "2.9.0"
 datastore = "1.1.7"
 androidxActivity = "1.9.3"
 androidxCore = "1.13.1"
+androidxAppcompat = "1.7.1"
 # Pinned below 1.x: Exposed 1.x is built against Kotlin 2.2+ and pulls that stdlib onto a Kotlin 2.1
 # compiler. 0.61 is the last line built against 2.0. Revisit together with the Kotlin bump.
 exposed = "0.61.0"
@@ -67,6 +68,8 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 # AndroidX (android only) — permission launcher and the location compat shim
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+# The per-app language: AppCompatDelegate.setApplicationLocales, back-ported below API 33
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxAppcompat" }
 
 # Server persistence — alarms and device registrations in SQLite
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
