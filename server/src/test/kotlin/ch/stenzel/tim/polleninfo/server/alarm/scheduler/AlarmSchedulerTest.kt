@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.PushChannel
+import ch.stenzel.tim.polleninfo.server.alarm.domain.PushKind
 import ch.stenzel.tim.polleninfo.server.alarm.push.PushResult
 import ch.stenzel.tim.polleninfo.server.alarm.push.FakePushSender
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
@@ -93,8 +94,10 @@ class AlarmSchedulerTest {
 
         val delivery = push.sent.single()
         assertEquals("token-1", delivery.token)
-        assertEquals("Pollen in Zürich", delivery.message.title)
-        assertEquals("Grasses: High · Birch: Moderate", delivery.message.body)
+        assertEquals(PushKind.REPORT, delivery.message.kind)
+        assertEquals(PollenStation.ZUERICH, delivery.message.station)
+        assertEquals(PushChannel.DAILY_REPORT, delivery.message.channel)
+        assertEquals(listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH, PollenSpecies.BIRCH to PollenSeverity.MODERATE), delivery.message.levels)
     }
 
     @Test
@@ -199,14 +202,8 @@ class AlarmSchedulerTest {
 
         scheduler().tick()
 
-        val byToken = push.sent.associate { it.token to it.message.body }
-        assertEquals(
-            mapOf(
-                "token-zh-any" to "No current reading for Zürich. Readings are currently unavailable.",
-                "token-be" to "Grasses: High · Birch: Moderate",
-            ),
-            byToken,
-        )
+        val byToken = push.sent.associate { it.token to it.message.kind }
+        assertEquals(mapOf("token-zh-any" to PushKind.UNAVAILABLE, "token-be" to PushKind.REPORT), byToken)
     }
 
     @Test
@@ -258,8 +255,9 @@ class AlarmSchedulerTest {
             clock.advanceBy(Duration.ofMinutes(1))
         }
         val first = push.sent.single()
-        assertEquals("Pollen in Zürich", first.message.title)
-        assertEquals("Grasses: High", first.message.body)
+        assertEquals(PushKind.ALERT, first.message.kind)
+        assertEquals(PollenStation.ZUERICH, first.message.station)
+        assertEquals(listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH), first.message.levels)
         assertEquals(PushChannel.THRESHOLD_ALERT, first.message.channel)
 
         // Tuesday 08:00 in Zürich, with Tuesday's reading.
@@ -268,7 +266,7 @@ class AlarmSchedulerTest {
         scheduler.tick()
 
         assertEquals(2, push.sent.size)
-        assertEquals("Grasses: High", push.sent.last().message.body)
+        assertEquals(listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH), push.sent.last().message.levels)
     }
 
     @Test
@@ -282,7 +280,7 @@ class AlarmSchedulerTest {
         publish("03.08.2026 06:00", mapOf(PollenSpecies.BIRCH to 100, PollenSpecies.GRASSES to 25))
         scheduler.tick()
 
-        assertEquals(listOf("Grasses: High", "Birch: High"), push.sent.map { it.message.body })
+        assertEquals(listOf(listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH), listOf(PollenSpecies.BIRCH to PollenSeverity.HIGH)), push.sent.map { it.message.levels })
     }
 
     @Test
@@ -292,7 +290,7 @@ class AlarmSchedulerTest {
 
         scheduler().tick()
 
-        assertEquals("Birch: High · Grasses: High", push.sent.single().message.body)
+        assertEquals(listOf(PollenSpecies.BIRCH to PollenSeverity.HIGH, PollenSpecies.GRASSES to PollenSeverity.HIGH), push.sent.single().message.levels)
     }
 
     @Test
@@ -323,7 +321,7 @@ class AlarmSchedulerTest {
         clock.advanceBy(Duration.ofMinutes(30))
         scheduler.tick()
 
-        assertEquals("Grasses: High", push.sent.single().message.body)
+        assertEquals(listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH), push.sent.single().message.levels)
     }
 
     @Test
@@ -407,7 +405,7 @@ class AlarmSchedulerTest {
         val alarm = thresholdAlert("token-1", species = setOf(PollenSpecies.BIRCH))
         val scheduler = scheduler()
         scheduler.tick()
-        assertEquals("Birch: High", push.sent.single().message.body)
+        assertEquals(listOf(PollenSpecies.BIRCH to PollenSeverity.HIGH), push.sent.single().message.levels)
 
         alarms.update(alarm.deviceId, alarm.id, alarm.asSpec { copy(species = setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES)) })
         clock.advanceBy(Duration.ofMinutes(1))
@@ -415,6 +413,6 @@ class AlarmSchedulerTest {
         clock.advanceBy(Duration.ofMinutes(1))
         scheduler.tick()
 
-        assertEquals(listOf("Birch: High", "Grasses: High"), push.sent.map { it.message.body })
+        assertEquals(listOf(listOf(PollenSpecies.BIRCH to PollenSeverity.HIGH), listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH)), push.sent.map { it.message.levels })
     }
 }

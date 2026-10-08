@@ -16,12 +16,9 @@ class LoggingPushSender(
 
     override suspend fun send(token: String, message: PushMessage): PushResult {
         logger.info(
-            "Push (not sent, no FCM credentials) to …{} on {}: {} — {} {}",
+            "Push (not sent, no FCM credentials) to …{}: {}",
             token.takeLast(TOKEN_SUFFIX_LENGTH),
-            message.channel.id,
-            message.title,
-            message.body,
-            message.data,
+            message.toData(),
         )
         return PushResult.Sent
     }

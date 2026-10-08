@@ -1,7 +1,12 @@
 package ch.stenzel.tim.polleninfo.server.alarm.push
 
+import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.PushChannel
+import ch.stenzel.tim.polleninfo.server.alarm.domain.PushKind
 import ch.stenzel.tim.polleninfo.server.alarm.domain.PushMessage
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
+import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -14,22 +19,30 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class FcmPushSenderTest {
 
     private val message = PushMessage(
-        title = "Pollen in Zürich",
-        body = "Grasses: High · Birch: Moderate",
+        kind = PushKind.REPORT,
         channel = PushChannel.DAILY_REPORT,
-        data = mapOf("stationAbbr" to "PZH", "alarmId" to "alarm-1"),
+        station = PollenStation.ZUERICH,
+        alarmId = AlarmId("alarm-1"),
+        levels = listOf(
+            PollenSpecies.GRASSES to PollenSeverity.HIGH,
+            PollenSpecies.BIRCH to PollenSeverity.MODERATE,
+        ),
     )
 
     private val requests = mutableListOf<HttpRequestData>()
@@ -59,18 +72,66 @@ class FcmPushSenderTest {
     }
 
     @Test
-    fun `the body carries the token and the notification and the channel and the data`() = runTest {
+    fun `the body is a data-only message with the token and high Android priority`() = runTest {
         sender { respond("{}") }.send("device-token", message)
 
+        val sent = sentMessage()
+        assertEquals(setOf("token", "android", "data"), sent.keys)
+        assertEquals("device-token", sent.string("token"))
+        assertEquals(JsonObject(mapOf("priority" to JsonPrimitive("HIGH"))), sent.obj("android"))
+    }
+
+    @Test
+    fun `the data carries the kind and channel and station and alarm and levels as strings`() = runTest {
+        sender { respond("{}") }.send("device-token", message)
+
+        val data = sentMessage().obj("data")
+        assertTrue(data.values.all { it is JsonPrimitive && it.isString })
+        assertEquals(
+            mapOf(
+                "kind" to "report",
+                "channel" to "daily_report",
+                "stationAbbr" to "PZH",
+                "stationName" to "Zürich",
+                "alarmId" to "alarm-1",
+                "levels" to "GRASSES:HIGH,BIRCH:MODERATE",
+            ),
+            data.mapValues { it.value.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `a no current reading message carries measuredAt as an ISO instant and no levels`() = runTest {
+        val noCurrent = message.copy(
+            kind = PushKind.NO_CURRENT_READING,
+            levels = emptyList(),
+            measuredAt = Instant.parse("2026-08-02T20:00:00Z"),
+        )
+
+        sender { respond("{}") }.send("device-token", noCurrent)
+
+        val data = sentMessage().obj("data")
+        assertEquals("no_current_reading", data.string("kind"))
+        assertEquals("2026-08-02T20:00:00Z", data.string("measuredAt"))
+        assertFalse("levels" in data)
+    }
+
+    @Test
+    fun `a threshold alert names its channel and has no measuredAt`() = runTest {
+        val alert = message.copy(kind = PushKind.ALERT, channel = PushChannel.THRESHOLD_ALERT)
+
+        sender { respond("{}") }.send("device-token", alert)
+
+        val data = sentMessage().obj("data")
+        assertEquals("alert", data.string("kind"))
+        assertEquals("threshold_alert", data.string("channel"))
+        assertFalse("measuredAt" in data)
+    }
+
+    private fun sentMessage(): JsonObject {
         val content = assertIs<TextContent>(requests.single().body)
         assertEquals("application/json", content.contentType.withoutParameters().toString())
-        val sent = Json.parseToJsonElement(content.text).jsonObject.getValue("message").jsonObject
-        assertEquals("device-token", sent.string("token"))
-        assertEquals("Pollen in Zürich", sent.obj("notification").string("title"))
-        assertEquals("Grasses: High · Birch: Moderate", sent.obj("notification").string("body"))
-        assertEquals("daily_report", sent.obj("android").obj("notification").string("channel_id"))
-        assertEquals("PZH", sent.obj("data").string("stationAbbr"))
-        assertEquals("alarm-1", sent.obj("data").string("alarmId"))
+        return Json.parseToJsonElement(content.text).jsonObject.getValue("message").jsonObject
     }
 
     @Test

@@ -11,8 +11,8 @@ import ch.stenzel.tim.polleninfo.core.language.appLanguageContext
  * The notification channels pollen alarms arrive on, one per alarm type, so the user can mute one
  * kind in system settings without losing the other.
  *
- * The ids are the backend's `PushChannel` ids: FCM files a message under the channel its
- * `channel_id` names, and one the app never created falls back to a generic channel.
+ * The ids are the backend's `PushChannel` ids, which a push message's `channel` names; the push
+ * service posts the notification on that channel.
  */
 enum class AlarmNotificationChannel(val id: String, @StringRes val nameRes: Int) {
     DAILY_REPORT("daily_report", R.string.notification_channel_daily_report),

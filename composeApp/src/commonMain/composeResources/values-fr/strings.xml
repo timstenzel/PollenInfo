@@ -248,4 +248,15 @@
         <item quantity="one">Vous avez %1$d alarme, le maximum pour un appareil. Supprimez-en une pour en créer une autre.</item>
         <item quantity="other">Vous avez %1$d alarmes, le maximum pour un appareil. Supprimez-en une pour en créer une autre.</item>
     </plurals>
+    <!-- Alarm notifications -->
+    <string name="notification_title">Pollens à %1$s</string>
+    <string name="notification_title_no_station">Pollens</string>
+    <string name="notification_level">%1$s : %2$s</string>
+    <string name="notification_no_pollen">Aucun pollen des types que vous avez choisis.</string>
+    <string name="notification_not_reported">Aucune mesure pour les types que vous avez choisis.</string>
+    <string name="notification_no_current_reading_today">Aucune donnée actuelle pour %1$s. Dernières données à %2$s.</string>
+    <string name="notification_no_current_reading_yesterday">Aucune donnée actuelle pour %1$s. Dernières données d’hier à %2$s.</string>
+    <string name="notification_no_current_reading_earlier">Aucune donnée actuelle pour %1$s. Dernières données du %2$s.</string>
+    <string name="notification_unavailable">Aucune donnée actuelle pour %1$s. Les mesures sont actuellement indisponibles.</string>
+    <string name="notification_generic">Ouvrez PollenInfo pour voir votre alarme.</string>
 </resources>

@@ -11,7 +11,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -70,11 +69,15 @@ class FcmPushSender(
         }
     }
 
+    /**
+     * Data-only: with no `notification` block FCM never shows anything itself, so the app writes
+     * every notification, in its own language, whether it is in the foreground or not. High priority
+     * is what lets FCM start the app's process for it promptly.
+     */
     private fun PushMessage.toFcm(token: String) = FcmMessage(
         token = token,
-        notification = FcmNotification(title = title, body = body),
-        android = FcmAndroid(FcmAndroidNotification(channelId = channel.id)),
-        data = data,
+        android = FcmAndroid(priority = PRIORITY_HIGH),
+        data = toData(),
     )
 
     companion object {
@@ -83,6 +86,7 @@ class FcmPushSender(
         /** The OAuth scope an access token needs for [FcmPushSender]. */
         const val SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 
+        private const val PRIORITY_HIGH = "HIGH"
         private const val UNREGISTERED = "UNREGISTERED"
         private const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
 
@@ -98,19 +102,12 @@ private data class SendRequest(val message: FcmMessage)
 @Serializable
 private data class FcmMessage(
     val token: String,
-    val notification: FcmNotification,
     val android: FcmAndroid,
     val data: Map<String, String>,
 )
 
 @Serializable
-private data class FcmNotification(val title: String, val body: String)
-
-@Serializable
-private data class FcmAndroid(val notification: FcmAndroidNotification)
-
-@Serializable
-private data class FcmAndroidNotification(@SerialName("channel_id") val channelId: String)
+private data class FcmAndroid(val priority: String)
 
 @Serializable
 private data class ErrorResponse(val error: ErrorBody)

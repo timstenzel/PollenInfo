@@ -245,4 +245,15 @@
         <item quantity="one">Du hast %1$d Alarm, mehr kann ein Gerät nicht speichern. Lösche einen, um einen neuen zu erstellen.</item>
         <item quantity="other">Du hast %1$d Alarme, mehr kann ein Gerät nicht speichern. Lösche einen, um einen neuen zu erstellen.</item>
     </plurals>
+    <!-- Alarm notifications -->
+    <string name="notification_title">Pollen in %1$s</string>
+    <string name="notification_title_no_station">Pollen</string>
+    <string name="notification_level">%1$s: %2$s</string>
+    <string name="notification_no_pollen">Keine Pollen deiner gewählten Pollenarten.</string>
+    <string name="notification_not_reported">Keine Messwerte für deine gewählten Pollenarten.</string>
+    <string name="notification_no_current_reading_today">Keine aktuellen Daten für %1$s. Letzte Daten von %2$s.</string>
+    <string name="notification_no_current_reading_yesterday">Keine aktuellen Daten für %1$s. Letzte Daten von gestern, %2$s.</string>
+    <string name="notification_no_current_reading_earlier">Keine aktuellen Daten für %1$s. Letzte Daten vom %2$s.</string>
+    <string name="notification_unavailable">Keine aktuellen Daten für %1$s. Die Messwerte sind zurzeit nicht verfügbar.</string>
+    <string name="notification_generic">Öffne PollenInfo, um deinen Alarm zu sehen.</string>
 </resources>

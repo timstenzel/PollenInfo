@@ -5,7 +5,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 
-private val SWISS_ZONE = TimeZone.of("Europe/Zurich")
+/** Switzerland's time zone — the one the backend's days and every alarm time are in. */
+val SWISS_ZONE: TimeZone = TimeZone.of("Europe/Zurich")
 
 /**
  * The app's single definition of "today": the current calendar date in Switzerland, whatever zone

@@ -272,6 +272,23 @@
         <item quantity="other">You have %1$d alarms, the most a device can hold. Delete one to create another.</item>
     </plurals>
 
+    <!-- Alarm notifications (core/push), written on the device in the app's language. %1$s in
+         notification_title and the bodies is the station's name. -->
+    <string name="notification_title">Pollen in %1$s</string>
+    <!-- The title when the message names no station at all. -->
+    <string name="notification_title_no_station">Pollen</string>
+    <!-- One pollen type in a report or an alert: %1$s the type, %2$s its severity. Joined with " · ". -->
+    <string name="notification_level">%1$s: %2$s</string>
+    <string name="notification_no_pollen">No pollen of your selected types.</string>
+    <string name="notification_not_reported">No reading for your selected types.</string>
+    <!-- No current reading: %2$s is the latest reading's time (HH:mm), or its date ("29 July") in _earlier. -->
+    <string name="notification_no_current_reading_today">No current reading for %1$s. Latest from %2$s.</string>
+    <string name="notification_no_current_reading_yesterday">No current reading for %1$s. Latest from %2$s yesterday.</string>
+    <string name="notification_no_current_reading_earlier">No current reading for %1$s. Latest from %2$s.</string>
+    <string name="notification_unavailable">No current reading for %1$s. Readings are currently unavailable.</string>
+    <!-- A message the app does not fully understand: the title still names the station. -->
+    <string name="notification_generic">Open PollenInfo to see your alarm.</string>
+
     <!-- The reference example feature (feature/example): English only, by decision, so the
          translation check ignores the example_ prefix. -->
     <string name="example_title">PollenInfo</string>

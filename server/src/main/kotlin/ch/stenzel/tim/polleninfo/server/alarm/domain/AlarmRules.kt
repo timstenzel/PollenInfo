@@ -2,16 +2,13 @@ package ch.stenzel.tim.polleninfo.server.alarm.domain
 
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
-import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.CacheResult
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.SpeciesMeasurement
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.StationMeasurement
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 
 /**
  * A reading this old or older is not current. It must stay equal to the app's `STALE_AFTER`
@@ -44,8 +41,10 @@ object AlarmRules {
      * - Not due ([isDailyDue]) → `null`.
      * - A current reading → sent when "Any" is chosen or at least one selected type has reached the
      *   minimum; `null` otherwise.
-     * - No current reading (an old one, or none at all) → for "Any", a message saying so and how old
-     *   the latest reading is; `null` with a minimum, which must not be judged on old data.
+     * - No current reading (an old one, or none at all) → for "Any", a message saying so and when the
+     *   latest reading is from; `null` with a minimum, which must not be judged on old data.
+     *
+     * The message says what happened ([PushKind]); the app words it in its own language.
      */
     fun evaluateDaily(
         alarm: Alarm,
@@ -63,17 +62,21 @@ object AlarmRules {
 
         if (measurement == null || !isCurrent(measurement.measuredAt, local)) {
             if (!anySeverity) return null
-            val body = if (measurement == null) {
-                unavailableBody(alarm.station)
+            return if (measurement == null) {
+                message(alarm, PushKind.UNAVAILABLE, PushChannel.DAILY_REPORT)
             } else {
-                noCurrentReadingBody(alarm.station, measurement.measuredAt, local)
+                message(alarm, PushKind.NO_CURRENT_READING, PushChannel.DAILY_REPORT, measuredAt = measurement.measuredAt)
             }
-            return dailyMessage(alarm, body)
         }
 
         val selected = measurement.species.filter { it.species in alarm.species && it.severity != null }
         if (!anySeverity && selected.none { it.severity!!.atLeast(alarm.minSeverity) }) return null
-        return dailyMessage(alarm, readingBody(selected))
+        return when {
+            selected.isEmpty() -> message(alarm, PushKind.NOT_REPORTED, PushChannel.DAILY_REPORT)
+            selected.all { it.severity == PollenSeverity.NONE } ->
+                message(alarm, PushKind.NO_POLLEN, PushChannel.DAILY_REPORT)
+            else -> message(alarm, PushKind.REPORT, PushChannel.DAILY_REPORT, levels = levels(selected))
+        }
     }
 
     /**
@@ -117,7 +120,7 @@ object AlarmRules {
         }
         if (qualifying.isEmpty()) return null
         return ThresholdOutcome(
-            message = message(alarm, severityList(qualifying), PushChannel.THRESHOLD_ALERT),
+            message = message(alarm, PushKind.ALERT, PushChannel.THRESHOLD_ALERT, levels = levels(qualifying)),
             species = qualifying.map { it.species }.toSet(),
         )
     }
@@ -130,59 +133,26 @@ object AlarmRules {
         Duration.between(measuredAt, now.toInstant()) < READING_STALE_AFTER &&
             measuredAt.atZone(ALARM_ZONE).toLocalDate() == now.withZoneSameInstant(ALARM_ZONE).toLocalDate()
 
-    fun title(station: PollenStation): String = "Pollen in ${station.displayName}"
-
-    private fun readingBody(selected: List<SpeciesMeasurement>): String = when {
-        selected.isEmpty() -> NO_READING_FOR_SELECTION
-        selected.all { it.severity == PollenSeverity.NONE } -> NO_POLLEN
-        else -> severityList(selected)
-    }
-
     /**
-     * "Grasses: High · Birch: Moderate" — worst first, then in [PollenSpecies] declaration order, the
-     * order the app's `GetStationMeasurementUseCase` displays a station in. Every entry has a severity.
+     * Worst first, then in [PollenSpecies] declaration order — the order the app's
+     * `GetStationMeasurementUseCase` displays a station in. Every entry has a severity.
      */
-    private fun severityList(readings: List<SpeciesMeasurement>): String = readings
+    private fun levels(readings: List<SpeciesMeasurement>): List<Pair<PollenSpecies, PollenSeverity>> = readings
         .sortedWith(compareByDescending<SpeciesMeasurement> { it.severity }.thenBy { it.species.ordinal })
-        .joinToString(" · ") { "${it.species.displayName}: ${it.severity!!.label()}" }
+        .map { it.species to it.severity!! }
 
-    private fun noCurrentReadingBody(station: PollenStation, measuredAt: Instant, now: ZonedDateTime): String {
-        val latest = measuredAt.atZone(ALARM_ZONE)
-        val latestText = when (latest.toLocalDate()) {
-            now.toLocalDate() -> latest.format(TIME)
-            now.toLocalDate().minusDays(1) -> "${latest.format(TIME)} yesterday"
-            else -> latest.format(DATE)
-        }
-        return "No current reading for ${station.displayName}. Latest from $latestText."
-    }
-
-    private fun unavailableBody(station: PollenStation) =
-        "No current reading for ${station.displayName}. Readings are currently unavailable."
-
-    private fun dailyMessage(alarm: Alarm, body: String) = message(alarm, body, PushChannel.DAILY_REPORT)
-
-    private fun message(alarm: Alarm, body: String, channel: PushChannel) = PushMessage(
-        title = title(alarm.station),
-        body = body,
+    private fun message(
+        alarm: Alarm,
+        kind: PushKind,
+        channel: PushChannel,
+        levels: List<Pair<PollenSpecies, PollenSeverity>> = emptyList(),
+        measuredAt: Instant? = null,
+    ) = PushMessage(
+        kind = kind,
         channel = channel,
-        data = mapOf(DATA_STATION to alarm.station.abbr, DATA_ALARM to alarm.id.value),
+        station = alarm.station,
+        alarmId = alarm.id,
+        levels = levels,
+        measuredAt = measuredAt,
     )
-
-    /** The app's wording (`PollenSeverity.label()`), so a notification and the screen agree. */
-    private fun PollenSeverity.label(): String = when (this) {
-        PollenSeverity.NONE -> "None"
-        PollenSeverity.LOW -> "Low"
-        PollenSeverity.MODERATE -> "Moderate"
-        PollenSeverity.HIGH -> "High"
-        PollenSeverity.VERY_HIGH -> "Very high"
-    }
-
-    const val DATA_STATION = "stationAbbr"
-    const val DATA_ALARM = "alarmId"
-
-    const val NO_POLLEN = "No pollen of your selected types."
-    const val NO_READING_FOR_SELECTION = "No reading for your selected types."
-
-    private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
-    private val DATE = DateTimeFormatter.ofPattern("d MMMM", Locale.ENGLISH)
 }

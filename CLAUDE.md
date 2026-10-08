@@ -49,8 +49,9 @@ station metadata and threshold logic in one place and off the devices.
 Push notifications deliver the user's alarms (see "Alarms"). The Android app obtains an FCM token,
 registers the device with the backend and sends it a new token whenever FCM rotates it; the backend
 keeps devices and alarms in SQLite (see "Persistence"), delivers daily reports and threshold alerts
-through FCM (see "Alarm delivery") and drops a token FCM reports as unregistered. iOS has no push
-leg.
+through FCM (see "Alarm delivery") and drops a token FCM reports as unregistered. The backend sends
+**what happened, not text**: a data-only message the app words in its own language (see "Firebase").
+iOS has no push leg.
 
 ### Modules
 
@@ -339,7 +340,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
-| `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
+| `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
@@ -1097,12 +1098,41 @@ without them is out of scope, and location deliberately stays on the platform pr
   with no activity. Their names are Android string resources (`notification_channel_*`) read
   through `appLanguageContext()`, and `MainActivity.onCreate` creates them again — a language change
   re-creates the activity, and re-creating an existing channel updates only its name, keeping what
-  the user set. Their ids are the server's `PushChannel` ids. In the background the system shows
-  a notification message itself, on the channel the message names, with `ic_notification` (the
-  manifest's `default_notification_icon`) and a tap that opens the launcher activity. In the
-  foreground FCM shows nothing, so `PollenFirebaseMessagingService.onMessageReceived` posts it on the
-  same channel with a tap that opens `MainActivity` — the two cases look the same. The service, the
-  channels and the icon are checked by hand.
+  the user set. Their ids are the server's `PushChannel` ids.
+- **Rendering on the device.** Alarms arrive as **data-only** messages (payload under "Alarm
+  delivery"), so FCM never shows one itself and every message reaches
+  `PollenFirebaseMessagingService.onMessageReceived` — foreground, background or with no process
+  running: one path, so the two cases cannot look different. It parses `message.data` with
+  `parseAlarmPayload` (pure, `AlarmPayloadParserTest`) and words it with `notificationText` (pure,
+  `AlarmNotificationTextTest`, which asserts resource keys and arguments through a fake
+  `NotificationStrings`), then posts on the payload's channel with `ic_notification`, auto-cancel,
+  a tap that opens `MainActivity`, and its own id per message.
+  - **Anything not understood** — an unknown `kind`, species or severity, malformed or missing
+    `levels`, a missing or unparseable `measuredAt` — makes the whole message
+    `AlarmNotificationContent.Generic`: "Pollen in <station>" over "Open PollenInfo to see your
+    alarm.", never a list that silently drops a type. A missing `stationName` falls back to
+    `stationAbbr`, no station at all gives the title "Pollen"; a missing or unknown `channel` is the
+    daily report channel.
+  - **Wording** comes from the screens' resources: `notification_*`, and the pollen-type and severity
+    words through `speciesNameResource` / `labelResource()`, "{type}: {severity}" joined with " · "
+    in the order the backend sent. An old reading is named by its `HH:mm` time if it is from today,
+    "… yesterday" if from yesterday, otherwise by `DateWording.fullDate` — in **`Europe/Zurich`**
+    (`SWISS_ZONE`, next to `swissToday`) against `swissToday(clock)`, since alarm times are Swiss.
+  - **Language.** Compose's `getString` outside composition resolves against `Locale.getDefault()`,
+    so the service first aligns that with `appLanguageContext()`'s locale. Below API 33 a process FCM
+    started with no activity still gets the device language (see "Localization").
+  - **Delivery trade-off (accepted).** Written on the device means the app's process must start for
+    each message: a force-stopped app receives no data messages until it is opened again, and the
+    "restricted" standby bucket throttles them. The backend sends `android.priority` `HIGH` so FCM
+    starts the process promptly. Before, the system showed the text by itself; this is the price of
+    notifications in the user's language.
+  - The service, the channels and the icon are checked by hand; the manifest no longer declares FCM's
+    `default_notification_icon` / `default_notification_channel_id`, which only applied to messages
+    the system showed itself.
+  - **Testing by hand**: the Firebase console cannot send data-only messages. Either run
+    `:server:run` with `FCM_CREDENTIALS` and create an alarm due a minute later, or `POST` the payload
+    to FCM HTTP v1 yourself (`{"message":{"token":…,"android":{"priority":"HIGH"},"data":{…}}}`) with
+    an access token for the `firebase.messaging` scope.
 - **Token rotation.** `PollenFirebaseMessagingService.onNewToken` hands the new token to
   `PushTokenUpdater` (Koin `inject()`; it lives in `core/push` so the service does not import the
   alarms feature). It runs the update with `runBlocking` under a 20-second timeout, on the Firebase
@@ -1205,11 +1235,11 @@ label) — every error sentence (`error_*`, see "Error handling"), the Android n
 names, and the vocabulary every screen shares — pollen-type, severity and feeling words, month and
 weekday names and date forms (below). **Not translated, by decision:** station names, "PollenInfo",
 and `feature/example`, whose text is English-only `example_*` resources in `values/` (so the
-reference shows the pattern too). Still open: the alarm push notifications themselves, which the
-server currently words in English.
+reference shows the pattern too). Alarm push notifications are written on the device in the app's
+language too (`notification_*`, see "Firebase"); the backend sends no text.
 
 - **Vocabulary lookups.** Each has a composable form and a `StringResource` form for code outside
-  Compose (`getString`, the push service later): `speciesName(id, fallback)` /
+  Compose (`getString`, as the push service does): `speciesName(id, fallback)` /
   `speciesNameResource(id)` in `core/ui/species` (`species_*`, keyed by the backend's ids; an id
   the app does not know shows the server's English name rather than nothing — pinned by
   `SpeciesNamesTest`), `PollenSeverity.label()` / `labelResource()` (`severity_*`),
@@ -1261,7 +1291,7 @@ server currently words in English.
     (`autoStoreLocales`). It applies only to an `AppCompatActivity`, which is why `MainActivity` is
     one (the manifest theme is `Theme.AppCompat.DayNight.NoActionBar` for the same reason). A change
     re-creates the activity in place, like any configuration change.
-  - **Text outside an activity** (notification channels, later the push service) uses
+  - **Text outside an activity** (notification channels, the push service) uses
     `Context.appLanguageContext()` (`core/language/LocalizedContext.kt`, `androidMain`): the
     application context on API 33+, where the system localizes it, and below that a
     `createConfigurationContext` wrapper in the chosen locales. Below API 33 AppCompat only loads
@@ -1343,10 +1373,12 @@ server/src/main/kotlin/.../server/
 │   └── PollenRoutes.kt
 └── alarm/
     ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId,
-    │                   ALARM_ZONE (= SWISS_ZONE), AlarmRules, PushMessage / PushChannel, AlarmValidation
+    │                   ALARM_ZONE (= SWISS_ZONE), AlarmRules, PushMessage / PushKind / PushChannel,
+    │                   AlarmValidation
     ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
     │                   PollenInfoDatabase
-    ├── push/           PushSender, FcmPushSender, LoggingPushSender, pushSenderFromEnvironment
+    ├── push/           PushSender, FcmPushSender, LoggingPushSender, PushPayload (+ toData),
+    │                   pushSenderFromEnvironment
     ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
     └── AlarmRoutes.kt
@@ -1472,7 +1504,12 @@ failure — upstream or delivery — never stops another's reports. A second tic
 does nothing. **There is no catch-up**: a minute the scheduler did not run in (backend down, clock
 jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
 
-**The rules are `alarm/domain/AlarmRules`** — pure, with `now` passed in, no clock, I/O or logging:
+**The rules are `alarm/domain/AlarmRules`** — pure, with `now` passed in, no clock, I/O or logging.
+**They decide, the app words**: a `PushMessage` is `kind` (`PushKind`), `channel`, `station`,
+`alarmId`, `levels` (species → severity, already in display order) and `measuredAt` — no title or
+body, and nothing in `alarm/` holds notification text (check with
+`grep -rnE '"[^"]*(Pollen in|No current reading|yesterday|No pollen of)' server/src/main/kotlin/ch/stenzel/tim/polleninfo/server/alarm`,
+which must find nothing).
 
 **Daily reports.**
 
@@ -1482,15 +1519,14 @@ jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
   app's `STALE_AFTER`) **and** from today's Swiss date. Judged on `measuredAt`, so a `Fresh` cache
   result for a file that stopped updating is not current either.
 - **Current** → sent if the minimum is "Any" (`NONE`) or at least one selected type has reached it;
-  otherwise nothing. Body: the selected types that have a reading, worst first, then in
-  `PollenSpecies` order — "Grasses: High · Birch: Moderate", words as the app's
-  `PollenSeverity.label()`. All of them at `NONE` → "No pollen of your selected types."; none of them
-  reported by the station → "No reading for your selected types."
-- **Not current** → with a minimum, nothing (never judged on old data). With "Any": "No current
-  reading for Zürich. Latest from 06:00." (`HH:mm` today, `HH:mm yesterday`, else `d MMMM`), or
-  "…Readings are currently unavailable." when there is no reading at all.
-- Title "Pollen in <station>"; channel `PushChannel.DAILY_REPORT`; data `stationAbbr` and `alarmId`,
-  so opening a station from a notification can be added without a backend change.
+  otherwise nothing. `REPORT` with `levels`: the selected types that have a reading, worst first,
+  then in `PollenSpecies` order (the app shows "Grasses: High · Birch: Moderate"). All of them at
+  `NONE` → `NO_POLLEN`; none of them reported by the station → `NOT_REPORTED`.
+- **Not current** → with a minimum, nothing (never judged on old data). With "Any":
+  `NO_CURRENT_READING` with the reading's `measuredAt` (the app says "Latest from 06:00", "… 22:00
+  yesterday" or "… 29 July"), or `UNAVAILABLE` when there is no reading at all.
+- Channel `PushChannel.DAILY_REPORT`; the station and alarm travel with every message, so opening a
+  station from a notification can be added without a backend change.
 
 **Threshold alerts** (`evaluateThreshold(alarm, now, reading, notifiedToday)` → `ThresholdOutcome`
 (message + the types to record) or `null`):
@@ -1501,8 +1537,8 @@ jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
 - **Only on a current reading** (the same `isCurrent`). A stale or missing one sends nothing, ever —
   an outage at the source must never produce a false "high today".
 - **Qualifying types**: selected, reported by the station, `severity.atLeast(minSeverity)`, and not
-  in `notifiedToday`. All of them go into **one** message, body as a daily report's ("Grasses: Very
-  high · Birch: High"); none → `null`. Same title and data, channel `PushChannel.THRESHOLD_ALERT`.
+  in `notifiedToday`. All of them go into **one** `ALERT` message, `levels` ordered as a daily
+  report's; none → `null`. Channel `PushChannel.THRESHOLD_ALERT`.
 - **At most once per type per alarm per Swiss day.** `alarm/store/NotificationLog`
   (`notifiedSpecies`, `record`, `pruneBefore`) is the persisted record, so a restart never resends.
   The scheduler records the types only on `Sent`; after `Failed` or `Unregistered` nothing is
@@ -1516,9 +1552,23 @@ jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
 never throws for a delivery failure.
 
 - `FcmPushSender(client, projectId, accessToken, baseUrl)` — FCM HTTP v1, one
-  `POST /v1/projects/{projectId}/messages:send` with `token`, `notification{title, body}`,
-  `android.notification.channel_id` and `data`, encoded by the sender itself so the shape does not
-  depend on the client's plugins. `404` with `UNREGISTERED`, or `400` with `INVALID_ARGUMENT`, is
+  `POST /v1/projects/{projectId}/messages:send` with `token`, `android.priority` `HIGH` and `data` —
+  **data-only, no `notification` block** — encoded by the sender itself so the shape does not
+  depend on the client's plugins. The data map (`PushPayload` / `PushMessage.toData()`, all values
+  strings as FCM requires) is the contract with the app's `parseAlarmPayload`:
+
+  | Key | Value |
+  | --- | --- |
+  | `kind` | `report`, `no_pollen`, `not_reported`, `no_current_reading`, `unavailable`, `alert` |
+  | `channel` | `daily_report` / `threshold_alert` |
+  | `stationAbbr` | e.g. `PZH` |
+  | `stationName` | e.g. `Zürich` — the app may have no station list loaded |
+  | `alarmId` | the alarm's id |
+  | `levels` | `BIRCH:HIGH,GRASSES:MODERATE` — enum names in display order; absent when empty |
+  | `measuredAt` | ISO-8601 instant, `no_current_reading` only |
+
+  It is a clean cut: no version field and no second format, so an app from before this change shows
+  nothing for these messages. `404` with `UNREGISTERED`, or `400` with `INVALID_ARGUMENT`, is
   `Unregistered`; any other non-2xx, a timeout or a transport error is `Failed`. The access token is
   an injected `suspend () -> String`, so `FcmPushSenderTest` never touches Google.
 - `pushSenderFromEnvironment()` (`PushWiring.kt`) builds it when **`FCM_CREDENTIALS`** names a
@@ -1527,7 +1577,7 @@ never throws for a delivery failure.
   the `HttpClient(CIO)` has a 15-second timeout and closes on `ApplicationStopped`. A configured key
   that cannot be read fails startup rather than silently logging.
 - Without `FCM_CREDENTIALS` the server starts with a warning and uses `LoggingPushSender`, which logs
-  the token's last six characters and the message and reports `Sent`. **The key is never
+  the token's last six characters and the message's data map and reports `Sent`. **The key is never
   committed.**
 - On **`Unregistered`** the scheduler calls `DeviceStore.clearToken(deviceId, token)`: the device and
   its alarms stay, but `enabledWithDeliverableDevice()` no longer returns them, so none is evaluated
@@ -1547,7 +1597,9 @@ an SLF4J backend every log line, including the logged pushes, would be dropped.
 It also pins token handling: an `Unregistered` result clears the token and the device's alarms are
 skipped from the next tick, and a new token brings them back.
 `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers, both window edges),
-content, batching, the per-day exclusion and every staleness form.
+each `PushKind` and the `levels` order, batching, the per-day exclusion and every staleness case
+(`measuredAt` only for `NO_CURRENT_READING`); `FcmPushSenderTest` pins the data-only request and its
+string data keys.
 
 #### `GET /pollen/stations/{abbr}/measurements`
 

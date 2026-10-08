@@ -155,14 +155,15 @@ class AlarmRulesTest {
     }
 
     @Test
-    fun `the title names the station`() {
-        val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh())
+    fun `the message names the station and the alarm`() {
+        val message = assertNotNull(AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh()))
 
-        assertEquals("Pollen in Zürich", message?.title)
+        assertEquals(PollenStation.ZUERICH, message.station)
+        assertEquals(AlarmId("alarm-1"), message.alarmId)
     }
 
     @Test
-    fun `the body lists the selected types with a reading worst first`() {
+    fun `a report lists the selected types with a reading worst first then in species order`() {
         val measurement = reading(
             severities = mapOf(
                 PollenSpecies.ALDER to PollenSeverity.LOW,
@@ -179,35 +180,61 @@ class AlarmRulesTest {
 
         val message = AlarmRules.evaluateDaily(alarm(species = selection), mondayAtEight, fresh(measurement))
 
-        assertEquals("Ash: Very high · Birch: Moderate · Grasses: Moderate · Alder: Low", message?.body)
+        assertEquals(PushKind.REPORT, message?.kind)
+        assertEquals(
+            listOf(
+                PollenSpecies.ASH to PollenSeverity.VERY_HIGH,
+                PollenSpecies.BIRCH to PollenSeverity.MODERATE,
+                PollenSpecies.GRASSES to PollenSeverity.MODERATE,
+                PollenSpecies.ALDER to PollenSeverity.LOW,
+            ),
+            message?.levels,
+        )
+        assertNull(message?.measuredAt)
     }
 
     @Test
-    fun `selected types that are all at none give the no pollen body`() {
+    fun `selected types that are all at none give the no pollen kind`() {
         val quiet = reading(
             severities = mapOf(PollenSpecies.BIRCH to PollenSeverity.NONE, PollenSpecies.GRASSES to PollenSeverity.NONE),
         )
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh(quiet))
 
-        assertEquals("No pollen of your selected types.", message?.body)
+        assertEquals(PushKind.NO_POLLEN, message?.kind)
+        assertEquals(emptyList(), message?.levels)
     }
 
     @Test
-    fun `selected types the station does not report give the no reading body`() {
+    fun `selected types the station does not report give the not reported kind`() {
         val noBirchOrGrasses = reading(severities = mapOf(PollenSpecies.HAZEL to PollenSeverity.HIGH))
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh(noBirchOrGrasses))
 
-        assertEquals("No reading for your selected types.", message?.body)
+        assertEquals(PushKind.NOT_REPORTED, message?.kind)
+        assertEquals(emptyList(), message?.levels)
     }
 
     @Test
-    fun `the message goes on the daily report channel with the station and alarm as data`() {
+    fun `a report goes on the daily report channel`() {
         val message = assertNotNull(AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh()))
 
         assertEquals(PushChannel.DAILY_REPORT, message.channel)
-        assertEquals(mapOf("stationAbbr" to "PZH", "alarmId" to "alarm-1"), message.data)
+    }
+
+    @Test
+    fun `a report with only some selected types at none still lists them all`() {
+        val mixed = reading(
+            severities = mapOf(PollenSpecies.BIRCH to PollenSeverity.NONE, PollenSpecies.GRASSES to PollenSeverity.LOW),
+        )
+
+        val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh(mixed))
+
+        assertEquals(PushKind.REPORT, message?.kind)
+        assertEquals(
+            listOf(PollenSpecies.GRASSES to PollenSeverity.LOW, PollenSpecies.BIRCH to PollenSeverity.NONE),
+            message?.levels,
+        )
     }
 
     // --- staleness ---
@@ -218,26 +245,33 @@ class AlarmRulesTest {
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh(almostStale))
 
-        assertEquals("Grasses: High · Birch: Moderate", message?.body)
+        assertEquals(PushKind.REPORT, message?.kind)
+        assertEquals(
+            listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH, PollenSpecies.BIRCH to PollenSeverity.MODERATE),
+            message?.levels,
+        )
     }
 
     @Test
-    fun `a reading three hours old gives an Any report the no current reading text with its time`() {
+    fun `a reading three hours old gives an Any report the no current reading kind with its time`() {
         val stale = reading(measuredAt = mondayAtEight.minusHours(3).toInstant())
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, fresh(stale))
 
-        assertEquals("Pollen in Zürich", message?.title)
-        assertEquals("No current reading for Zürich. Latest from 05:00.", message?.body)
+        assertEquals(PushKind.NO_CURRENT_READING, message?.kind)
+        assertEquals(PushChannel.DAILY_REPORT, message?.channel)
+        assertEquals(stale.measuredAt, message?.measuredAt)
+        assertEquals(emptyList(), message?.levels)
     }
 
     @Test
-    fun `a retained reading from yesterday is named as yesterday`() {
+    fun `a retained reading from yesterday gives the no current reading kind with its time`() {
         val yesterday = reading(measuredAt = mondayAtEight.minusDays(1).withHour(22).toInstant())
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, CacheResult.Stale(yesterday))
 
-        assertEquals("No current reading for Zürich. Latest from 22:00 yesterday.", message?.body)
+        assertEquals(PushKind.NO_CURRENT_READING, message?.kind)
+        assertEquals(yesterday.measuredAt, message?.measuredAt)
     }
 
     @Test
@@ -251,16 +285,18 @@ class AlarmRulesTest {
             fresh(beforeMidnight),
         )
 
-        assertEquals("No current reading for Zürich. Latest from 23:30 yesterday.", message?.body)
+        assertEquals(PushKind.NO_CURRENT_READING, message?.kind)
+        assertEquals(beforeMidnight.measuredAt, message?.measuredAt)
     }
 
     @Test
-    fun `a retained reading older than yesterday is named by its date`() {
+    fun `a retained reading older than yesterday gives the no current reading kind with its time`() {
         val lastWeek = reading(measuredAt = Instant.parse("2026-07-29T07:00:00Z"))
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, CacheResult.Stale(lastWeek))
 
-        assertEquals("No current reading for Zürich. Latest from 29 July.", message?.body)
+        assertEquals(PushKind.NO_CURRENT_READING, message?.kind)
+        assertEquals(Instant.parse("2026-07-29T07:00:00Z"), message?.measuredAt)
     }
 
     @Test
@@ -272,12 +308,15 @@ class AlarmRulesTest {
     }
 
     @Test
-    fun `a failed reading gives an Any report the unavailable text`() {
+    fun `a failed reading gives an Any report the unavailable kind`() {
         val failed = CacheResult.Failed(IOException("upstream down"))
 
         val message = AlarmRules.evaluateDaily(alarm(), mondayAtEight, failed)
 
-        assertEquals("No current reading for Zürich. Readings are currently unavailable.", message?.body)
+        assertEquals(PushKind.UNAVAILABLE, message?.kind)
+        assertEquals(PushChannel.DAILY_REPORT, message?.channel)
+        assertNull(message?.measuredAt)
+        assertEquals(emptyList(), message?.levels)
     }
 
     @Test
@@ -388,7 +427,7 @@ class AlarmRulesTest {
         val outcome = evaluateThreshold(notifiedToday = setOf(PollenSpecies.BIRCH))
 
         assertEquals(setOf(PollenSpecies.GRASSES), outcome?.species)
-        assertEquals("Grasses: Very high", outcome?.message?.body)
+        assertEquals(listOf(PollenSpecies.GRASSES to PollenSeverity.VERY_HIGH), outcome?.message?.levels)
     }
 
     @Test
@@ -401,16 +440,21 @@ class AlarmRulesTest {
         val outcome = assertNotNull(evaluateThreshold())
 
         assertEquals(setOf(PollenSpecies.BIRCH, PollenSpecies.GRASSES), outcome.species)
-        assertEquals("Grasses: Very high · Birch: High", outcome.message.body)
+        assertEquals(PushKind.ALERT, outcome.message.kind)
+        assertEquals(
+            listOf(PollenSpecies.GRASSES to PollenSeverity.VERY_HIGH, PollenSpecies.BIRCH to PollenSeverity.HIGH),
+            outcome.message.levels,
+        )
+        assertNull(outcome.message.measuredAt)
     }
 
     @Test
-    fun `the alert names the station and goes on the threshold alert channel`() {
+    fun `the alert names the station and alarm and goes on the threshold alert channel`() {
         val message = assertNotNull(evaluateThreshold()).message
 
-        assertEquals("Pollen in Zürich", message.title)
+        assertEquals(PollenStation.ZUERICH, message.station)
+        assertEquals(AlarmId("alarm-1"), message.alarmId)
         assertEquals(PushChannel.THRESHOLD_ALERT, message.channel)
-        assertEquals(mapOf("stationAbbr" to "PZH", "alarmId" to "alarm-1"), message.data)
     }
 
     @Test

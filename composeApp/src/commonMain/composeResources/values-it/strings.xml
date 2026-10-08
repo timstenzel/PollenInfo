@@ -245,4 +245,15 @@
         <item quantity="one">Ha %1$d allarme, il massimo per un dispositivo. Ne elimini uno per crearne un altro.</item>
         <item quantity="other">Ha %1$d allarmi, il massimo per un dispositivo. Ne elimini uno per crearne un altro.</item>
     </plurals>
+    <!-- Alarm notifications -->
+    <string name="notification_title">Pollini a %1$s</string>
+    <string name="notification_title_no_station">Pollini</string>
+    <string name="notification_level">%1$s: %2$s</string>
+    <string name="notification_no_pollen">Nessun polline dei tipi selezionati.</string>
+    <string name="notification_not_reported">Nessuna misurazione per i tipi selezionati.</string>
+    <string name="notification_no_current_reading_today">Nessun dato attuale per %1$s. Ultimi dati delle %2$s.</string>
+    <string name="notification_no_current_reading_yesterday">Nessun dato attuale per %1$s. Ultimi dati di ieri alle %2$s.</string>
+    <string name="notification_no_current_reading_earlier">Nessun dato attuale per %1$s. Ultimi dati del giorno %2$s.</string>
+    <string name="notification_unavailable">Nessun dato attuale per %1$s. Le misurazioni non sono al momento disponibili.</string>
+    <string name="notification_generic">Apra PollenInfo per vedere il Suo allarme.</string>
 </resources>

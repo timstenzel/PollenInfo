@@ -7,21 +7,26 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import ch.stenzel.tim.polleninfo.MainActivity
 import ch.stenzel.tim.polleninfo.R
+import ch.stenzel.tim.polleninfo.core.language.appLanguageContext
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.ui.format.loadDateWording
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Clock
+import org.jetbrains.compose.resources.getString
 import org.koin.android.ext.android.inject
 
 /**
- * Receives pollen alarms from FCM.
+ * Receives pollen alarms from FCM and writes them as notifications in the app's language.
  *
- * In the background the system shows a notification message by itself, on the channel the backend
- * named, and a tap opens the launcher activity. In the foreground FCM hands the message here
- * instead and shows nothing, so this posts it the same way — same channel, same tap — and the user
- * sees no difference.
+ * The backend sends data-only messages — what happened, not text — so every alarm reaches
+ * [onMessageReceived], whether the app is in the foreground, in the background or not running:
+ * one path, the same channel, icon and tap (which opens the app). A message it does not fully
+ * understand is still shown, as "Pollen in <station>" ([parseAlarmPayload]).
  *
  * A rotated token is reported through [PushTokenUpdater] — only for an install that has registered;
  * one that has not sends whatever token is current when it first does.
@@ -41,13 +46,24 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
+    /**
+     * Every alarm arrives here — the backend sends data-only messages, so FCM never shows one by
+     * itself, in the foreground or not. Called on a Firebase worker thread, so the strings are loaded
+     * blocking it.
+     */
     override fun onMessageReceived(message: RemoteMessage) {
-        val notification = message.notification ?: return
         val manager = NotificationManagerCompat.from(this)
         // POST_NOTIFICATIONS revoked, or notifications switched off: nothing may be shown.
         if (!manager.areNotificationsEnabled()) return
 
-        val channel = AlarmNotificationChannel.fromId(notification.channelId) ?: AlarmNotificationChannel.DAILY_REPORT
+        val content = parseAlarmPayload(message.data)
+        val text = runBlocking {
+            useAppLanguage()
+            notificationText(content, loadDateWording(), Clock.System) { resource, args ->
+                getString(resource, *args.toTypedArray())
+            }
+        }
+        val channel = AlarmNotificationChannel.fromId(content.channel.id) ?: AlarmNotificationChannel.DAILY_REPORT
         val openApp = PendingIntent.getActivity(
             this,
             0,
@@ -56,9 +72,9 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
         )
         val shown = NotificationCompat.Builder(this, channel.id)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(notification.title)
-            .setContentText(notification.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notification.body))
+            .setContentTitle(text.title)
+            .setContentText(text.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text.body))
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()
@@ -69,6 +85,16 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
         } catch (e: SecurityException) {
             // The permission was revoked between the check above and this call.
         }
+    }
+
+    /**
+     * Compose resources outside composition resolve against `Locale.getDefault()`. In a process FCM
+     * started without an activity that may still be the device's language, so it is aligned with the
+     * app's language first — what AppCompat does for its activities anyway.
+     */
+    private fun useAppLanguage() {
+        val locales = appLanguageContext().resources.configuration.locales
+        if (!locales.isEmpty && Locale.getDefault() != locales[0]) Locale.setDefault(locales[0])
     }
 }
 
