@@ -13,7 +13,7 @@ Screenshots are in `verification/`.
 - UI driven with `adb shell input` and `uiautomator dump`; each result below was read from the
   dumped view tree and/or a screenshot.
 
-## Finding — Android 17 blocks the development backend (open, needs a decision)
+## Finding — Android 17 blocks the development backend (resolved: option 1)
 
 **On API 37 the debug app cannot reach `:server:run` at `http://10.0.2.2:8080`.** Android 17
 restricts access to local-network addresses (the `10.0.0.0/8` range includes the emulator's
@@ -38,6 +38,12 @@ address, and the release build already refuses cleartext. API 36 and below are u
 2. Point the Android `apiBaseUrl` at `http://127.0.0.1:8080` and use `adb reverse tcp:8080
    tcp:8080`. Loopback is not local-network access, but every emulator session needs the
    `adb reverse` step.
+
+**Resolved by the product owner's choice of option 1:** the debug manifest declares
+`ACCESS_LOCAL_NETWORK` (merged into the debug manifest only; the release merged manifest does not
+contain it), and CLAUDE.md ("Talking to our own backend") documents the `pm grant` command needed
+after each fresh install. Verified on the API 37 emulator: after install + grant, the debug app's
+`GET /pollen/stations` answers `200 OK` and onboarding shows the list.
 
 ## Checks performed
 
@@ -75,7 +81,8 @@ The feature counts as done only once both are confirmed here.
 2. `FCM_CREDENTIALS=/path/to/key.json ./gradlew :server:run` (no "push notifications are logged"
    warning should appear at start).
 3. Install the debug build on a device or emulator with Play services. **On API 37, see the finding
-   above: grant `ACCESS_LOCAL_NETWORK` or use a device on API ≤ 36.**
+   above: after a fresh install run
+   `adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK`.**
 4. Set the app language in Settings (e.g. Deutsch), allow notifications, and create a daily report
    for any station, "Any", every day, at the next whole minute + 1.
 5. When that minute passes, a notification on the "Daily reports" channel must arrive. Its title

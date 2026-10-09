@@ -3,8 +3,15 @@
   Debug-only overlay. The development backend runs as plain HTTP on the host machine
   (see `apiBaseUrl`), which Android blocks by default since API 28. Keeping the exception in this
   source set means it is merged into debug builds only, so a release build can never ship it.
+
+  The host alias 10.0.2.2 is a local-network address, which apps targeting API 37 may only reach
+  with ACCESS_LOCAL_NETWORK. It is a runtime permission the app never asks for: grant it once per
+  fresh install with
+  adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application android:usesCleartextTraffic="true" />
 

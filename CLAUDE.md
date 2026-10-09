@@ -401,6 +401,14 @@ Because those addresses are plain HTTP, both platforms need a transport-security
   on `<application>`. It lives in the **debug source set only**, so a release build can never ship
   it (verify with `grep usesCleartextTraffic androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml`
   — only the debug one matches).
+- **Android 17 (API 37)** — an app targeting 37 may not reach local-network addresses, and
+  `10.0.2.2` is one, without the runtime permission `ACCESS_LOCAL_NETWORK`. Without it every
+  request to the development backend times out ("Couldn't reach the server") while `/health`
+  answers from the host. The same debug manifest declares it, so release builds never request it.
+  It is a `dangerous` permission the app never prompts for: **grant it after every fresh install**
+  (an upgrade keeps it) with
+  `adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK`.
+  Emulators on API 36 and below need nothing.
 - **iOS** — no `Info.plist` exists yet (there is no iOS app project). Whoever creates the iOS
   wrapper must add an ATS exception, `NSAllowsLocalNetworking = true`, or the simulator will refuse
   the cleartext development backend. See "iOS wrapper configuration" below.
