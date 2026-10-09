@@ -170,24 +170,24 @@ The whole updated app and server, verified as a user experiences them, with a wr
 
 ### Implementation steps
 
-- [ ] Re-check every catalog entry and the Gradle version against the newest stable release; anything released since task 02 is bumped in its own commit (standard checks run) before the report, or the reason it is not is recorded in the catalog.
-- [ ] Run a clean build of every module with `--rerun-tasks --warning-mode all` and keep its warning output.
-- [ ] On the emulator against `:server:run`, walk through: fresh install → onboarding (location prompt) → Home; All stations (map, a selected row), Diary (chart, range switch), Alarms (notification prompt, create an alarm), Settings (change station, language); in the alarm editor with an unsaved change, back gesture and top-bar arrow.
-- [ ] Build, install and start the release APK.
-- [ ] Write `.sdd/dependency-update/verification-report.md`: each check, method, result (screenshots where useful), emulator API level used; plus a section for the product owner's checks (real push in the chosen language, a day of normal use) with instructions and a place to record their confirmation.
-- [ ] Commit the report; tell the product owner the branch is ready for their checks.
+- [x] Re-check every catalog entry and the Gradle version against the newest stable release; anything released since task 02 is bumped in its own commit (standard checks run) before the report, or the reason it is not is recorded in the catalog.
+- [x] Run a clean build of every module with `--rerun-tasks --warning-mode all` and keep its warning output.
+- [x] On the emulator against `:server:run`, walk through: fresh install → onboarding (location prompt) → Home; All stations (map, a selected row), Diary (chart, range switch), Alarms (notification prompt, create an alarm), Settings (change station, language); in the alarm editor with an unsaved change, back gesture and top-bar arrow.
+- [x] Build, install and start the release APK.
+- [x] Write `.sdd/dependency-update/verification-report.md`: each check, method, result (screenshots where useful), emulator API level used; plus a section for the product owner's checks (real push in the chosen language, a day of normal use) with instructions and a place to record their confirmation.
+- [x] Commit the report; tell the product owner the branch is ready for their checks.
 
 ### Acceptance criteria
 
-- [ ] The clean build output contains no Gradle deprecation and no `w:` line for any module.
-- [ ] Every catalog entry is at the newest stable version or carries a comment naming the constraint, and Android Studio's version list shows no "newer version available" hint (recorded in the report).
-- [ ] In the alarm editor with an unsaved change, both the back gesture and the top-bar arrow show "Discard changes?".
-- [ ] On a fresh install the location and notification prompts appear when requested, and all five tabs show their content.
-- [ ] The release APK installs and starts on the emulator.
-- [ ] The report exists with every manual check's method and result, and a product-owner section for UAT 16 and 17; the feature counts as done only once that section is confirmed.
+- [ ] The clean build output contains no Gradle deprecation and no `w:` line for any module. *(failed: no `w:` line, but AGP 9.4.1's `Configuration.setVisible` deprecation prints (and KGP 2.4.21's `KotlinNativeBundleArtifactsTypes` once per fresh daemon) — both from the plugins, documented in CLAUDE.md, as in tasks 02–05.)*
+- [x] Every catalog entry is at the newest stable version or carries a comment naming the constraint, and Android Studio's version list shows no "newer version available" hint (recorded in the report). *(Exposed 1.5.1, released during the session, bumped in its own commit; afterwards lint's `NewerVersionAvailable` / `GradleDependency` — the detectors behind the IDE hint — report 0. The IDE window itself was not opened.)*
+- [x] In the alarm editor with an unsaved change, both the back gesture and the top-bar arrow show "Discard changes?".
+- [x] On a fresh install the location and notification prompts appear when requested, and all five tabs show their content. *(API 37 — only with `ACCESS_LOCAL_NETWORK` added to the debug manifest for the walk-through and reverted: Android 17 blocks `10.0.2.2` for targetSdk 37. Open finding in the report.)*
+- [x] The release APK installs and starts on the emulator. *(signed locally with the debug keystore; the release output is unsigned)*
+- [x] The report exists with every manual check's method and result, and a product-owner section for UAT 16 and 17; the feature counts as done only once that section is confirmed.
 
 ### Quality gates
 
-- [ ] All standard checks pass on the final commit.
-- [ ] `git diff develop -- '**/strings.xml'` shows no changed user-facing text (only moves).
-- [ ] The branch is not pushed.
+- [x] All standard checks pass on the final commit.
+- [x] `git diff develop -- '**/strings.xml'` shows no changed user-facing text (only moves).
+- [x] The branch is not pushed.
