@@ -47,15 +47,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
@@ -118,7 +119,6 @@ import org.koin.core.parameter.parametersOf
  * bar — it is a task with a clear way back, not a tab. [onDone] leaves the editor, after a save or a
  * delete, or when the user goes back without unsaved changes or chooses to discard them.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun AlarmEditorScreen(
     alarmId: String?,
@@ -128,7 +128,10 @@ fun AlarmEditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // The system back asks about unsaved changes just as the top bar's arrow does.
-    BackHandler(onBack = viewModel::onBack)
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        onBackCompleted = viewModel::onBack,
+    )
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->

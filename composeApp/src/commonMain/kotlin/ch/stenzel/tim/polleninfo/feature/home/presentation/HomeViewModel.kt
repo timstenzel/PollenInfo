@@ -143,7 +143,7 @@ class HomeViewModel(
         val current = _uiState.value
         val refreshing = keepReadings && current is HomeUiState.Content
         _uiState.value = if (refreshing) {
-            (current as HomeUiState.Content).copy(isRefreshing = true)
+            current.copy(isRefreshing = true)
         } else {
             HomeUiState.Loading(station.name)
         }

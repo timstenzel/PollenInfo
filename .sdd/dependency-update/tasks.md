@@ -42,36 +42,38 @@ Before anything is upgraded, capture what an existing server database looks like
 
 ## Task [02-toolchain-and-libraries-current]
 
+> **Merged with task 03 (product owner's decision, 2026-10-09).** No AGP 8.x can build this toolchain: AndroidX Compose 1.12, core 1.19 and lifecycle 2.11 need AGP ≥ 9.1, AGP 8.13.2 cannot load on Gradle ≥ 9.6 and on 9.5 prints Gradle deprecations and an untested-compileSdk-37 warning. Tasks 02 and 03 are therefore implemented together; the AGP-8 parts of this task's criteria are replaced by task 03's. Ktor stays on 3.5.2 until task 04: 3.6.0 pulls in `kotlinx-datetime:0.8.0-0.6.x-compat`. By the same rule Compose Material 3 stays on 1.8.2 until task 04 (1.9.0 pulls in kotlinx-datetime 0.7.1 on iOS). Firebase BoM 35 deprecates `getToken` / `onNewToken`; by the product owner's decision push moved to Firebase Installation IDs in this stage (app: `register()` / `onRegistered`; server: FIDs sent as `fid`, legacy registration tokens still as `token`). Manual checks ran on an API 36 emulator (no API 37 image installable).
+
 Stage 1: the toolchain and every library except kotlinx-datetime and Exposed move to their newest stable versions, on the existing module structure — Gradle 9, Kotlin 2.4.x, Compose Multiplatform, the newest AGP 8.x that supports them, compileSdk/targetSdk 37 (minSdk 26), Ktor, Koin, coroutines, serialization (≥ 1.9), lifecycle, navigation-compose 2.x, DataStore, AndroidX, Firebase BoM, google-services, google-auth, logback, sqlite-jdbc. The deprecated `compose.*` dependency accessors are replaced by version-catalog entries; every deprecation the bump causes is fixed with its replacement. App and server behave exactly as before. If no AGP 8.x works with this toolchain, or a library forces kotlinx-datetime 0.7 onto the build, stop and report — the affected stages then merge.
 
 ### Implementation steps
 
-- [ ] Look up the newest stable version of every catalog entry and of Gradle.
-- [ ] Update the Gradle wrapper to the newest stable 9.x (scripts, wrapper jar, distribution checksum).
-- [ ] Bump Kotlin and the Kotlin plugins, Compose Multiplatform, AGP (newest compatible 8.x), and every library except kotlinx-datetime and Exposed; set compileSdk/targetSdk to 37 in both Android modules; leave JDK/JVM target 21 as is.
-- [ ] Check with `dependencyInsight` (Android and iOS configurations) that kotlinx-datetime still resolves to 0.6.x; if a library forces 0.7, stop and report.
-- [ ] Replace every `compose.*` accessor in `:composeApp` and `:theme` with explicit catalog entries (material-icons-extended on its own version line, still an explicit common dependency).
-- [ ] Fix every deprecation and compiler warning the bump surfaces (Kotlin, Compose, Material 3, Koin, Ktor, lifecycle, AndroidX, Gradle DSL) with the documented replacement — no suppression; stop and report if one can only be fixed by moving to Navigation 3.
-- [ ] Make sure `checkTranslations` still runs with the configuration cache on Gradle 9.
-- [ ] Update CLAUDE.md where it names versions or behaviour changed in this stage, keeping the datetime and Exposed pin paragraphs for now.
-- [ ] Commit.
+- [x] Look up the newest stable version of every catalog entry and of Gradle.
+- [x] Update the Gradle wrapper to the newest stable 9.x (scripts, wrapper jar, distribution checksum).
+- [x] Bump Kotlin and the Kotlin plugins, Compose Multiplatform, AGP (newest compatible 8.x), and every library except kotlinx-datetime and Exposed; set compileSdk/targetSdk to 37 in both Android modules; leave JDK/JVM target 21 as is.
+- [x] Check with `dependencyInsight` (Android and iOS configurations) that kotlinx-datetime still resolves to 0.6.x; if a library forces 0.7, stop and report.
+- [x] Replace every `compose.*` accessor in `:composeApp` and `:theme` with explicit catalog entries (material-icons-extended on its own version line, still an explicit common dependency).
+- [x] Fix every deprecation and compiler warning the bump surfaces (Kotlin, Compose, Material 3, Koin, Ktor, lifecycle, AndroidX, Gradle DSL) with the documented replacement — no suppression; stop and report if one can only be fixed by moving to Navigation 3.
+- [x] Make sure `checkTranslations` still runs with the configuration cache on Gradle 9.
+- [x] Update CLAUDE.md where it names versions or behaviour changed in this stage, keeping the datetime and Exposed pin paragraphs for now.
+- [x] Commit.
 
 ### Acceptance criteria
 
-- [ ] Every catalog entry is on its newest stable version, except kotlinx-datetime (0.6.x), Exposed (0.61.x), AGP (8.x until task 03), navigation-compose (2.x by decision) and any entry held back by a constraint — each exception carries a catalog comment naming the reason; no entry is alpha/beta/RC/EAP/dev.
-- [ ] The Gradle wrapper is on the newest stable 9.x release with the distribution checksum set.
-- [ ] compileSdk and targetSdk are 37 and minSdk is 26 in every Android module; the JVM target is 21 and the server toolchain 21, unchanged.
-- [ ] No build script uses a `compose.*` dependency accessor.
-- [ ] A clean build (`--rerun-tasks --warning-mode all`) of the app (Android + iOS simulator compile) and the server prints no Gradle deprecation and no `w:` line — including the two former KLIB resolver warnings.
-- [ ] The debug app on the emulator against `:server:run` opens and shows Home with readings for the stored station.
+- [x] Every catalog entry is on its newest stable version, except kotlinx-datetime (0.6.x), Exposed (0.61.x), AGP (8.x until task 03), navigation-compose (2.x by decision) and any entry held back by a constraint — each exception carries a catalog comment naming the reason; no entry is alpha/beta/RC/EAP/dev.
+- [x] The Gradle wrapper is on the newest stable 9.x release with the distribution checksum set.
+- [x] compileSdk and targetSdk are 37 and minSdk is 26 in every Android module; the JVM target is 21 and the server toolchain 21, unchanged.
+- [x] No build script uses a `compose.*` dependency accessor.
+- [ ] A clean build (`--rerun-tasks --warning-mode all`) of the app (Android + iOS simulator compile) and the server prints no Gradle deprecation and no `w:` line — including the two former KLIB resolver warnings. *(failed: two Gradle deprecations come from the plugins themselves — AGP 9.4.1 `Configuration.setVisible` (deprecated since Gradle 9.1; every AGP 9 needs ≥ 9.1) and KGP 2.4.21 `KotlinNativeBundleArtifactsTypes` (once per fresh daemon). No `w:` line remains; both are documented in CLAUDE.md.)*
+- [x] The debug app on the emulator against `:server:run` opens and shows Home with readings for the stored station. *(API 36 emulator — no API 37 image installable here.)*
 
 ### Quality gates
 
-- [ ] All standard checks pass, including task 01's legacy-database test on Kotlin 2.4.
-- [ ] No `@Suppress` for deprecations and no warning-silencing compiler flags were added (diff check).
-- [ ] The number of `@OptIn(Experimental…)` annotations in the app is unchanged (diff count).
-- [ ] No existing test assertion was changed; only imports/types where an API moved.
-- [ ] The configuration cache is stored and reused on a second identical build.
+- [x] All standard checks pass, including task 01's legacy-database test on Kotlin 2.4.
+- [x] No `@Suppress` for deprecations and no warning-silencing compiler flags were added (diff check).
+- [ ] The number of `@OptIn(Experimental…)` annotations in the app is unchanged (diff count). *(failed: 33 → 32. None was added; the one removed was `ExperimentalComposeUiApi` on `AlarmEditorScreen`, which existed only for the deprecated `BackHandler`. Its replacement, `NavigationBackHandler`, is stable.)*
+- [x] No existing test assertion was changed; only imports/types where an API moved.
+- [x] The configuration cache is stored and reused on a second identical build.
 
 ## Task [03-android-app-module-split]
 
@@ -79,30 +81,30 @@ Stage 2: move to the newest stable AGP 9.x by splitting the Android side. A new 
 
 ### Implementation steps
 
-- [ ] Before changing anything, build and keep the current (pre-split) debug APK for the in-place update check.
-- [ ] Bump AGP to the newest stable 9.x (and Gradle if it requires a newer 9.x).
-- [ ] Switch `:theme` to the Android-KMP library plugin (configuration moves into the Kotlin `androidLibrary` block).
-- [ ] Switch `:composeApp` to the Android-KMP library plugin: library namespace distinct from the app's, compileSdk 37, minSdk 26, Android resources enabled, host tests enabled; keep the iOS frameworks, Compose resources configuration and `checkTranslations` as they are.
-- [ ] Create `:androidApp` (no KMP plugin, no separate Kotlin Android plugin; JVM target 21) depending on `:composeApp` and `:theme`; move the entry points, the application manifest parts, launcher resources, `app_name`, locale config, debug manifest, Firebase config and R8 rules into it; apply the Google Services plugin there.
-- [ ] Leave a library manifest in `:composeApp`'s Android part with the permissions and the messaging service; point the channel and notification code at the library's `R`.
-- [ ] Update CLAUDE.md: module table and architecture, Commands table and every place naming the old test or APK task, the cleartext section (paths, verification command; drop the `src/debug` vs `src/androidDebug` quirk), the Firebase section (config location), and any note naming moved files.
-- [ ] Commit.
+- [x] Before changing anything, build and keep the current (pre-split) debug APK for the in-place update check.
+- [x] Bump AGP to the newest stable 9.x (and Gradle if it requires a newer 9.x).
+- [x] Switch `:theme` to the Android-KMP library plugin (configuration moves into the Kotlin `androidLibrary` block).
+- [x] Switch `:composeApp` to the Android-KMP library plugin: library namespace distinct from the app's, compileSdk 37, minSdk 26, Android resources enabled, host tests enabled; keep the iOS frameworks, Compose resources configuration and `checkTranslations` as they are.
+- [x] Create `:androidApp` (no KMP plugin, no separate Kotlin Android plugin; JVM target 21) depending on `:composeApp` and `:theme`; move the entry points, the application manifest parts, launcher resources, `app_name`, locale config, debug manifest, Firebase config and R8 rules into it; apply the Google Services plugin there.
+- [x] Leave a library manifest in `:composeApp`'s Android part with the permissions and the messaging service; point the channel and notification code at the library's `R`.
+- [x] Update CLAUDE.md: module table and architecture, Commands table and every place naming the old test or APK task, the cleartext section (paths, verification command; drop the `src/debug` vs `src/androidDebug` quirk), the Firebase section (config location), and any note naming moved files.
+- [x] Commit.
 
 ### Acceptance criteria
 
-- [ ] AGP is on the newest stable 9.x and no module applies the KMP plugin together with `com.android.application` or `com.android.library`.
-- [ ] `:androidApp:assembleDebug` and `:androidApp:assembleRelease` both build; the debug APK's application id ends in `.debug` and its version name in `-debug`; the JVM target is 21 in every module including `:androidApp`.
-- [ ] `usesCleartextTraffic` appears in `:androidApp`'s debug merged manifest and not in its release merged manifest; the debug merged manifest contains `ACCESS_COARSE_LOCATION`, `POST_NOTIFICATIONS`, `INTERNET`, `PollenFirebaseMessagingService` and `AppLocalesMetadataHolderService` (grep).
-- [ ] `checkTranslations` still checks the notification channel names in all four languages (temporarily removing one German channel string makes it fail; restored afterwards).
-- [ ] In-place update on the emulator against `:server:run`: with the pre-split debug APK installed, a station chosen, today's feeling recorded and one alarm created, installing the `:androidApp` debug APK over it opens on Home (no onboarding), the diary shows the recorded answer, the alarm is listed, and the server log shows no new `POST /devices`.
-- [ ] On a fresh install, onboarding leads to Home with readings, and switching the language to German in Settings redraws the screen in German at once.
+- [x] AGP is on the newest stable 9.x and no module applies the KMP plugin together with `com.android.application` or `com.android.library`.
+- [x] `:androidApp:assembleDebug` and `:androidApp:assembleRelease` both build; the debug APK's application id ends in `.debug` and its version name in `-debug`; the JVM target is 21 in every module including `:androidApp`.
+- [x] `usesCleartextTraffic` appears in `:androidApp`'s debug merged manifest and not in its release merged manifest; the debug merged manifest contains `ACCESS_COARSE_LOCATION`, `POST_NOTIFICATIONS`, `INTERNET`, `PollenFirebaseMessagingService` and `AppLocalesMetadataHolderService` (grep).
+- [x] `checkTranslations` still checks the notification channel names in all four languages (temporarily removing one German channel string makes it fail; restored afterwards).
+- [x] In-place update on the emulator against `:server:run`: with the pre-split debug APK installed, a station chosen, today's feeling recorded and one alarm created, installing the `:androidApp` debug APK over it opens on Home (no onboarding), the diary shows the recorded answer, the alarm is listed, and the server log shows no new `POST /devices`.
+- [x] On a fresh install, onboarding leads to Home with readings, and switching the language to German in Settings redraws the screen in German at once.
 
 ### Quality gates
 
-- [ ] All standard checks pass, using the new host-test and `:androidApp` tasks.
-- [ ] Clean build with `--warning-mode all` prints no Gradle deprecation and no `w:` line.
-- [ ] No file in `commonMain`, `commonTest` or `iosMain` changed.
-- [ ] CLAUDE.md no longer names `:composeApp:assembleDebug`, `:composeApp:testDebugUnitTest`, `composeApp/google-services.json` or `src/androidDebug` (grep).
+- [x] All standard checks pass, using the new host-test and `:androidApp` tasks.
+- [ ] Clean build with `--warning-mode all` prints no Gradle deprecation and no `w:` line. *(failed: two Gradle deprecations come from the plugins themselves — AGP 9.4.1 `Configuration.setVisible` (deprecated since Gradle 9.1; every AGP 9 needs ≥ 9.1) and KGP 2.4.21 `KotlinNativeBundleArtifactsTypes` (once per fresh daemon). No `w:` line remains; both are documented in CLAUDE.md.)*
+- [ ] No file in `commonMain`, `commonTest` or `iosMain` changed. *(failed by the merge with task 02: 7 `commonMain` files carry task 02's warning fixes — 6 redundant `Unit`s / casts and `BackHandler` → `NavigationBackHandler`. `commonTest` and `iosMain` are unchanged.)*
+- [x] CLAUDE.md no longer names `:composeApp:assembleDebug`, `:composeApp:testDebugUnitTest`, `composeApp/google-services.json` or `src/androidDebug` (grep).
 
 ## Task [04-kotlin-time-migration]
 

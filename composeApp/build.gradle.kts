@@ -1,27 +1,36 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
-    // Reads composeApp/google-services.json (committed; it identifies the Firebase project and is
-    // not a secret) into resources that firebase-messaging initialises from.
-    alias(libs.plugins.googleServices)
 }
 
 kotlin {
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    // The shared code as an Android library; the APK is :androidApp. The namespace differs from the
+    // app's, so the library's own `R` (notification channel names, the notification icon) is
+    // `ch.stenzel.tim.polleninfo.shared.R`.
+    android {
+        namespace = "ch.stenzel.tim.polleninfo.shared"
+        compileSdk = 37
+        minSdk = 26
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_21)
         }
+
+        // The notification channel names and icon in src/androidMain/res, and Compose resources.
+        androidResources {
+            enable = true
+        }
+
+        // Runs commonTest on the JVM.
+        withHostTest { }
     }
 
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { iosTarget ->
@@ -33,19 +42,19 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.components.resources)
+            implementation(libs.compose.ui.tooling.preview)
             // `Icons.Default.*` is NOT transitive here. It resolves for the Android target through
             // material3's own dependencies and then fails to link for iOS, so the Android build
             // alone does not catch its absence — verified against compileKotlinIosSimulatorArm64.
-            implementation(compose.materialIconsExtended)
-            // The multiplatform `BackHandler`, so the alarm editor's system back can ask about
-            // unsaved changes on both platforms. Not part of the `compose.*` accessors.
-            implementation(libs.compose.ui.backhandler)
+            implementation(libs.compose.material.icons.extended)
+            // The multiplatform `NavigationBackHandler`, so the alarm editor's system back can ask
+            // about unsaved changes on both platforms.
+            implementation(libs.navigationevent.compose)
 
             implementation(libs.navigation.compose)
 
@@ -79,62 +88,30 @@ kotlin {
         }
 
         androidMain.dependencies {
-            implementation(compose.preview)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.koin.android)
             implementation(libs.kotlinx.coroutines.android)
-            // Declared explicitly rather than leant on transitively: MainActivity and the coarse
-            // location permission launcher both use them directly, so a version bump elsewhere must
-            // not be able to take them away.
+            // Declared explicitly rather than leant on transitively: the permission launchers and the
+            // location compat shim use them directly, so a version bump elsewhere must not be able to
+            // take them away.
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
             // The app language (AppCompatDelegate.setApplicationLocales), which is the system's
-            // per-app language setting on API 33+ and stored by AppCompat below. MainActivity must be
-            // an AppCompatActivity for it to apply.
+            // per-app language setting on API 33+ and stored by AppCompat below. :androidApp's
+            // MainActivity must be an AppCompatActivity for it to apply.
             implementation(libs.androidx.appcompat)
-            // Push tokens for pollen alarms. This is the one place the app needs Google Play
-            // services; location deliberately stays on the platform provider.
+            // Push tokens and the messaging service for pollen alarms. This is the one place the app
+            // needs Google Play services; location deliberately stays on the platform provider.
+            // :androidApp applies the Google Services plugin that configures it.
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.messaging)
+            // The Firebase Installation ID that FCM addresses this install by.
+            implementation(libs.firebase.installations)
         }
 
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
-    }
-}
-
-android {
-    namespace = "ch.stenzel.tim.polleninfo"
-    compileSdk = 35
-
-    defaultConfig {
-        applicationId = "ch.stenzel.tim.polleninfo"
-        minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
-    }
-
-    buildTypes {
-        debug {
-            isDebuggable = true
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-        }
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 

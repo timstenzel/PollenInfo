@@ -38,12 +38,10 @@ class DataStoreDiaryRepository(
             val current = preferences[ENTRIES_KEY]?.let(DiaryCodec::decode).orEmpty()
             preferences[ENTRIES_KEY] = DiaryCodec.encode(current.recording(date, feeling))
         }
-        Unit
     }
 
     override suspend fun dismiss(date: LocalDate): Result<Unit> = safeCall {
         dataStore.edit { it[DISMISSED_ON_KEY] = date.toString() }
-        Unit
     }
 
     private companion object {

@@ -36,7 +36,6 @@ class DataStoreSelectedStationRepository(
             preferences[ABBR_KEY] = station.abbr
             preferences[NAME_KEY] = station.name
         }
-        Unit
     }
 
     private companion object {

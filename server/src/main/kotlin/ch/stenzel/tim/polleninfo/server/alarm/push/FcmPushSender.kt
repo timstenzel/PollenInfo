@@ -23,6 +23,10 @@ import kotlinx.serialization.json.Json
  *
  * The body is encoded here rather than through the client's content negotiation, so the wire shape
  * does not depend on how the injected client is configured.
+ *
+ * The device's push address is a Firebase Installation ID (FID) for an app on firebase-messaging
+ * 26+, and a registration token for an install that has not updated yet; [isInstallationId] tells
+ * them apart, so each goes in the field FCM expects ([FcmMessage.fid] or [FcmMessage.token]).
  */
 class FcmPushSender(
     private val client: HttpClient,
@@ -74,8 +78,9 @@ class FcmPushSender(
      * every notification, in its own language, whether it is in the foreground or not. High priority
      * is what lets FCM start the app's process for it promptly.
      */
-    private fun PushMessage.toFcm(token: String) = FcmMessage(
-        token = token,
+    private fun PushMessage.toFcm(address: String) = FcmMessage(
+        token = address.takeUnless(::isInstallationId),
+        fid = address.takeIf(::isInstallationId),
         android = FcmAndroid(priority = PRIORITY_HIGH),
         data = toData(),
     )
@@ -90,18 +95,28 @@ class FcmPushSender(
         private const val UNREGISTERED = "UNREGISTERED"
         private const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
 
-        private val json = Json { ignoreUnknownKeys = true }
+        // explicitNulls = false: exactly one of `token` / `fid` is sent.
+        private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     }
 }
 
 class FcmException(message: String) : Exception(message)
+
+/**
+ * Whether a stored push address is a Firebase Installation ID: exactly 22 base64url characters.
+ * A registration token is far longer and contains a `:`, so the two never overlap.
+ */
+fun isInstallationId(address: String): Boolean = INSTALLATION_ID.matches(address)
+
+private val INSTALLATION_ID = Regex("[A-Za-z0-9_-]{22}")
 
 @Serializable
 private data class SendRequest(val message: FcmMessage)
 
 @Serializable
 private data class FcmMessage(
-    val token: String,
+    val token: String? = null,
+    val fid: String? = null,
     val android: FcmAndroid,
     val data: Map<String, String>,
 )

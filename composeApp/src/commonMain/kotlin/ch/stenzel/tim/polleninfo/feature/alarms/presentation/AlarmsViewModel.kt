@@ -146,7 +146,7 @@ class AlarmsViewModel(
         val current = listState
         val refreshing = keepAlarms && current is AlarmsUiState.Content
         listState = if (refreshing) {
-            (current as AlarmsUiState.Content).copy(isRefreshing = true)
+            current.copy(isRefreshing = true)
         } else {
             AlarmsUiState.Loading
         }

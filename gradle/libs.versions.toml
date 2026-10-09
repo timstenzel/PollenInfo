@@ -1,27 +1,38 @@
 [versions]
-kotlin = "2.1.21"
-agp = "8.9.2"
-composeMultiplatform = "1.8.1"
-ktor = "3.1.3"
-koin = "4.0.4"
-serialization = "1.8.1"
-coroutines = "1.10.2"
+kotlin = "2.4.21"
+agp = "9.4.1"
+composeMultiplatform = "1.12.1"
+# Compose Multiplatform's Material 3 and icons are published on their own version lines.
+# Material 3 held on 1.8.x until the kotlinx-datetime migration (dependency-update task 04): 1.9
+# pulls in kotlinx-datetime 0.7 on iOS, which ends the 0.6.x API the app still uses.
+composeMaterial3 = "1.8.2"
+composeMaterialIcons = "1.7.3"
+navigationEvent = "1.1.0"
+# Held on 3.5.x until the kotlinx-datetime migration (dependency-update task 04): 3.6 pulls in
+# kotlinx-datetime 0.8 (`ktor-openapi-schema`), which ends the 0.6.x API the app still uses.
+ktor = "3.5.2"
+koin = "4.2.2"
+serialization = "1.11.0"
+coroutines = "1.11.0"
+# Held on 0.6.x until its own migration (dependency-update task 04): 0.7 moves `Instant` and `Clock`
+# to `kotlin.time`, which is a code migration, not a bump.
 datetime = "0.6.2"
-lifecycle = "2.9.1"
-navigationCompose = "2.9.0"
-datastore = "1.1.7"
-androidxActivity = "1.9.3"
-androidxCore = "1.13.1"
-androidxAppcompat = "1.7.1"
-# Pinned below 1.x: Exposed 1.x is built against Kotlin 2.2+ and pulls that stdlib onto a Kotlin 2.1
-# compiler. 0.61 is the last line built against 2.0. Revisit together with the Kotlin bump.
+lifecycle = "2.11.0"
+# 2.x by decision: Navigation 3 is a different library generation.
+navigationCompose = "2.9.2"
+datastore = "1.2.1"
+androidxActivity = "1.13.0"
+androidxCore = "1.19.1"
+androidxAppcompat = "1.8.0"
+# Held on 0.61.x until its own migration (dependency-update task 05): 1.x moves every package
+# (`org.jetbrains.exposed.v1`) and changes `transaction`, which is a code migration, not a bump.
 exposed = "0.61.0"
 sqliteJdbc = "3.53.4.0"
-firebaseBom = "34.14.1"
-googleServices = "4.4.4"
+firebaseBom = "35.0.0"
+googleServices = "4.5.0"
 googleAuth = "1.54.0"
-# 1.5.x is the line built for slf4j 2.0, which is what Ktor brings.
-logback = "1.5.38"
+# Built for slf4j 2.0, which is what Ktor brings.
+logback = "1.6.5"
 
 [libraries]
 # Ktor Client
@@ -53,13 +64,22 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 
+# Compose Multiplatform — explicit coordinates instead of the deprecated `compose.*` accessors
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-ui-tooling-preview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "composeMultiplatform" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "composeMaterialIcons" }
+
 # Lifecycle / ViewModel (KMP)
 lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 
 # Navigation (KMP)
-compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
+navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationEvent" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 
 # DataStore (KMP) — persisted user selections
@@ -82,6 +102,7 @@ google-auth-oauth2 = { module = "com.google.auth:google-auth-library-oauth2-http
 # Firebase (android only) — the FCM token for push notifications
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+firebase-installations = { module = "com.google.firebase:firebase-installations" }
 
 # Test
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -95,5 +116,5 @@ composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMul
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-androidLibrary = { id = "com.android.library", version.ref = "agp" }
+androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }

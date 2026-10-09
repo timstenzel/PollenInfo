@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the shared code needs from the app it is merged into: its permissions and the push service.
+  The application itself — entry points, theme, launcher and locale config — is :androidApp's.
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,41 +20,18 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <application
-        android:name=".PollenInfoApplication"
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="@string/app_name"
-        android:localeConfig="@xml/locales_config"
-        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
-
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
+    <application>
         <!--
-          Lets AppCompat persist the app language itself below API 33, where there is no system
-          per-app language. On API 33+ the system keeps it and this service is never used.
+          FCM addresses this install by its Firebase Installation ID (register() / onRegistered)
+          rather than by a registration token, which firebase-messaging 26 deprecates.
         -->
-        <service
-            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
-            android:enabled="false"
-            android:exported="false">
-            <meta-data
-                android:name="autoStoreLocales"
-                android:value="true" />
-        </service>
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
 
-        <!-- Shows pollen alarms that arrive while the app is in the foreground. -->
+        <!-- Receives every pollen alarm (data-only messages) and rotated push tokens. -->
         <service
-            android:name=".core.push.PollenFirebaseMessagingService"
+            android:name="ch.stenzel.tim.polleninfo.core.push.PollenFirebaseMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

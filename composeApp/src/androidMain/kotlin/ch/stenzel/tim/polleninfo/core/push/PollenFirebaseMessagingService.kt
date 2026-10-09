@@ -5,8 +5,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import ch.stenzel.tim.polleninfo.MainActivity
-import ch.stenzel.tim.polleninfo.R
+import ch.stenzel.tim.polleninfo.shared.R
 import ch.stenzel.tim.polleninfo.core.language.appLanguageContext
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.ui.format.loadDateWording
@@ -28,8 +27,9 @@ import org.koin.android.ext.android.inject
  * one path, the same channel, icon and tap (which opens the app). A message it does not fully
  * understand is still shown, as "Pollen in <station>" ([parseAlarmPayload]).
  *
- * A rotated token is reported through [PushTokenUpdater] — only for an install that has registered;
- * one that has not sends whatever token is current when it first does.
+ * The install's push address — its Firebase Installation ID, reported by [onRegistered] whenever
+ * FCM (re)registers it — is sent on through [PushTokenUpdater], only for an install that has
+ * registered with the backend; one that has not sends whichever id is current when it first does.
  */
 class PollenFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -39,10 +39,10 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
      * Called on a Firebase worker thread, and the service may be stopped as soon as this returns,
      * so the update runs to completion here rather than in a scope that would be cancelled with it.
      */
-    override fun onNewToken(token: String) {
+    override fun onRegistered(installationId: String) {
         runBlocking {
-            val result = withTimeoutOrNull(TOKEN_UPDATE_TIMEOUT) { tokenUpdater.updateToken(token) }
-            if (result !is Result.Success) Log.w(TAG, "Sending the new push token failed: $result")
+            val result = withTimeoutOrNull(TOKEN_UPDATE_TIMEOUT) { tokenUpdater.updateToken(installationId) }
+            if (result !is Result.Success) Log.w(TAG, "Sending the new push address failed: $result")
         }
     }
 
@@ -64,12 +64,15 @@ class PollenFirebaseMessagingService : FirebaseMessagingService() {
             }
         }
         val channel = AlarmNotificationChannel.fromId(content.channel.id) ?: AlarmNotificationChannel.DAILY_REPORT
-        val openApp = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        // The app's launcher activity (:androidApp's MainActivity), which this library cannot name.
+        val openApp = packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
+            PendingIntent.getActivity(
+                this,
+                0,
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }
         val shown = NotificationCompat.Builder(this, channel.id)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(text.title)

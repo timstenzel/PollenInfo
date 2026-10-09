@@ -24,7 +24,6 @@ class DataStoreNotificationPermissionPreferences(
 
     override suspend fun markAsked(): Result<Unit> = safeCall {
         dataStore.edit { it[ASKED_BEFORE_KEY] = true }
-        Unit
     }
 
     private companion object {

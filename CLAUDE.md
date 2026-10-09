@@ -46,10 +46,11 @@ and its file of earlier years — needed only for a year that reaches back acros
 classification lives in `:server`; the apps only speak to our own REST API. This keeps CSV parsing,
 station metadata and threshold logic in one place and off the devices.
 
-Push notifications deliver the user's alarms (see "Alarms"). The Android app obtains an FCM token,
-registers the device with the backend and sends it a new token whenever FCM rotates it; the backend
-keeps devices and alarms in SQLite (see "Persistence"), delivers daily reports and threshold alerts
-through FCM (see "Alarm delivery") and drops a token FCM reports as unregistered. The backend sends
+Push notifications deliver the user's alarms (see "Alarms"). The Android app registers with FCM,
+registers the device with the backend under its push address — its Firebase Installation ID (FID) —
+and sends it again whenever FCM re-registers it; the backend keeps devices and alarms in SQLite (see
+"Persistence"), delivers daily reports and threshold alerts through FCM (see "Alarm delivery") and
+drops an address FCM reports as unregistered. The backend sends
 **what happened, not text**: a data-only message the app words in its own language (see "Firebase").
 iOS has no push leg.
 
@@ -57,11 +58,24 @@ iOS has no push leg.
 
 | Module       | Type                        | Contains                                                    |
 | ------------ | --------------------------- | ----------------------------------------------------------- |
-| `:composeApp`| KMP (android, ios*)         | The app: UI, ViewModels, repositories, REST client           |
+| `:androidApp`| Android application         | The APK: `MainActivity`, `PollenInfoApplication`, the app manifest, launcher icons, `app_name`, locale config, debug cleartext manifest, Firebase config, R8 rules |
+| `:composeApp`| KMP library (android, ios*) | The app's code: UI, ViewModels, repositories, REST client, platform actuals, push service, notification channels, all app tests |
 | `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching, device and alarm store (SQLite) |
-| `:theme`     | KMP (android, ios*)         | Shared Material 3 colors / typography / `PollenInfoTheme`    |
+| `:theme`     | KMP library (android, ios*) | Shared Material 3 colors / typography / `PollenInfoTheme`    |
 
 Package root everywhere: `ch.stenzel.tim.polleninfo`.
+
+\* iOS targets are `iosArm64` and `iosSimulatorArm64`; Compose Multiplatform 1.12 no longer publishes
+for `iosX64` (the simulator on Intel Macs).
+
+AGP 9 does not accept the Android application plugin in a Kotlin Multiplatform module, so the APK is
+its own plain Android module, `:androidApp` (AGP's built-in Kotlin, no separate Kotlin Android
+plugin), depending on `:composeApp` and `:theme`. Both libraries use
+`com.android.kotlin.multiplatform.library` and configure Android inside `kotlin { android { … } }`.
+`:composeApp`'s Android namespace is `ch.stenzel.tim.polleninfo.shared` — its own `R` (notification
+channel names, `ic_notification`) is `ch.stenzel.tim.polleninfo.shared.R` — while the application id
+and the entry points' package stay `ch.stenzel.tim.polleninfo`. Code in `:composeApp` cannot name
+`MainActivity`; the push service opens the app through the package's launch intent.
 
 ## Commands
 
@@ -72,18 +86,19 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 
 | Task                            | Command                                     |
 | ------------------------------- | ------------------------------------------- |
-| App unit tests (fast, JVM)      | `./gradlew :composeApp:testDebugUnitTest`   |
+| App unit tests (fast, JVM)      | `./gradlew :composeApp:testAndroidHostTest` |
 | Server unit tests               | `./gradlew :server:test`                    |
-| All unit tests we can run here  | `./gradlew :composeApp:testDebugUnitTest :server:test` |
+| All unit tests we can run here  | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | Verify iOS sources compile      | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Check translations (also part of `check`) | `./gradlew :composeApp:checkTranslations` |
 | Run the backend on :8080        | `./gradlew :server:run` (push is logged unless `FCM_CREDENTIALS` is set) |
-| Android debug APK               | `./gradlew :composeApp:assembleDebug`       |
+| Android debug APK               | `./gradlew :androidApp:assembleDebug`       |
+| Android release APK (R8)        | `./gradlew :androidApp:assembleRelease`     |
 
 Notes:
 
-- `commonTest` is the single source of truth for app tests; `testDebugUnitTest` executes it on the
-  JVM. **`:composeApp:iosSimulatorArm64Test` requires full Xcode** — with only Command Line Tools
+- `commonTest` is the single source of truth for app tests; `testAndroidHostTest` (the Android-KMP
+  library's host tests) executes it on the JVM. **`:composeApp:iosSimulatorArm64Test` requires full Xcode** — with only Command Line Tools
   installed (`xcode-select -p` → `/Library/Developer/CommandLineTools`) linking the test binary
   fails at `xcrun`. Compile the iOS test sources instead to catch non-portable code.
 - Prefer the targeted test tasks over `./gradlew check` for the same reason.
@@ -92,7 +107,12 @@ Notes:
 - `./gradlew :server:run` writes its database to `server/data/polleninfo.db` (override with
   `POLLENINFO_DB`). Delete the file for a clean backend; the app then re-registers on its own. Inspect
   it with the SDK's `sqlite3` (`platform-tools/`). The directory is git-ignored.
-- The Android build needs `composeApp/google-services.json` (committed — see "Firebase").
+- The Android build needs `androidApp/google-services.json` (committed — see "Firebase").
+- Two Gradle deprecations come from the plugins themselves and cannot be fixed in our build: AGP
+  9.4's `Configuration.setVisible` (deprecated since Gradle 9.1) and KGP 2.4's plain-enum
+  `KotlinNativeBundleArtifactsTypes` attribute (printed once per fresh daemon). Everything else
+  builds without a deprecation or a compiler warning; keep it that way.
+- `gradle-wrapper.jar` is git-ignored; `./gradlew wrapper` (or Android Studio) recreates it.
 
 ## Data source: MeteoSwiss OGD pollen
 
@@ -251,9 +271,9 @@ adds the date once it is no longer today). That is `Content.refreshedAt`, the ti
 a different fact from `measuredAt`: within the backend's cache period a refresh moves it while the
 data time stays put, which is how the user can tell the refresh happened. It is never a warning.
 
-This is what `kotlinx-datetime` is in `commonMain` for. It is pinned to **0.6.x**: 0.7 moves
-`Instant` and `Clock` into `kotlin.time`, which is still experimental on our Kotlin 2.1 and would
-need an opt-in at every use. Revisit the pin when Kotlin is bumped.
+This is what `kotlinx-datetime` is in `commonMain` for. It is held on **0.6.x** until its migration
+(0.7 moves `Instant` and `Clock` into `kotlin.time`), and with it Ktor (3.6 pulls in datetime 0.8)
+and Compose Material 3 (1.9 pulls in 0.7 on iOS) — see the comments in `libs.versions.toml`.
 
 ## Conventions
 
@@ -374,11 +394,10 @@ flavour machinery for this yet.
 
 Because those addresses are plain HTTP, both platforms need a transport-security exception:
 
-- **Android** — `composeApp/src/debug/AndroidManifest.xml` sets `android:usesCleartextTraffic="true"`
+- **Android** — `androidApp/src/debug/AndroidManifest.xml` sets `android:usesCleartextTraffic="true"`
   on `<application>`. It lives in the **debug source set only**, so a release build can never ship
-  it (verify with `grep usesCleartextTraffic composeApp/build/intermediates/merged_manifest/<variant>/…`).
-  Note the path is `src/debug/`, not `src/androidDebug/`: despite what `./gradlew :composeApp:sourceSets`
-  reports, only `src/debug/AndroidManifest.xml` is actually merged in this KMP + AGP setup.
+  it (verify with `grep usesCleartextTraffic androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml`
+  — only the debug one matches).
 - **iOS** — no `Info.plist` exists yet (there is no iOS app project). Whoever creates the iOS
   wrapper must add an ATS exception, `NSAllowsLocalNetworking = true`, or the simulator will refuse
   the cleartext development backend. See "iOS wrapper configuration" below.
@@ -1029,8 +1048,8 @@ list's "Create alarm" navigates to it without an id, a tapped row with that alar
 save or delete, and when leaving is allowed.
 
 **Leaving goes through `onBack()`** — the top bar's arrow and the system back alike (the
-multiplatform `BackHandler` from `org.jetbrains.compose.ui:ui-backhandler`, an explicit
-`commonMain` dependency). With unsaved changes (`form.isDirty`) it sets `showDiscardDialog` ("Discard
+multiplatform `NavigationBackHandler` from `org.jetbrains.androidx.navigationevent:navigationevent-compose`,
+an explicit `commonMain` dependency). With unsaved changes (`form.isDirty`) it sets `showDiscardDialog` ("Discard
 changes?" — Discard → `Done`, Keep editing closes the dialog); without, or from `Loading` / `Error`,
 it sends `Done` at once.
 
@@ -1079,17 +1098,22 @@ hand.
 Push is FCM, and **FCM is the one place the app depends on Google Play services** — push on devices
 without them is out of scope, and location deliberately stays on the platform provider.
 
-- `composeApp/google-services.json` is **committed**: it identifies the Firebase project and is not a
+- `androidApp/google-services.json` is **committed**: it identifies the Firebase project and is not a
   secret. It holds two Android clients, `ch.stenzel.tim.polleninfo` and
   `ch.stenzel.tim.polleninfo.debug` (the debug `applicationIdSuffix`); without a client for the
   variant's id, `process<Variant>GoogleServices` fails the build. Re-download it from the Firebase
   console after adding an app id.
-- Gradle: the `com.google.gms.google-services` plugin on `:composeApp`, and the Firebase BoM plus
-  `firebase-messaging` in `androidMain` only.
+- Gradle: the `com.google.gms.google-services` plugin on `:androidApp`, and the Firebase BoM plus
+  `firebase-messaging` and `firebase-installations` in `:composeApp`'s `androidMain` only.
+- **The push address is the Firebase Installation ID (FID)**, not a registration token, which
+  firebase-messaging 26 deprecates: `:composeApp`'s manifest sets
+  `firebase_messaging_installation_id_enabled` (with it, `getToken()` throws). The "token" names in
+  `PushTokenProvider`, `PushTokenUpdater`, `fcmToken` on the wire and `fcm_token` in the database are
+  kept; they now carry the FID.
 - `core/push/PushTokenProvider` (`suspend fun token(): PushTokenResult` — `Available(token)` |
-  `Unavailable`) is bound in `platformModule`: `FirebasePushTokenProvider` on Android wraps
-  `FirebaseMessaging.getInstance().token` with `suspendCancellableCoroutine`; iOS binds
-  `UnavailablePushTokenProvider`. A *failed* token task (no Play services, no network) is thrown,
+  `Unavailable`) is bound in `platformModule`: `FirebasePushTokenProvider` on Android awaits
+  `FirebaseMessaging.register()` and then returns `FirebaseInstallations.getInstance().id`, each task
+  bridged with `suspendCancellableCoroutine`; iOS binds `UnavailablePushTokenProvider`. A *failed* task (no Play services, no network) is thrown,
   not `Unavailable`, so the screen offers Retry — `Unavailable` is reserved for "this platform cannot
   receive push".
 - **Receiving.** `PollenInfoApplication` creates the two channels on every start —
@@ -1106,7 +1130,8 @@ without them is out of scope, and location deliberately stays on the platform pr
   `parseAlarmPayload` (pure, `AlarmPayloadParserTest`) and words it with `notificationText` (pure,
   `AlarmNotificationTextTest`, which asserts resource keys and arguments through a fake
   `NotificationStrings`), then posts on the payload's channel with `ic_notification`, auto-cancel,
-  a tap that opens `MainActivity`, and its own id per message.
+  a tap that opens the app (the package's launch intent, i.e. `MainActivity`), and its own id per
+  message.
   - **Anything not understood** — an unknown `kind`, species or severity, malformed or missing
     `levels`, a missing or unparseable `measuredAt` — makes the whole message
     `AlarmNotificationContent.Generic`: "Pollen in <station>" over "Open PollenInfo to see your
@@ -1131,15 +1156,17 @@ without them is out of scope, and location deliberately stays on the platform pr
     the system showed itself.
   - **Testing by hand**: the Firebase console cannot send data-only messages. Either run
     `:server:run` with `FCM_CREDENTIALS` and create an alarm due a minute later, or `POST` the payload
-    to FCM HTTP v1 yourself (`{"message":{"token":…,"android":{"priority":"HIGH"},"data":{…}}}`) with
+    to FCM HTTP v1 yourself (`{"message":{"fid":…,"android":{"priority":"HIGH"},"data":{…}}}`) with
     an access token for the `firebase.messaging` scope.
-- **Token rotation.** `PollenFirebaseMessagingService.onNewToken` hands the new token to
-  `PushTokenUpdater` (Koin `inject()`; it lives in `core/push` so the service does not import the
-  alarms feature). It runs the update with `runBlocking` under a 20-second timeout, on the Firebase
-  worker thread that calls it — the service may be stopped as soon as `onNewToken` returns, so a
-  launched coroutine could be cancelled mid-request. A failed update is only logged: FCM does not
-  call again for the same token, so the backend keeps the old one until the next rotation or until
-  it reports the old one unregistered (accepted for now).
+- **Re-registration.** `PollenFirebaseMessagingService.onRegistered(installationId)` — called on app
+  start with auto-init, when FCM refreshes the registration and after every `register()` — hands the
+  FID to `PushTokenUpdater` (Koin `inject()`; it lives in `core/push` so the service does not import
+  the alarms feature). That is also how an install that registered with a registration token before
+  the FID switch moves its backend entry to its FID on its first start. It runs the update with
+  `runBlocking` under a 20-second timeout, on the Firebase worker thread that calls it — the service
+  may be stopped as soon as `onRegistered` returns, so a launched coroutine could be cancelled
+  mid-request. A failed update is only logged; the next `onRegistered` (the next start at the latest)
+  sends it again.
 - **Sending** needs a Firebase service-account key for the server, passed as a file path in
   `FCM_CREDENTIALS`. It is **never committed** (see "Alarm delivery").
 
@@ -1277,15 +1304,16 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
   `stringResource(Res.string.x, args…)` (`stringArrayResource(Res.array.x)` for a
   `string-array`). Placeholders are positional only — `%1$s`, `%2$d` — since
   that is all Compose resources substitute. Android-only text goes in
-  `androidMain/res/values{,-de,-fr,-it}/strings.xml` — the notification channel names, and
-  `app_name` (`values/` only, `translatable="false"`).
+  `:composeApp`'s `androidMain/res/values{,-de,-fr,-it}/strings.xml` — the notification channel
+  names. `app_name` (`translatable="false"`) is `:androidApp`'s `src/main/res/values/strings.xml`,
+  outside the check.
 - **Fallback.** A device language other than de/fr/it gets `values/` (English). That is all
   "System default" is: no language set, so resource resolution picks `values-de|fr|it` for a
   matching device language and English otherwise.
 - **Choosing the language** (Settings, see there) goes through `core/language`:
   - **Android** — `AndroidLanguageRepository` over `AppCompatDelegate.getApplicationLocales()` /
     `setApplicationLocales(…)` (`androidx.appcompat`, explicit in `androidMain`). That is the
-    system's per-app language on API 33+ — `res/xml/locales_config.xml` (en, de, fr, it) is its
+    system's per-app language on API 33+ — `androidApp/src/main/res/xml/locales_config.xml` (en, de, fr, it) is its
     `android:localeConfig` and must list exactly `AppLanguage`'s languages — and below API 33
     AppCompat stores it itself through the manifest's `AppLocalesMetadataHolderService`
     (`autoStoreLocales`). It applies only to an `AppCompatActivity`, which is why `MainActivity` is
@@ -1339,7 +1367,7 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
   cover date and time formatting, as in `ReadingAgeLabel.kt`. (`ExampleMapper.format` is a
   hand-rolled multiplatform replacement for numbers.)
 - **Backtick test names may not contain a comma on Kotlin/Native.** The JVM accepts them, so
-  `testDebugUnitTest` passes and then `compileTestKotlinIosSimulatorArm64` fails with "Name contains
+  `testAndroidHostTest` passes and then `compileTestKotlinIosSimulatorArm64` fails with "Name contains
   illegal characters". Another reason to compile the iOS test sources.
 - **`Icons.Default.*` is not transitive.** `compose.material3` supplies it for the Android target
   and not for iOS, so a screen using an icon compiles for Android and then fails to resolve
@@ -1464,8 +1492,8 @@ scheduler only ever loads enabled alarms.
 Devices and alarms are the first state the backend must not lose, so the server is no longer
 stateless: **its database file has to be kept across restarts and deployments.** SQLite through
 JetBrains Exposed's DSL (`exposed-core`, `exposed-jdbc`, `org.xerial:sqlite-jdbc`). Exposed is
-pinned to **0.61.x**: 1.x is built against Kotlin 2.2+ and would put that stdlib under our 2.1
-compiler — revisit with the Kotlin bump.
+held on **0.61.x** until its migration: 1.x moves every package (`org.jetbrains.exposed.v1`) and
+changes `transaction`.
 
 - `alarm/store/PollenInfoDatabase` opens it: `fromEnvironment()` reads `POLLENINFO_DB` (default
   `./data/polleninfo.db`, relative to the working directory — `server/` under `:server:run`) and
@@ -1552,7 +1580,8 @@ which must find nothing).
 never throws for a delivery failure.
 
 - `FcmPushSender(client, projectId, accessToken, baseUrl)` — FCM HTTP v1, one
-  `POST /v1/projects/{projectId}/messages:send` with `token`, `android.priority` `HIGH` and `data` —
+  `POST /v1/projects/{projectId}/messages:send` with the device's address, `android.priority` `HIGH`
+  and `data` —
   **data-only, no `notification` block** — encoded by the sender itself so the shape does not
   depend on the client's plugins. The data map (`PushPayload` / `PushMessage.toData()`, all values
   strings as FCM requires) is the contract with the app's `parseAlarmPayload`:
@@ -1567,6 +1596,9 @@ never throws for a delivery failure.
   | `levels` | `BIRCH:HIGH,GRASSES:MODERATE` — enum names in display order; absent when empty |
   | `measuredAt` | ISO-8601 instant, `no_current_reading` only |
 
+  The address goes in `fid` when it is a Firebase Installation ID (`isInstallationId`: exactly 22
+  base64url characters) and in the deprecated `token` otherwise — a registration token stored by an
+  install that has not started the FID-based app yet (it is far longer and contains a `:`).
   It is a clean cut: no version field and no second format, so an app from before this change shows
   nothing for these messages. `404` with `UNREGISTERED`, or `400` with `INVALID_ARGUMENT`, is
   `Unregistered`; any other non-2xx, a timeout or a transport error is `Failed`. The access token is

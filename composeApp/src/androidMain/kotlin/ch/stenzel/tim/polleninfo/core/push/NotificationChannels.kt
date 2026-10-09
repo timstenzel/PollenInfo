@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
-import ch.stenzel.tim.polleninfo.R
+import ch.stenzel.tim.polleninfo.shared.R
 import ch.stenzel.tim.polleninfo.core.language.appLanguageContext
 
 /**

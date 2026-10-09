@@ -24,12 +24,10 @@ class DataStoreDeviceRegistrationRepository(
 
     override suspend fun store(id: String): Result<Unit> = safeCall {
         dataStore.edit { it[DEVICE_ID_KEY] = id }
-        Unit
     }
 
     override suspend fun clear(): Result<Unit> = safeCall {
         dataStore.edit { it.remove(DEVICE_ID_KEY) }
-        Unit
     }
 
     private companion object {

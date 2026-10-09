@@ -82,6 +82,34 @@ class FcmPushSenderTest {
     }
 
     @Test
+    fun `a Firebase Installation ID is sent as fid and not as token`() = runTest {
+        sender { respond("{}") }.send(FID, message)
+
+        val sent = sentMessage()
+        assertEquals(setOf("fid", "android", "data"), sent.keys)
+        assertEquals(FID, sent.string("fid"))
+    }
+
+    @Test
+    fun `a registration token from an app that has not updated is still sent as token`() = runTest {
+        sender { respond("{}") }.send(REGISTRATION_TOKEN, message)
+
+        val sent = sentMessage()
+        assertEquals(setOf("token", "android", "data"), sent.keys)
+        assertEquals(REGISTRATION_TOKEN, sent.string("token"))
+    }
+
+    @Test
+    fun `an installation id is exactly 22 base64url characters`() {
+        assertTrue(isInstallationId(FID))
+        assertTrue(isInstallationId("A".repeat(22)))
+        assertFalse(isInstallationId("A".repeat(21)))
+        assertFalse(isInstallationId("A".repeat(23)))
+        assertFalse(isInstallationId("A".repeat(21) + ":"))
+        assertFalse(isInstallationId(REGISTRATION_TOKEN))
+    }
+
+    @Test
     fun `the data carries the kind and channel and station and alarm and levels as strings`() = runTest {
         sender { respond("{}") }.send("device-token", message)
 
@@ -193,6 +221,12 @@ class FcmPushSenderTest {
     private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
 
     private companion object {
+        // The shapes FCM issues: a 22 character FID, and a registration token as issued before
+        // firebase-messaging 26 (sender id, a colon, then the long body).
+        const val FID = "cK3xmP9qRAWv-_7tLz2bUq"
+        const val REGISTRATION_TOKEN =
+            "fXk2Q9e0RtS3abcdEfGh12:APA91bHj4kLmNoPqRsTuVwXyZ0123456789abcdefGhIjKlMnOpQrStUvWxYz-_0123456789"
+
         // Shapes as documented for the HTTP v1 API's error responses.
         const val UNREGISTERED_BODY = """{"error":{"code":404,"message":"Requested entity was not found.",
             "status":"NOT_FOUND","details":[{"@type":"type.googleapis.com/google.firebase.fcm.v1.FcmError",
