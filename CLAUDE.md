@@ -1494,9 +1494,13 @@ scheduler only ever loads enabled alarms.
 
 Devices and alarms are the first state the backend must not lose, so the server is no longer
 stateless: **its database file has to be kept across restarts and deployments.** SQLite through
-JetBrains Exposed's DSL (`exposed-core`, `exposed-jdbc`, `org.xerial:sqlite-jdbc`). Exposed is
-held on **0.61.x** until its migration: 1.x moves every package (`org.jetbrains.exposed.v1`) and
-changes `transaction`.
+JetBrains Exposed's DSL (`exposed-core`, `exposed-jdbc`, `org.xerial:sqlite-jdbc`), on Exposed
+1.x: tables, operators (`eq`, `and`, `less`, … — top-level functions, imported one by one) and
+statement builders come from `org.jetbrains.exposed.v1.core`; `Database`, `SchemaUtils`, the
+queries (`selectAll`, `insert`, `update`, `deleteWhere`, …) and `transaction` from
+`org.jetbrains.exposed.v1.jdbc`. `LegacyDatabaseCompatibilityTest` opens a checked-in database
+written by the pre-1.x server (`server/src/test/resources/fixtures/db/`, see its README), so a file
+from before the migration provably still loads.
 
 - `alarm/store/PollenInfoDatabase` opens it: `fromEnvironment()` reads `POLLENINFO_DB` (default
   `./data/polleninfo.db`, relative to the working directory — `server/` under `:server:run`) and

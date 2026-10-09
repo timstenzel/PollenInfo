@@ -1,7 +1,7 @@
 package ch.stenzel.tim.polleninfo.server.alarm.store
 
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.Table
 
 /**
  * One row per registered install. [fcmToken] is nullable so the scheduler can drop a token the push

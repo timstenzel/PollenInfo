@@ -10,9 +10,9 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.util.UUID
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 fun dailyAlarm(
     deviceId: DeviceId,

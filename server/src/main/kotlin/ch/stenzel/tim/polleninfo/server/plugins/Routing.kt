@@ -21,7 +21,7 @@ import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * Collaborators are parameters with test-friendly defaults, so a test can install the exact

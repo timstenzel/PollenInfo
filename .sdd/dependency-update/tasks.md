@@ -137,30 +137,32 @@ Stage 3: lift the kotlinx-datetime pin. The app moves to the newest stable kotli
 
 ## Task [05-exposed-1x-migration]
 
+> **Implementation notes (2026-10-09).** Exposed 1.5.0. The migration was imports only: `v1.core` for tables, `Op`, `ResultRow`, `SortOrder`, `UpdateBuilder` and the operators — which are now top-level functions, so `eq` / `isNotNull` inside `where { }` lambdas need an explicit import where the old `SqlExpressionBuilder` receiver supplied them — and `v1.jdbc` for `Database`, `SchemaUtils`, the queries (`select` included) and `transaction` / `TransactionManager`; `ExposedSQLException` is `v1.exceptions`. `transaction(database) { … }` and `DatabaseConfig { defaultIsolationLevel = … }` compile unchanged. No store logic and no test assertion changed. The `:server` build's one Gradle deprecation is AGP's `setVisible` (traced to `BasePlugin.createAndroidJdkImageConfiguration`), printed because the Android modules are configured too.
+
 Stage 4: lift the Exposed pin. The server's database layer moves to the newest stable Exposed 1.x — `v1` packages, the JDBC split and the changed `transaction` signature — while every store keeps its interface and behaviour: serializable transactions on the IO dispatcher, the per-connection foreign-keys pragma and busy timeout, the ten-alarm limit counted inside the insert's transaction, cascade deletes of the notification log, creation order, the conditional token clear, and the schema exactly as it is. Task 01's legacy-database test proves an existing database still opens.
 
 ### Implementation steps
 
-- [ ] Bump Exposed to the newest stable 1.x and remove its pin comment from the catalog.
-- [ ] Migrate the database entry point, tables, the three stores, routing's store defaults and the store test helpers to the 1.x packages and `transaction` signature, keeping isolation, dispatcher, pragma and busy timeout.
-- [ ] Run the store, route, scheduler and legacy-database tests and fix only the code, not the assertions.
-- [ ] Start `:server:run` with `POLLENINFO_DB` pointing at a copy of task 01's fixture and list a device's alarms through the REST API.
-- [ ] Remove the 0.61.x pin paragraph from CLAUDE.md ("Persistence"), keeping the rest of the persistence description accurate for 1.x.
-- [ ] Commit.
+- [x] Bump Exposed to the newest stable 1.x and remove its pin comment from the catalog.
+- [x] Migrate the database entry point, tables, the three stores, routing's store defaults and the store test helpers to the 1.x packages and `transaction` signature, keeping isolation, dispatcher, pragma and busy timeout.
+- [x] Run the store, route, scheduler and legacy-database tests and fix only the code, not the assertions.
+- [x] Start `:server:run` with `POLLENINFO_DB` pointing at a copy of task 01's fixture and list a device's alarms through the REST API.
+- [x] Remove the 0.61.x pin paragraph from CLAUDE.md ("Persistence"), keeping the rest of the persistence description accurate for 1.x.
+- [x] Commit.
 
 ### Acceptance criteria
 
-- [ ] Exposed is on its newest stable 1.x and no server file imports an `org.jetbrains.exposed.sql` package (grep).
-- [ ] Task 01's legacy-database compatibility test passes unchanged.
-- [ ] The existing store, alarm-route and scheduler tests pass unchanged — including the concurrent-create limit, the cascade, the conditional token clear and restart without resending.
-- [ ] `:server:run` against a copy of the fixture answers `GET /devices/{id}/alarms` with that device's alarms, and `sqlite3 .schema` of the copy is identical before and after the start.
-- [ ] The `alarm/` push-text grep from CLAUDE.md still finds nothing.
+- [x] Exposed is on its newest stable 1.x and no server file imports an `org.jetbrains.exposed.sql` package (grep).
+- [x] Task 01's legacy-database compatibility test passes unchanged.
+- [x] The existing store, alarm-route and scheduler tests pass unchanged — including the concurrent-create limit, the cascade, the conditional token clear and restart without resending.
+- [x] `:server:run` against a copy of the fixture answers `GET /devices/{id}/alarms` with that device's alarms, and `sqlite3 .schema` of the copy is identical before and after the start.
+- [x] The `alarm/` push-text grep from CLAUDE.md still finds nothing.
 
 ### Quality gates
 
-- [ ] All standard checks pass.
-- [ ] Clean build of `:server` with `--warning-mode all` prints no Gradle deprecation and no `w:` line.
-- [ ] Neither CLAUDE.md nor the catalog mentions `0.61` (grep).
+- [x] All standard checks pass.
+- [ ] Clean build of `:server` with `--warning-mode all` prints no Gradle deprecation and no `w:` line. *(failed: no `w:` line, but one Gradle deprecation — AGP 9.4.1's `Configuration.setVisible`, from `BasePlugin.createAndroidJdkImageConfiguration`, printed because the Android modules are configured in the same build; nothing from `:server` or Exposed. Same known plugin deprecation as task 03, documented in CLAUDE.md.)*
+- [x] Neither CLAUDE.md nor the catalog mentions `0.61` (grep).
 
 ## Task [06-release-readiness-verification]
 
