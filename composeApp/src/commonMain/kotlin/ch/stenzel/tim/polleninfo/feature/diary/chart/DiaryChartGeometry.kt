@@ -106,7 +106,7 @@ fun diaryChartGeometry(
 private fun dateTickIndices(days: List<HistoryDay>, range: HistoryRange): List<Int> = when (range) {
     HistoryRange.WEEK -> days.indices.toList()
     HistoryRange.MONTH -> days.indices.filter { (days.lastIndex - it) % 7 == 0 }
-    HistoryRange.YEAR -> days.indices.filter { days[it].date.dayOfMonth == 1 }
+    HistoryRange.YEAR -> days.indices.filter { days[it].date.day == 1 }
 }
 
 /** The height of [level] in a plot [height] px tall — higher means worse. */

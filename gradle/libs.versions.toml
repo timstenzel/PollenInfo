@@ -3,20 +3,17 @@ kotlin = "2.4.21"
 agp = "9.4.1"
 composeMultiplatform = "1.12.1"
 # Compose Multiplatform's Material 3 and icons are published on their own version lines.
-# Material 3 held on 1.8.x until the kotlinx-datetime migration (dependency-update task 04): 1.9
-# pulls in kotlinx-datetime 0.7 on iOS, which ends the 0.6.x API the app still uses.
-composeMaterial3 = "1.8.2"
+composeMaterial3 = "1.9.0"
 composeMaterialIcons = "1.7.3"
 navigationEvent = "1.1.0"
-# Held on 3.5.x until the kotlinx-datetime migration (dependency-update task 04): 3.6 pulls in
-# kotlinx-datetime 0.8 (`ktor-openapi-schema`), which ends the 0.6.x API the app still uses.
-ktor = "3.5.2"
+ktor = "3.6.0"
 koin = "4.2.2"
 serialization = "1.11.0"
 coroutines = "1.11.0"
-# Held on 0.6.x until its own migration (dependency-update task 04): 0.7 moves `Instant` and `Clock`
-# to `kotlin.time`, which is a code migration, not a bump.
-datetime = "0.6.2"
+# Strict, so it wins over the `0.8.0-0.6.x-compat` artifact Ktor 3.6 asks for (`ktor-openapi-schema`,
+# which names the old types only as strings): the app uses `kotlin.time.Instant` / `Clock`, and the
+# compat artifact would bring the deprecated `kotlinx.datetime` ones back. Bump the value as usual.
+datetime = { strictly = "0.8.0" }
 lifecycle = "2.11.0"
 # 2.x by decision: Navigation 3 is a different library generation.
 navigationCompose = "2.9.2"

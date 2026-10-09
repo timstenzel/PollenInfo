@@ -10,7 +10,7 @@ import ch.stenzel.tim.polleninfo.resources.reading_age_stale_earlier
 import ch.stenzel.tim.polleninfo.resources.reading_age_stale_today
 import ch.stenzel.tim.polleninfo.resources.reading_refreshed_earlier
 import ch.stenzel.tim.polleninfo.resources.reading_refreshed_today
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

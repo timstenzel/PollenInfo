@@ -2,7 +2,7 @@ package ch.stenzel.tim.polleninfo.core.push
 
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesNameResource
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * The notification channel an alarm is posted on. [id] is the backend's `PushChannel` id and the id

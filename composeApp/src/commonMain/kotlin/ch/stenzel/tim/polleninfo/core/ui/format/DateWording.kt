@@ -5,6 +5,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.format.char
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.number
 
 /**
  * The month and weekday names of one language and how it writes a day with a month — everything a
@@ -33,13 +34,13 @@ data class DateWording(
     }
 
     /** "29 July" — a stale reading's date, a refresh from an earlier day. */
-    fun fullDate(date: LocalDate): String = dayMonth(date.dayOfMonth, monthsFull[date.monthNumber - 1])
+    fun fullDate(date: LocalDate): String = dayMonth(date.day, monthsFull[date.month.number - 1])
 
     /** "4 Sep" — the Diary's week and month axis. */
-    fun shortDate(date: LocalDate): String = dayMonth(date.dayOfMonth, monthsShort[date.monthNumber - 1])
+    fun shortDate(date: LocalDate): String = dayMonth(date.day, monthsShort[date.month.number - 1])
 
     /** "Oct" — the Diary's year axis, whose ticks are month starts. */
-    fun monthOnly(date: LocalDate): String = monthsShort[date.monthNumber - 1]
+    fun monthOnly(date: LocalDate): String = monthsShort[date.month.number - 1]
 
     /** "Mon" — day chips and alarm summaries. */
     fun weekdayShort(day: DayOfWeek): String = weekdaysShort[day.isoDayNumber - 1]

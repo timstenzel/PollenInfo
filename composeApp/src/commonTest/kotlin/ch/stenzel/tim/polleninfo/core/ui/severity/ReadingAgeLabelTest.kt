@@ -14,7 +14,7 @@ import ch.stenzel.tim.polleninfo.resources.reading_refreshed_earlier
 import ch.stenzel.tim.polleninfo.resources.reading_refreshed_today
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone

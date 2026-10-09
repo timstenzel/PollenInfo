@@ -5,8 +5,8 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.StationMeasurement
 import ch.stenzel.tim.polleninfo.core.measurement.domain.repository.StationMeasurementRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
+import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.datetime.Instant
 
 /**
  * Records the abbreviations it was asked for and replays a scripted result.

@@ -3,7 +3,7 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.result.AppError
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * What the home screen shows.

@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.measurement.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * What the home screen shows: a station's reading plus the values derived from it.

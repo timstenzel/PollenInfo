@@ -9,6 +9,7 @@ import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.usecase.GetAllStationReadingsUseCase
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -21,7 +22,6 @@ import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 
 class AllStationsViewModel(
     private val stationRepository: StationRepository,

@@ -56,7 +56,7 @@ import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.home_driven_by
 import ch.stenzel.tim.polleninfo.resources.home_load_failed
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 

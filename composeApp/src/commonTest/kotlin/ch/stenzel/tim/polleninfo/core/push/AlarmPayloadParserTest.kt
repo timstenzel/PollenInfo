@@ -3,7 +3,7 @@ package ch.stenzel.tim.polleninfo.core.push
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 class AlarmPayloadParserTest {
 

@@ -73,10 +73,10 @@ import ch.stenzel.tim.polleninfo.resources.all_stations_row_no_reading
 import ch.stenzel.tim.polleninfo.resources.all_stations_stale
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.nav_all_stations
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 

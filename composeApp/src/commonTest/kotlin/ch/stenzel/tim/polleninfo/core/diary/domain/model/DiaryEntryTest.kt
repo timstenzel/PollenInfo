@@ -2,8 +2,8 @@ package ch.stenzel.tim.polleninfo.core.diary.domain.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
 class DiaryEntryTest {

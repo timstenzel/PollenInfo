@@ -108,30 +108,32 @@ Stage 2: move to the newest stable AGP 9.x by splitting the Android side. A new 
 
 ## Task [04-kotlin-time-migration]
 
+> **Implementation notes (2026-10-09).** kotlinx-datetime 0.8.0, and with it Ktor 3.6.0 and Compose Material 3 1.9.0 (held back in task 02 for this migration). Ktor 3.6 requires `kotlinx-datetime:0.8.0-0.6.x-compat` through `ktor-openapi-schema`, which would put the compat artifact on every app classpath; that library names the old types only as strings (checked in its JVM classes and iOS klib signatures), so the catalog declares kotlinx-datetime `strictly = "0.8.0"` and `dependencyInsight` resolves plain 0.8.0 on Android, host-test and iOS classpaths. The server, which uses `java.time` only and does not declare kotlinx-datetime, still gets the compat artifact transitively from Ktor. Deprecations the bump surfaced were fixed: `LocalDate.dayOfMonth` → `day`, `monthNumber` → `month.number`, and Material 3 1.9's `MenuAnchorType` → `ExposedDropdownMenuAnchorType`. Emulator: API 36.
+
 Stage 3: lift the kotlinx-datetime pin. The app moves to the newest stable kotlinx-datetime and uses the standard library's `kotlin.time.Instant` and `kotlin.time.Clock` everywhere it used the library's own — models, mapper, reading age, Swiss "today", notification wording, the three ViewModels' injected clocks, the Android push service, and every test fixture and fake. Dates, times and zones stay in kotlinx-datetime. Reading-age boundaries, refresh captions, the feeling prompt, the diary window and notification wording behave exactly as before.
 
 ### Implementation steps
 
-- [ ] Bump kotlinx-datetime to the newest stable version; confirm on the project's Kotlin version that `kotlin.time.Instant` / `Clock` need no opt-in — if they do, stop and report.
-- [ ] Replace every `kotlinx.datetime.Instant` / `kotlinx.datetime.Clock` import in app main and test code with the `kotlin.time` types (explicit imports where names would clash), without deprecated type aliases or the compat artifact.
-- [ ] Confirm the measurement wire value still parses: `measuredAt` stays a `String` in the DTO and the mapper parses it with `kotlin.time.Instant`.
-- [ ] Adapt test clocks and fixtures to `kotlin.time.Clock` / `Instant` without changing any asserted value.
-- [ ] Remove the 0.6.x pin comment from the app's build script (next to the kotlinx-datetime dependency) and the pin paragraph from CLAUDE.md ("Reading age"), noting that `Instant` / `Clock` are `kotlin.time`.
-- [ ] Commit.
+- [x] Bump kotlinx-datetime to the newest stable version; confirm on the project's Kotlin version that `kotlin.time.Instant` / `Clock` need no opt-in — if they do, stop and report.
+- [x] Replace every `kotlinx.datetime.Instant` / `kotlinx.datetime.Clock` import in app main and test code with the `kotlin.time` types (explicit imports where names would clash), without deprecated type aliases or the compat artifact.
+- [x] Confirm the measurement wire value still parses: `measuredAt` stays a `String` in the DTO and the mapper parses it with `kotlin.time.Instant`.
+- [x] Adapt test clocks and fixtures to `kotlin.time.Clock` / `Instant` without changing any asserted value.
+- [x] Remove the 0.6.x pin comment from the app's build script (next to the kotlinx-datetime dependency) and the pin paragraph from CLAUDE.md ("Reading age"), noting that `Instant` / `Clock` are `kotlin.time`.
+- [x] Commit.
 
 ### Acceptance criteria
 
-- [ ] kotlinx-datetime is on its newest stable version and the app build script no longer contains the "Pinned to 0.6.x" comment.
-- [ ] No app source or test file imports `kotlinx.datetime.Instant` or `kotlinx.datetime.Clock` (grep finds nothing).
-- [ ] No `ExperimentalTime` opt-in was added anywhere (grep).
-- [ ] The reading-age, reading-age label, measurement mapper, notification text, payload parser, diary entry, Home, All stations and Diary ViewModel tests pass with their assertions unchanged.
-- [ ] On the emulator against `:server:run`, Home shows the "Data from HH:mm" and "Refreshed HH:mm" captions in local time.
+- [x] kotlinx-datetime is on its newest stable version and the app build script no longer contains the "Pinned to 0.6.x" comment.
+- [x] No app source or test file imports `kotlinx.datetime.Instant` or `kotlinx.datetime.Clock` (grep finds nothing).
+- [x] No `ExperimentalTime` opt-in was added anywhere (grep).
+- [x] The reading-age, reading-age label, measurement mapper, notification text, payload parser, diary entry, Home, All stations and Diary ViewModel tests pass with their assertions unchanged.
+- [x] On the emulator against `:server:run`, Home shows the "Data from HH:mm" and "Refreshed HH:mm" captions in local time.
 
 ### Quality gates
 
-- [ ] All standard checks pass.
-- [ ] Clean build with `--warning-mode all` prints no Gradle deprecation and no `w:` line.
-- [ ] CLAUDE.md no longer says kotlinx-datetime is pinned to 0.6.x (grep for `0.6.x`).
+- [x] All standard checks pass.
+- [x] Clean build with `--warning-mode all` prints no Gradle deprecation and no `w:` line.
+- [x] CLAUDE.md no longer says kotlinx-datetime is pinned to 0.6.x (grep for `0.6.x`).
 
 ## Task [05-exposed-1x-migration]
 

@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.measurement.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /**
  * One taxon's reading at the selected station.

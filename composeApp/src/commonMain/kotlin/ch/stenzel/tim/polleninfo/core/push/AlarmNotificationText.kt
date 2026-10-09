@@ -17,7 +17,7 @@ import ch.stenzel.tim.polleninfo.resources.notification_not_reported
 import ch.stenzel.tim.polleninfo.resources.notification_title
 import ch.stenzel.tim.polleninfo.resources.notification_title_no_station
 import ch.stenzel.tim.polleninfo.resources.notification_unavailable
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime

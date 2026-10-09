@@ -12,10 +12,10 @@ import ch.stenzel.tim.polleninfo.core.ui.format.loadDateWording
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import java.util.Locale
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.Clock
 import org.jetbrains.compose.resources.getString
 import org.koin.android.ext.android.inject
 

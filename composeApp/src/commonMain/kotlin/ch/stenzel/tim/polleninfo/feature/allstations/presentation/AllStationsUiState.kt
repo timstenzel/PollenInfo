@@ -2,7 +2,7 @@ package ch.stenzel.tim.polleninfo.feature.allstations.presentation
 
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.feature.allstations.domain.model.StationReading
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 /** What the All stations screen shows. */
 sealed interface AllStationsUiState {

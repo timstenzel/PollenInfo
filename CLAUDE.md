@@ -267,13 +267,16 @@ warning were ever removed, a stale reading would pass for current. Keep the two 
 
 Below it sits a second caption, "Refreshed 10:42" (`refreshedLabel` in `core/ui/severity/ReadingAgeLabel.kt`; it
 adds the date once it is no longer today). That is `Content.refreshedAt`, the time the app last
-*received* a reading, stamped by `HomeViewModel` from an injected `kotlinx.datetime.Clock`. It is
+*received* a reading, stamped by `HomeViewModel` from an injected `kotlin.time.Clock`. It is
 a different fact from `measuredAt`: within the backend's cache period a refresh moves it while the
 data time stays put, which is how the user can tell the refresh happened. It is never a warning.
 
-This is what `kotlinx-datetime` is in `commonMain` for. It is held on **0.6.x** until its migration
-(0.7 moves `Instant` and `Clock` into `kotlin.time`), and with it Ktor (3.6 pulls in datetime 0.8)
-and Compose Material 3 (1.9 pulls in 0.7 on iOS) — see the comments in `libs.versions.toml`.
+`Instant` and `Clock` are the standard library's **`kotlin.time`** types (stable, no opt-in);
+`kotlinx-datetime` in `commonMain` supplies the rest — `LocalDate`, `TimeZone`, `toLocalDateTime`,
+`todayIn`, the formatters. Never import `kotlinx.datetime.Instant` / `Clock`: they are deprecated and
+exist only in its `…-compat` artifact. Ktor asks for that artifact (`ktor-openapi-schema`, which
+names the old types only as strings), so the catalog declares kotlinx-datetime with a **strict**
+version to keep the plain one — see the comment in `libs.versions.toml`.
 
 ## Conventions
 
@@ -682,7 +685,7 @@ load; the station list is re-fetched only if it never arrived.
 
 **Refresh.** A "Refreshed 10:42" caption (`refreshedLabel`) sits above the list and is absent until
 the first round completes — `Content.refreshedAt` is stamped from an injected
-`kotlinx.datetime.Clock` (a defaulted constructor parameter, as on `HomeViewModel`) when a round
+`kotlin.time.Clock` (a defaulted constructor parameter, as on `HomeViewModel`) when a round
 completes, not when rows fill in. Pull-to-refresh wraps only the list and works from `Content`
 only: it sets `isRefreshing`, keeps the current rows exactly as they are (no reset to `Pending`),
 does **not** re-fetch the station list, and replaces all rows at once with the new round's *final*

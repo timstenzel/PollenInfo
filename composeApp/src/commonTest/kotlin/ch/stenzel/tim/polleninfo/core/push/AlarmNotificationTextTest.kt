@@ -5,9 +5,9 @@ import ch.stenzel.tim.polleninfo.core.ui.format.englishDates
 import ch.stenzel.tim.polleninfo.core.ui.format.germanDates
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 
 /**
  * Asserts on resource keys and arguments, never on English sentences: the fake lookup writes each

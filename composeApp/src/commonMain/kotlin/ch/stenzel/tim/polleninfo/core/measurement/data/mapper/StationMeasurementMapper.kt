@@ -5,7 +5,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.data.remote.dto.StationMeasure
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.StationMeasurement
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 fun StationMeasurementDto.toDomain(): StationMeasurement = StationMeasurement(
     stationAbbr = stationAbbr,

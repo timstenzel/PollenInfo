@@ -2,7 +2,7 @@ package ch.stenzel.tim.polleninfo.core.measurement.domain.model
 
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone

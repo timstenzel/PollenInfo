@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.diary.domain.model
 
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
