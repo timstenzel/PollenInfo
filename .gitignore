@@ -61,6 +61,8 @@ secrets.properties
 **/composeCompilerReports/
 **/composeMetrics/*.db
 *.db
+# …except the checked-in legacy server database the compatibility test opens.
+!/server/src/test/resources/fixtures/db/*.db
 
 # Server database (POLLENINFO_DB, default ./data/polleninfo.db relative to the working directory —
 # `server/` under `./gradlew :server:run`). Anchored on purpose: a bare `data/` would also ignore
