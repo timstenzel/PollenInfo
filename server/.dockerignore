@@ -1,0 +1,3 @@
+# The image needs the installDist output and nothing else — no sources, test classes or fixtures.
+*
+!build/install/server/**

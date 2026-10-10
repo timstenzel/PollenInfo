@@ -2,7 +2,6 @@
 .gradle/
 build/
 **/build/
-gradle-wrapper.jar
 local.properties
 
 # IntelliJ / Android Studio

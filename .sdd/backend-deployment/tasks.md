@@ -191,32 +191,32 @@ user with a capped JVM heap and starts locally against the dev database.
 
 ### Implementation steps
 
-- [ ] Commit `gradle-wrapper.jar` (remove it from `.gitignore`) so CI runs `./gradlew` from a clean checkout; update the CLAUDE.md note.
-- [ ] Add a composite action `.github/actions/setup-jvm` (JDK 21 + `gradle/actions/setup-gradle`, which caches and validates the wrapper), for every present and future workflow.
-- [ ] Runtime-only Dockerfile: a pinned `eclipse-temurin:21-jre` copying the `:server:installDist` output, a fixed non-root uid, `EXPOSE 8080`, `JAVA_OPTS` with `-Xmx512m` and `-XX:+ExitOnOutOfMemoryError`; `.dockerignore` keeps everything but the distribution out. The distribution is built by Gradle on the host or runner, because the project cannot be configured without an Android SDK.
-- [ ] Workflow `server.yml`, triggered on pull requests and pushes to `main` filtered to `server/**`, `gradle/**`, the root Gradle files, `deploy/**`, `.github/actions/**` and itself: a test-and-scan job (shared setup, `:server:test` with Testcontainers, `:server:installDist`, image build, Trivy scan with `CRITICAL`, ignore unfixed, fail the job); a publish job on `main` only that pushes `ghcr.io/timstenzel/polleninfo-server:<sha>` and `:latest`.
-- [ ] Permissions: workflow default `contents: read`; only the publish job gets `packages: write`. Every action pinned by commit SHA. No repository-wide secrets; document in `deploy/README.md` that future store credentials go into GitHub Environments with required reviewers, and that app workflows will be `android.yml` / `ios.yml`, triggered by `android-v…` / `ios-v…` tags or manually.
-- [ ] Dependabot: `gradle`, `docker` (Dockerfile), `github-actions`, weekly.
-- [ ] `CLAUDE.md` Commands: building and running the image locally; start `deploy/README.md` with that section.
+- [x] Commit `gradle-wrapper.jar` (remove it from `.gitignore`) so CI runs `./gradlew` from a clean checkout; update the CLAUDE.md note.
+- [x] Add a composite action `.github/actions/setup-jvm` (JDK 21 + `gradle/actions/setup-gradle`, which caches and validates the wrapper), for every present and future workflow.
+- [x] Runtime-only Dockerfile: a pinned `eclipse-temurin:21-jre` copying the `:server:installDist` output, a fixed non-root uid, `EXPOSE 8080`, `JAVA_OPTS` with `-Xmx512m` and `-XX:+ExitOnOutOfMemoryError`; `.dockerignore` keeps everything but the distribution out. The distribution is built by Gradle on the host or runner, because the project cannot be configured without an Android SDK.
+- [x] Workflow `server.yml`, triggered on pull requests and pushes to `main` filtered to `server/**`, `gradle/**`, the root Gradle files, `deploy/**`, `.github/actions/**` and itself: a test-and-scan job (shared setup, `:server:test` with Testcontainers, `:server:installDist`, image build, Trivy scan with `CRITICAL`, ignore unfixed, fail the job); a publish job on `main` only that pushes `ghcr.io/timstenzel/polleninfo-server:<sha>` and `:latest`.
+- [x] Permissions: workflow default `contents: read`; only the publish job gets `packages: write`. Every action pinned by commit SHA. No repository-wide secrets; document in `deploy/README.md` that future store credentials go into GitHub Environments with required reviewers, and that app workflows will be `android.yml` / `ios.yml`, triggered by `android-v…` / `ios-v…` tags or manually.
+- [x] Dependabot: `gradle`, `docker` (Dockerfile), `github-actions`, weekly.
+- [x] `CLAUDE.md` Commands: building and running the image locally; start `deploy/README.md` with that section.
 
 ### Acceptance criteria
 
-- [ ] After `./gradlew :server:installDist`, `docker build` succeeds on a machine whose build does not need an Android SDK for the image step, and the image started with `POLLENINFO_ENV=development` and `DB_URL=jdbc:postgresql://postgres:5432/polleninfo` on the dev compose network answers `GET /health` with `OK`.
-- [ ] `docker run --rm --entrypoint id <image> -u` prints the fixed non-zero uid.
-- [ ] `docker run --rm --entrypoint find <image> / -name '*.json' -path '*fcm*' -o -name '*Test*.class'` finds nothing.
-- [ ] A push to `main` touching `server/` produces a green run and a package `polleninfo-server` tagged with the commit SHA; a pull request run executes tests and scan and publishes nothing.
-- [ ] A push that changes only files under `composeApp/` (or only `CLAUDE.md`) does not start `server.yml`.
-- [ ] A throwaway pull request that pins the runtime base to an image with a known fixable critical CVE fails at the scan step and publishes nothing.
-- [ ] GitHub's Dependabot tab shows the three configured ecosystems without configuration errors.
+- [x] After `./gradlew :server:installDist`, `docker build` succeeds on a machine whose build does not need an Android SDK for the image step, and the image started with `POLLENINFO_ENV=development` and `DB_URL=jdbc:postgresql://postgres:5432/polleninfo` on the dev compose network answers `GET /health` with `OK`.
+- [x] `docker run --rm --entrypoint id <image> -u` prints the fixed non-zero uid.
+- [x] `docker run --rm --entrypoint find <image> / -name '*.json' -path '*fcm*' -o -name '*Test*.class'` finds nothing.
+- [ ] ~~A push to `main` touching `server/` produces a green run and a package `polleninfo-server` tagged with the commit SHA; a pull request run executes tests and scan and publishes nothing.~~ *(skipped: requires pushing to GitHub `main`; no push was made from this session)*
+- [ ] ~~A push that changes only files under `composeApp/` (or only `CLAUDE.md`) does not start `server.yml`.~~ *(skipped: requires GitHub Actions runs on pushed commits)*
+- [ ] ~~A throwaway pull request that pins the runtime base to an image with a known fixable critical CVE fails at the scan step and publishes nothing.~~ *(skipped: requires opening a pull request on GitHub; locally Trivy 0.70 with the same settings reports 0 fixable critical findings on the real image)*
+- [ ] ~~GitHub's Dependabot tab shows the three configured ecosystems without configuration errors.~~ *(skipped: requires the GitHub web UI after the config is pushed)*
 
 ### Quality gates
 
-- [ ] `actionlint` reports no errors for the workflow and the composite action.
-- [ ] Every `uses:` in `.github/` references a 40-character commit SHA (grep).
-- [ ] The workflow declares `permissions: contents: read` at top level and `packages: write` only on the publish job (grep or `actionlint` output).
-- [ ] `docker build --check` (or `hadolint`) reports no errors for the Dockerfile.
-- [ ] `./gradlew :server:test` passes.
-- [ ] `git ls-files gradle/wrapper` lists `gradle-wrapper.jar`.
+- [x] `actionlint` reports no errors for the workflow and the composite action.
+- [x] Every `uses:` in `.github/` references a 40-character commit SHA (grep).
+- [x] The workflow declares `permissions: contents: read` at top level and `packages: write` only on the publish job (grep or `actionlint` output).
+- [x] `docker build --check` (or `hadolint`) reports no errors for the Dockerfile.
+- [x] `./gradlew :server:test` passes.
+- [x] `git ls-files gradle/wrapper` lists `gradle-wrapper.jar`.
 
 ## Task 07-production-stack
 

@@ -1,0 +1,20 @@
+# Weekly update pull requests for the Gradle catalog, the server image's base and the CI actions.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    # "/" covers .github/workflows; the composite action is listed so its pins are updated too.
+    directories:
+      - /
+      - /.github/actions/setup-jvm
+    schedule:
+      interval: weekly

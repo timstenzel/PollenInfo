@@ -1,0 +1,21 @@
+# The JDK and Gradle setup every workflow shares (server.yml now, android.yml / ios.yml later), so
+# the toolchain is pinned in one place.
+name: Set up JDK and Gradle
+description: JDK 21 (Temurin) and Gradle with dependency caching and wrapper validation.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 21
+      uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      with:
+        # The open-source GitHub Actions cache rather than the commercial default.
+        cache-provider: basic
+        # Refuse to run a gradle-wrapper.jar whose checksum Gradle has not published.
+        validate-wrappers: true

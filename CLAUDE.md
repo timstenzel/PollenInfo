@@ -96,6 +96,7 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 | Run the backend on :8080        | `./gradlew :server:run` against the development database (push is logged unless `FCM_CREDENTIALS` is set) |
 | Android debug APK               | `./gradlew :androidApp:assembleDebug`       |
 | Android release APK (R8)        | `./gradlew :androidApp:assembleRelease`     |
+| Server container image          | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` (run it: `deploy/README.md`) |
 
 Notes:
 
@@ -119,7 +120,11 @@ Notes:
   9.4's `Configuration.setVisible` (deprecated since Gradle 9.1) and KGP 2.4's plain-enum
   `KotlinNativeBundleArtifactsTypes` attribute (printed once per fresh daemon). Everything else
   builds without a deprecation or a compiler warning; keep it that way.
-- `gradle-wrapper.jar` is git-ignored; `./gradlew wrapper` (or Android Studio) recreates it.
+- `gradle/wrapper/gradle-wrapper.jar` is committed, so CI can run `./gradlew` from a clean checkout;
+  CI validates it against Gradle's published checksums. Regenerate it only with `./gradlew wrapper`.
+- **CI** is `.github/workflows/server.yml` (server tests, image build, Trivy scan, publish to GHCR
+  from `main`), with the shared JDK/Gradle setup in `.github/actions/setup-jvm`; every action is
+  pinned by commit SHA. Its rules, and those for the app workflows to come, are in `deploy/README.md`.
 
 ## Data source: MeteoSwiss OGD pollen
 
