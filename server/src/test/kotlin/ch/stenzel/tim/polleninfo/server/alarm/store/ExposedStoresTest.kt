@@ -45,6 +45,7 @@ class ExposedStoresTest {
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
+    private val schedulerState = ExposedSchedulerState(database)
 
     // --- Devices ---
 
@@ -594,5 +595,21 @@ class ExposedStoresTest {
         PollenInfoDatabase.connect(TestPostgres.sharedConfig()).use { reopened ->
             assertEquals(setOf(PollenSpecies.BIRCH), ExposedNotificationLog(reopened.database).notifiedSpecies(alarmId, today))
         }
+    }
+
+    // --- Scheduler state ---
+
+    @Test
+    fun `the scheduler state is empty until a minute is recorded`() = runTest {
+        assertNull(schedulerState.lastMinute())
+    }
+
+    @Test
+    fun `the scheduler state keeps only the last recorded minute`() = runTest {
+        schedulerState.recordMinute(Instant.parse("2026-08-03T05:59:00Z"))
+        schedulerState.recordMinute(Instant.parse("2026-08-03T06:00:00Z"))
+
+        assertEquals(Instant.parse("2026-08-03T06:00:00Z"), schedulerState.lastMinute())
+        assertEquals(1L, transaction(database) { SchedulerStateTable.selectAll().count() })
     }
 }

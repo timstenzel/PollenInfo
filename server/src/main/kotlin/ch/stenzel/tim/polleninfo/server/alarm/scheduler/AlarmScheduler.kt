@@ -10,11 +10,13 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmWithToken
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.NotificationLog
+import ch.stenzel.tim.polleninfo.server.alarm.store.SchedulerState
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.CacheResult
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.StationMeasurement
 import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
@@ -36,20 +38,26 @@ import org.slf4j.LoggerFactory
  * types it has notified about today. A type is recorded only once its message was delivered, so a
  * failed send is retried on the next tick; the log is persisted, so a restart never repeats one.
  *
- * Only the current minute is evaluated. A minute the scheduler did not run in — the backend was
- * down, a tick overran — is not replayed: an "08:00 report" at 08:40 is worse than none.
+ * Each minute is processed once. [state] holds the last finished minute across restarts, so a tick
+ * first processes, oldest first, the minutes it missed since then — a restart, a tick that overran —
+ * as long as they are at most [MAX_CATCH_UP] old, and never processes a minute already finished.
+ * Older minutes are not replayed: an "08:00 report" at 08:40 is worse than none.
  */
 class AlarmScheduler(
     private val alarms: AlarmStore,
     private val devices: DeviceStore,
     private val log: NotificationLog,
+    private val state: SchedulerState,
     private val measurements: MeasurementService,
     private val push: PushSender,
     private val clock: Clock,
     private val logger: Logger = LoggerFactory.getLogger(AlarmScheduler::class.java),
 ) {
 
-    /** The minute the last tick evaluated, so a second tick within one minute sends nothing again. */
+    /**
+     * The last minute processed, so a second tick within one minute sends nothing again; read from
+     * [state] on the first tick.
+     */
     private var lastMinute: ZonedDateTime? = null
 
     /** The Swiss date the log was last pruned for; pruning runs on the first tick of each day. */
@@ -58,9 +66,31 @@ class AlarmScheduler(
     /** The Swiss date inactive devices were last pruned on, tracked apart so each step retries alone. */
     private var devicesPrunedFor: LocalDate? = null
 
+    /**
+     * Processes the current minute, after the missed ones no older than [MAX_CATCH_UP]. A minute at or
+     * before the last one processed — a second tick within a minute, a clock set back — is skipped.
+     */
     suspend fun tick() {
         val now = ZonedDateTime.now(clock).withZoneSameInstant(ALARM_ZONE).truncatedTo(ChronoUnit.MINUTES)
-        if (now == lastMinute) return
+        val last = lastMinute ?: state.lastMinute()?.atZone(ALARM_ZONE)
+        val earliest = now.minus(MAX_CATCH_UP)
+        var minute = when {
+            last == null -> now
+            last.isBefore(earliest) -> earliest
+            else -> last.plusMinutes(1)
+        }
+        while (!minute.isAfter(now)) {
+            if (minute.isBefore(now)) logger.info("Catching up the alarms of $minute")
+            process(minute)
+            minute = minute.plusMinutes(1)
+        }
+    }
+
+    /**
+     * Sends [now]'s alarms and then records the minute as finished. It counts as processed before it
+     * is sent, so a minute that fails part-way is not retried by this instance.
+     */
+    private suspend fun process(now: ZonedDateTime) {
         lastMinute = now
         pruneLog(now.toLocalDate())
         pruneInactiveDevices(now)
@@ -83,6 +113,21 @@ class AlarmScheduler(
                     }
                 }
             }
+        }
+        recordFinished(now)
+    }
+
+    /**
+     * A failed write only costs the protection against processing [minute] again after a restart,
+     * so it is logged rather than thrown.
+     */
+    private suspend fun recordFinished(minute: ZonedDateTime) {
+        try {
+            state.recordMinute(minute.toInstant())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Recording $minute as finished failed", e)
         }
     }
 
@@ -173,5 +218,13 @@ class AlarmScheduler(
     private suspend fun dropToken(alarm: Alarm, token: String) {
         logger.warn("Alarm ${alarm.id.value}: push token no longer registered, dropping it")
         devices.clearFcmToken(alarm.deviceId, token)
+    }
+
+    companion object {
+        /**
+         * How far back a tick catches up missed minutes: enough to cover a restart, short enough that
+         * a report never arrives noticeably late.
+         */
+        val MAX_CATCH_UP: Duration = Duration.ofMinutes(2)
     }
 }

@@ -34,3 +34,10 @@ CREATE TABLE notification_log (
     local_date    date        NOT NULL,             -- Swiss calendar day
     PRIMARY KEY (alarm_id, species, local_date)
 );
+
+-- The last Swiss minute the alarm scheduler finished, so a restart catches up the minutes it missed
+-- (at most two) and never processes one twice. One row at most: the key can only be true.
+CREATE TABLE scheduler_state (
+    id            boolean     PRIMARY KEY DEFAULT true CHECK (id),
+    last_minute   timestamptz NOT NULL
+);

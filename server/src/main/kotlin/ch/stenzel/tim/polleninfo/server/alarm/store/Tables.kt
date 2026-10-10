@@ -66,3 +66,14 @@ internal object NotificationLogTable : Table("notification_log") {
 
     override val primaryKey = PrimaryKey(alarmId, species, localDate)
 }
+
+/**
+ * The alarm scheduler's progress: one row at most ([id] is always `true`), holding the start of the
+ * last minute whose alarms it finished.
+ */
+internal object SchedulerStateTable : Table("scheduler_state") {
+    val id = bool("id")
+    val lastMinute = timestampWithTimeZone("last_minute")
+
+    override val primaryKey = PrimaryKey(id)
+}

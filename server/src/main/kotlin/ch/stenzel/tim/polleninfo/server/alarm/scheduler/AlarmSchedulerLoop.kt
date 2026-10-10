@@ -12,7 +12,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Runs [scheduler] at the start of every minute for the life of the application.
+ * Runs [scheduler] once at start — catching up the minutes a restart missed, and the current one —
+ * and then at the start of every minute for the life of the application.
  *
  * A tick that throws is logged and the loop carries on, so one bad minute never ends alarm delivery.
  * The loop holds no logic beyond that; [AlarmScheduler.tick] is what is tested.
@@ -20,7 +21,6 @@ import kotlinx.coroutines.launch
 fun Application.launchAlarmScheduler(scheduler: AlarmScheduler, clock: Clock) {
     val job = launch {
         while (isActive) {
-            delay(untilNextMinute(clock).toMillis())
             try {
                 scheduler.tick()
             } catch (e: CancellationException) {
@@ -28,6 +28,7 @@ fun Application.launchAlarmScheduler(scheduler: AlarmScheduler, clock: Clock) {
             } catch (e: Exception) {
                 log.error("Alarm scheduler tick failed", e)
             }
+            delay(untilNextMinute(clock).toMillis())
         }
     }
     monitor.subscribe(ApplicationStopped) { job.cancel() }

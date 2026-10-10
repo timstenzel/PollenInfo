@@ -125,24 +125,24 @@ per-day, per-type guarantee.
 
 ### Implementation steps
 
-- [ ] Amend `V1__init.sql` with a one-row `scheduler_state(last_minute timestamptz)` table.
-- [ ] A small store for it (read, write) on the app role.
-- [ ] The scheduler writes the minute after its sends for that minute are done; on start it runs the missed minutes no older than `MAX_CATCH_UP = 2 minutes` (oldest first) through the same `tick` logic for that minute, then the normal loop.
-- [ ] Tests with `MutableClock`; update `CLAUDE.md` (Alarm delivery: replace "There is no catch-up" with the two-minute rule and its reason).
+- [x] Amend `V1__init.sql` with a one-row `scheduler_state(last_minute timestamptz)` table.
+- [x] A small store for it (read, write) on the app role.
+- [x] The scheduler writes the minute after its sends for that minute are done; on start it runs the missed minutes no older than `MAX_CATCH_UP = 2 minutes` (oldest first) through the same `tick` logic for that minute, then the normal loop.
+- [x] Tests with `MutableClock`; update `CLAUDE.md` (Alarm delivery: replace "There is no catch-up" with the two-minute rule and its reason).
 
 ### Acceptance criteria
 
-- [ ] Scheduler test: last minute 07:59 stored, restart at 08:01:10 → the 08:00 daily report is sent exactly once, then 08:01 runs normally.
-- [ ] Scheduler test: last minute 07:55 stored, restart at 08:01:10 → no report for 07:56–07:58 is sent (older than two minutes); 07:59 and 08:00 are processed.
-- [ ] Scheduler test: a minute already stored as processed is not sent again by a second scheduler built on the same database.
-- [ ] Scheduler test: an empty `scheduler_state` (first ever start) catches up nothing.
-- [ ] Scheduler test: a threshold alert that already notified a type today does not notify it again during catch-up.
+- [x] Scheduler test: last minute 07:59 stored, restart at 08:01:10 → the 08:00 daily report is sent exactly once, then 08:01 runs normally.
+- [x] Scheduler test: last minute 07:55 stored, restart at 08:01:10 → no report for 07:56–07:58 is sent (older than two minutes); 07:59 and 08:00 are processed.
+- [x] Scheduler test: a minute already stored as processed is not sent again by a second scheduler built on the same database.
+- [x] Scheduler test: an empty `scheduler_state` (first ever start) catches up nothing.
+- [x] Scheduler test: a threshold alert that already notified a type today does not notify it again during catch-up.
 
 ### Quality gates
 
-- [ ] `./gradlew :server:test` passes.
-- [ ] No new compiler warning.
-- [ ] `grep -n "no catch-up" CLAUDE.md` finds no statement contradicting the two-minute rule.
+- [x] `./gradlew :server:test` passes.
+- [x] No new compiler warning.
+- [x] `grep -n "no catch-up" CLAUDE.md` finds no statement contradicting the two-minute rule.
 
 ## Task 05-abuse-protection
 

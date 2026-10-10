@@ -1434,8 +1434,8 @@ server/src/main/kotlin/.../server/
     │                   hash), DeviceId, AlarmId,
     │                   ALARM_ZONE (= SWISS_ZONE), AlarmRules, PushMessage / PushKind / PushChannel,
     │                   AlarmValidation
-    ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
-    │                   PollenInfoDatabase
+    ├── store/          DeviceStore, AlarmStore, NotificationLog, SchedulerState (+ Exposed
+    │                   implementations), tables, PollenInfoDatabase
     ├── push/           PushSender, FcmPushSender, LoggingPushSender, PushPayload (+ toData),
     │                   pushSender(config)
     ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
@@ -1577,7 +1577,9 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   CASCADE, enabled, station_abbr, species text[], min_severity, days text[], type, at_time /
   from_time / until_time time, created_at timestamptz)` with an index on `(device_id, created_at)`,
   and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date date, PK(all
-  three))` — which pollen types each threshold alert has notified about on a Swiss date. Arrays hold
+  three))` — which pollen types each threshold alert has notified about on a Swiss date — and
+  `scheduler_state(id boolean PK CHECK (id), last_minute timestamptz)`, at most one row: the last
+  minute the alarm scheduler finished (see "Alarm delivery"). Arrays hold
   enum names; instants are written at UTC (`toTimestamp()`). An alarm id that is not a UUID is
   simply not found (`toUuidOrNull()`), never an error.
 - Isolation is Postgres's default `READ COMMITTED`. **The ten-alarm limit locks the device row**
@@ -1609,9 +1611,9 @@ checks they equal `ServerConfig.DEV_*_PASSWORD`.
 
 #### Alarm delivery
 
-`alarm/scheduler/AlarmScheduler.tick()` runs at the start of every minute
-(`launchAlarmScheduler` in `Application.module()`: a coroutine on the application scope that waits
-for the next whole minute, logs and survives a failing tick, and is cancelled on
+`alarm/scheduler/AlarmScheduler.tick()` runs once at start and then at the start of every minute
+(`launchAlarmScheduler` in `Application.module()`: a coroutine on the application scope that ticks,
+waits for the next whole minute, logs and survives a failing tick, and is cancelled on
 `ApplicationStopped`). The loop holds no logic; `tick()` is the tested surface.
 
 Each tick takes the current minute in `ALARM_ZONE` (`SWISS_ZONE`, `Europe/Zurich` — every alarm day and time is
@@ -1619,9 +1621,20 @@ Swiss time, and `java.time` handles daylight saving), loads `AlarmStore.enabledW
 (enabled alarms whose device has a push token), keeps the daily reports due **this minute** and the
 threshold alerts whose window is open, groups them by station and reads each such station **once** through the routes' shared `MeasurementService`.
 Stations run in parallel children of a `supervisorScope`, each with its own `try`, so one station's
-failure — upstream or delivery — never stops another's reports. A second tick within the same minute
-does nothing. **There is no catch-up**: a minute the scheduler did not run in (backend down, clock
-jump) is never replayed, since an "08:00 report" at 08:40 is worse than none.
+failure — upstream or delivery — never stops another's reports.
+
+**Each minute is processed once, and a missed minute is caught up for two minutes.** Once a minute's
+sends are done the scheduler writes it to `alarm/store/SchedulerState` (the one-row
+`scheduler_state` table), so the record survives a restart. A tick processes, oldest first, every
+minute after the last finished one that is at most `MAX_CATCH_UP` (2 minutes) before the current
+minute, then the current one — so a deploy or crash restarting at 08:01:10 still sends the 08:00
+report, a second scheduler on the same database never processes a finished minute again, and a
+second tick within a minute (or a clock set back) does nothing. On the very first start, with no
+stored minute, only the current one runs. A minute counts as processed in memory before it is sent,
+so one that fails part-way is not retried by the same instance; a failed state write is only logged.
+**Anything older is never replayed** — a longer outage or a clock jump forward — since an "08:00
+report" at 08:40 is worse than none. Threshold alerts are unaffected by catching up: their window is
+evaluated anyway, and the notification log keeps a caught-up minute from repeating a type.
 
 **The rules are `alarm/domain/AlarmRules`** — pure, with `now` passed in, no clock, I/O or logging.
 **They decide, the app words**: a `PushMessage` is `kind` (`PushKind`), `channel`, `station`,
@@ -1721,9 +1734,13 @@ never throws for a delivery failure.
 The server logs through `logback-classic` (`server/src/main/resources/logback.xml`, INFO); without
 an SLF4J backend every log line, including the logged pushes, would be dropped.
 
-`AlarmSchedulerTest` runs `tick()` against an in-memory database, `MeasurementService` over
+`AlarmSchedulerTest` runs `tick()` against the test database, `MeasurementService` over
 `FakePollenService` (whose `failures` map fails single stations), `FakePushSender` and
 `MutableClock` — a scheduler built a second time on the same database stands in for a restart.
+The catch-up is pinned with a stored minute: 07:59 stored and a restart at 08:01:10 sends 08:00 once
+and then 08:01, 07:55 stored skips 07:56–07:58, a finished minute is not resent by a second
+scheduler, an empty state catches up nothing, and a threshold alert already sent that day is not
+repeated by caught-up minutes.
 It also pins token handling: an `Unregistered` result clears the token and the device's alarms are
 skipped from the next tick, and a new token brings them back. The device prune is pinned too: it runs
 on a Swiss day's first tick and not again that day, a throwing prune (`FlakyPrune`, a delegating

@@ -46,7 +46,7 @@ object TestPostgres {
     fun cleanDatabase(): Database {
         val database = shared.database
         execute(DATABASE, ServerConfig.DEFAULT_OWNER_USER, OWNER_PASSWORD) {
-            "TRUNCATE devices, alarms, notification_log"
+            "TRUNCATE devices, alarms, notification_log, scheduler_state"
         }
         return database
     }

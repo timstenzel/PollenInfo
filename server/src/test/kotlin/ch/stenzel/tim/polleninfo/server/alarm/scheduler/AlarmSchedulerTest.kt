@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.server.alarm.scheduler
 
+import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_ZONE
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
@@ -13,6 +14,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.DevicesTable
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
+import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedSchedulerState
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
@@ -50,6 +52,7 @@ class AlarmSchedulerTest {
     private val devices = ExposedDeviceStore(database, clock)
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
+    private val state = ExposedSchedulerState(database)
 
     /** One reading from 07:00 Swiss time: Birch MODERATE, Grasses HIGH. */
     private val pollen = FakePollenService(
@@ -73,6 +76,7 @@ class AlarmSchedulerTest {
         alarms = alarms,
         devices = devices,
         log = log,
+        state = state,
         measurements = measurements,
         push = push,
         clock = clock,
@@ -202,6 +206,77 @@ class AlarmSchedulerTest {
         scheduler().tick()
 
         assertEquals(emptyList(), push.sent)
+    }
+
+    // --- catch-up after a restart ---
+
+    /** [hhmm] on Monday 3 August 2026 in Zürich, as an instant. */
+    private fun swiss(hhmm: String): Instant =
+        LocalTime.parse(hhmm).atDate(monday).atZone(ALARM_ZONE).toInstant()
+
+    @Test
+    fun `a restart catches up the minute it missed and then runs the current one`() = runTest {
+        dailyReport("token-0800", at = LocalTime.of(8, 0))
+        dailyReport("token-0801", at = LocalTime.of(8, 1))
+        state.recordMinute(swiss("07:59"))
+        clock.now = swiss("08:01").plusSeconds(10)
+        val scheduler = scheduler()
+
+        scheduler.tick()
+        clock.advanceBy(Duration.ofSeconds(20))
+        scheduler.tick()
+
+        assertEquals(listOf("token-0800", "token-0801"), push.sent.map { it.token })
+        assertEquals(swiss("08:01"), state.lastMinute())
+    }
+
+    @Test
+    fun `a restart does not catch up minutes older than two minutes`() = runTest {
+        listOf(56, 57, 58, 59).forEach { minute -> dailyReport("token-07$minute", at = LocalTime.of(7, minute)) }
+        dailyReport("token-0800", at = LocalTime.of(8, 0))
+        state.recordMinute(swiss("07:55"))
+        clock.now = swiss("08:01").plusSeconds(10)
+
+        scheduler().tick()
+
+        assertEquals(listOf("token-0759", "token-0800"), push.sent.map { it.token })
+    }
+
+    @Test
+    fun `a minute already processed is not sent again by a scheduler built on the same database`() = runTest {
+        dailyReport("token-1")
+        scheduler().tick()
+
+        clock.advanceBy(Duration.ofSeconds(30))
+        scheduler().tick()
+
+        assertEquals(listOf("token-1"), push.sent.map { it.token })
+    }
+
+    @Test
+    fun `the first start ever catches up nothing`() = runTest {
+        dailyReport("token-1")
+        clock.now = swiss("08:01").plusSeconds(10)
+
+        scheduler().tick()
+
+        assertEquals(emptyList(), push.sent)
+        assertEquals(swiss("08:01"), state.lastMinute())
+    }
+
+    @Test
+    fun `catching up does not repeat a threshold alert already sent that day`() = runTest {
+        thresholdAlert("token-1")
+        clock.now = swiss("07:58")
+        scheduler().tick()
+        assertEquals(1, push.sent.size)
+
+        // Down for 07:59 and 08:00; back at 08:01:10 — both missed minutes are caught up.
+        clock.now = swiss("08:01").plusSeconds(10)
+        scheduler().tick()
+
+        assertEquals(1, push.sent.size)
+        assertEquals(swiss("08:01"), state.lastMinute())
     }
 
     @Test

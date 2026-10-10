@@ -22,7 +22,7 @@ class MigrationTest {
 
         assertEquals(listOf("1"), result.migrations.map { it.version })
         assertEquals(
-            listOf("alarms", "devices", "flyway_schema_history", "notification_log"),
+            listOf("alarms", "devices", "flyway_schema_history", "notification_log", "scheduler_state"),
             asOwner { connection ->
                 connection.query(
                     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
@@ -62,12 +62,21 @@ class MigrationTest {
             connection.execute(
                 "INSERT INTO notification_log VALUES ('00000000-0000-0000-0000-000000000001', 'BIRCH', '2026-08-03')",
             )
+            connection.execute("INSERT INTO scheduler_state (last_minute) VALUES (now())")
             connection.execute("UPDATE devices SET fcm_token = 'u'")
             connection.execute("UPDATE alarms SET enabled = false")
             connection.execute("UPDATE notification_log SET species = 'ASH'")
             assertEquals(listOf("u"), connection.query("SELECT fcm_token FROM devices"))
             assertEquals(listOf("f"), connection.query("SELECT enabled FROM alarms"))
             assertEquals(listOf("ASH"), connection.query("SELECT species FROM notification_log"))
+            connection.execute("UPDATE scheduler_state SET last_minute = '2026-08-03T06:00:00Z'")
+            assertEquals(listOf("1"), connection.query("SELECT count(*) FROM scheduler_state"))
+            // 23514 check_violation: scheduler_state holds one row at most.
+            val second = assertFailsWith<SQLException> {
+                connection.execute("INSERT INTO scheduler_state (id, last_minute) VALUES (false, now())")
+            }
+            assertEquals("23514", second.sqlState)
+            connection.execute("DELETE FROM scheduler_state")
             connection.execute("DELETE FROM notification_log")
             connection.execute("DELETE FROM alarms")
             connection.execute("DELETE FROM devices")
