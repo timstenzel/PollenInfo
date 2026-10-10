@@ -15,6 +15,7 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -24,7 +25,8 @@ import io.ktor.server.routing.routing
  * can install the exact configuration it wants to assert against. `Application.module()` builds the
  * production ones and passes them all in.
  *
- * Nothing here needs a database, so a test of these routes runs without one.
+ * Nothing here needs a database, so a test of these routes runs without one. The pollen routes are
+ * rate-limited per client address, `/health` is not; [configureSecurity] must be installed first.
  */
 fun Application.configureRouting(
     thresholds: PollenThresholds = PollenThresholds(),
@@ -35,13 +37,15 @@ fun Application.configureRouting(
         get("/health") {
             call.respondText("OK")
         }
-        pollenRoutes(thresholds, measurementService, historyService)
+        rateLimit(POLLEN_LIMIT) {
+            pollenRoutes(thresholds, measurementService, historyService)
+        }
     }
 }
 
 /**
  * The device and alarm routes with the device authentication they need, over stores the caller has
- * built — there are no defaults.
+ * built — there are no defaults. [configureSecurity] must be installed first.
  */
 fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) {
     configureDeviceAuthentication(devices)

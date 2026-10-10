@@ -18,6 +18,12 @@ data class ServerConfig(
     val database: DatabaseConfig,
     /** The Firebase service-account key; always set in production, optional in development. */
     val fcmCredentialsPath: Path?,
+    val rateLimits: RateLimits = RateLimits(),
+    /**
+     * Whether the client address is taken from the proxy's `X-Forwarded-For`. Only a server that
+     * nothing but its own proxy can reach may trust it, or every caller could pick its own bucket.
+     */
+    val trustedProxy: Boolean = false,
 ) {
 
     enum class Environment { PRODUCTION, DEVELOPMENT }
@@ -31,6 +37,10 @@ data class ServerConfig(
         const val DB_APP_USER = "DB_APP_USER"
         const val DB_APP_PASSWORD_FILE = "DB_APP_PASSWORD_FILE"
         const val FCM_CREDENTIALS = "FCM_CREDENTIALS"
+        const val RATE_LIMIT_REGISTER_PER_HOUR = "RATE_LIMIT_REGISTER_PER_HOUR"
+        const val RATE_LIMIT_DEVICE_PER_MINUTE = "RATE_LIMIT_DEVICE_PER_MINUTE"
+        const val RATE_LIMIT_POLLEN_PER_MINUTE = "RATE_LIMIT_POLLEN_PER_MINUTE"
+        const val TRUSTED_PROXY = "TRUSTED_PROXY"
 
         const val DEFAULT_PORT = 8080
         const val DEFAULT_OWNER_USER = "polleninfo_owner"
@@ -115,8 +125,35 @@ data class ServerConfig(
                 }
             }
 
+            /** A positive whole number from [variable], or [default] when it is not set. */
+            fun limit(variable: String, default: Int): Int = when (val text = value(variable)) {
+                null -> default
+                else -> text.toIntOrNull()?.takeIf { it > 0 } ?: run {
+                    problems += "$variable must be a whole number above 0, not '$text'"
+                    default
+                }
+            }
+
+            val rateLimits = RateLimits(
+                registerPerHour = limit(RATE_LIMIT_REGISTER_PER_HOUR, RateLimits.DEFAULT_REGISTER_PER_HOUR),
+                devicePerMinute = limit(RATE_LIMIT_DEVICE_PER_MINUTE, RateLimits.DEFAULT_DEVICE_PER_MINUTE),
+                pollenPerMinute = limit(RATE_LIMIT_POLLEN_PER_MINUTE, RateLimits.DEFAULT_POLLEN_PER_MINUTE),
+            )
+
+            // In production the server sits behind Caddy, the only peer that can reach it; a
+            // development server is reached directly, where the header is whatever the caller says.
+            val trustedProxy = when (val text = value(TRUSTED_PROXY)?.lowercase()) {
+                null -> production
+                "true" -> true
+                "false" -> false
+                else -> {
+                    problems += "$TRUSTED_PROXY must be 'true' or 'false', not '$text'"
+                    production
+                }
+            }
+
             if (problems.isNotEmpty()) throw ConfigException(problems)
-            return ServerConfig(environment, port, database, fcmCredentialsPath)
+            return ServerConfig(environment, port, database, fcmCredentialsPath, rateLimits, trustedProxy)
         }
 
         /** The [load] file reader for real files: `null` for one that is missing or unreadable. */
@@ -127,6 +164,25 @@ data class ServerConfig(
         } catch (e: SecurityException) {
             null
         }
+    }
+}
+
+/**
+ * How many requests a caller may make before it gets a `429`: registrations per client address and
+ * hour, device calls per device and minute, pollen reads per client address and minute.
+ *
+ * The pollen limit leaves room for the All stations tab, which reads all fifteen stations at once:
+ * eight full refreshes a minute from one address still pass.
+ */
+data class RateLimits(
+    val registerPerHour: Int = DEFAULT_REGISTER_PER_HOUR,
+    val devicePerMinute: Int = DEFAULT_DEVICE_PER_MINUTE,
+    val pollenPerMinute: Int = DEFAULT_POLLEN_PER_MINUTE,
+) {
+    companion object {
+        const val DEFAULT_REGISTER_PER_HOUR = 5
+        const val DEFAULT_DEVICE_PER_MINUTE = 60
+        const val DEFAULT_POLLEN_PER_MINUTE = 120
     }
 }
 

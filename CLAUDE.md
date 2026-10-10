@@ -1409,8 +1409,8 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
 ### Server conventions
 
 Ktor plugin configuration is split into `plugins/` extension functions on `Application`
-(`configureSerialization`, `configureLogging`, `configureRouting`, `configureAlarmRouting`) and
-composed in `Application.module(config)`, which also builds the long-lived collaborators once — the
+(`configureSerialization`, `configureLogging`, `configureSecurity`, `configureRouting`,
+`configureAlarmRouting`) and composed in `Application.module(config)`, which also builds the long-lived collaborators once — the
 upstream `PollenService` (via `meteoSwissPollenService`), the `MeasurementService` and the
 `HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`
 (health and pollen, no database) and `configureAlarmRouting(devices, alarms)` (no defaults), then
@@ -1420,8 +1420,8 @@ feature package, taking their collaborators as parameters so tests can supply th
 ```
 server/src/main/kotlin/.../server/
 ├── config/             ServerConfig (+ DatabaseConfig, ConfigException)
-├── plugins/            configureSerialization / configureLogging / configureRouting /
-│                       configureAlarmRouting
+├── plugins/            configureSerialization / configureLogging / configureSecurity /
+│                       configureRouting / configureAlarmRouting (+ configureDeviceAuthentication)
 ├── pollen/
 │   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds, SWISS_ZONE
 │   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
@@ -1475,6 +1475,43 @@ independently of the domain.
 (auth) = `Authorization: Bearer <deviceToken>`; a missing, malformed or unknown token is `401` with
 `WWW-Authenticate: Bearer`, checked before the body is read (so an invalid body without a token is
 a `401`, not a `400`).
+
+Every route can also answer:
+
+| Status | When |
+| --- | --- |
+| `429 {error}` + `Retry-After` | A rate limit is exhausted (below); `/health` is never limited |
+| `413 {error}` | A request body over 16 KB (`MAX_BODY_BYTES`), declared or chunked |
+| `500 {"error":"internal error"}` | Any unexpected exception — the details are logged, never sent |
+
+#### Abuse protection
+
+`plugins/Security.kt`'s `configureSecurity(rateLimits, trustedProxy)` holds all of it, and must be
+installed **before** the routes, since `rateLimit(...)` looks its limiter up when a route is built
+(route tests call `configureSecurity()` with the defaults, or small limits of their own).
+
+- **Three limiters** (`ktor-server-rate-limit`, token buckets refilled per period), each wrapping
+  its routes: `REGISTER_LIMIT` around `POST /devices`, per client address (5 an hour);
+  `DEVICE_LIMIT` around `/devices/me/…`, **inside** `authenticate("device")` and keyed on the
+  `DevicePrincipal`, so random unknown tokens are a `401` and never get a bucket of their own (60 a
+  minute per device); `POLLEN_LIMIT` around `/pollen/…`, per client address (120 a minute — eight
+  full All stations refreshes of fifteen readings). The numbers are `RateLimits` in `ServerConfig`
+  (see "Configuration"). A limited call is `429` with `Retry-After`, its body `{error}` from
+  `StatusPages`.
+- **Client address.** `XForwardedHeaders` is installed only when `trustedProxy` is set (production,
+  where Caddy is the only peer that can reach the server), and uses the **last** `X-Forwarded-For`
+  value — the one the proxy appended. Untrusted, a spoofed header changes nothing.
+- **Body size.** `RequestBodyLimit` (`ktor-server-body-limit`) refuses a declared `Content-Length`
+  above 16 KB before the handler runs and counts a chunked body while it is read; either is `413`
+  and the handler stores nothing.
+- **Errors.** `StatusPages` answers Ktor's own client errors (bad request, unsupported media type,
+  too large) with their status and an `{error}` body; anything else is logged with method and path
+  and answered with the generic `500`. No exception text reaches a client.
+- **Logging.** `configureLogging`'s `CallLogging` format is spelled out — status, method, path,
+  duration — so no header (the token travels in `Authorization`), query or body is ever logged.
+- **No CORS plugin**: no browser page on another site may call the API.
+
+`SecurityTest` drives all of it over fake stores, without a database.
 
 #### Devices and alarms
 
@@ -1603,6 +1640,10 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
 | `DB_OWNER_USER` / `DB_APP_USER` | `polleninfo_owner` / `polleninfo_app` | optional |
 | `DB_OWNER_PASSWORD_FILE` / `DB_APP_PASSWORD_FILE` | the passwords of `deploy/dev-secrets/` | required, readable, not empty |
 | `FCM_CREDENTIALS` | unset → `LoggingPushSender` | required, readable |
+| `RATE_LIMIT_REGISTER_PER_HOUR` | `5` | optional; a whole number above 0 |
+| `RATE_LIMIT_DEVICE_PER_MINUTE` | `60` | optional; a whole number above 0 |
+| `RATE_LIMIT_POLLEN_PER_MINUTE` | `120` | optional; a whole number above 0 |
+| `TRUSTED_PROXY` | `false` | `true` by default; `true` or `false` |
 
 Passwords are only ever read from files (trimmed), never from variables, and `DatabaseConfig`'s
 `toString` omits them. A configured `FCM_CREDENTIALS` that cannot be read fails in development too.
@@ -1911,7 +1952,7 @@ Rules of the road:
 - Shared test fixtures go in a plain file in `commonTest` (see `FakeExampleRepository.kt`) —
   hand-written fakes, no mocking framework in this project.
 - Server route tests use `testApplication { application { configureSerialization();
-  configureRouting(ownThresholds) } }` and pass in their own collaborators, so a test can assert
+  configureSecurity(); configureRouting(ownThresholds) } }` and pass in their own collaborators, so a test can assert
   against the exact configuration it installed (see `PollenRoutesTest`).
 - Pin boundaries from both sides. `SpeciesThresholdsTest` is the model: every band bound is
   asserted at the edge and just below it, since an off-by-one there silently mislabels severity.

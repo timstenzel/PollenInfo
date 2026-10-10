@@ -156,28 +156,28 @@ cross-origin access is granted.
 
 ### Implementation steps
 
-- [ ] Add `ktor-server-rate-limit` and `ktor-server-forwarded-header`.
-- [ ] Extend the configuration object with the three limits (`RATE_LIMIT_*`) and a trusted-proxy flag (default on in production, off in development).
-- [ ] Install `XForwardedHeaders` only when trusted. Install three named limiters: `register` by address around `POST /devices`; `device` **inside** `authenticate("device")`, keyed on the principal, so random unknown tokens cannot each get a bucket; `pollen` by address around the pollen routes. `/health` unlimited.
-- [ ] `StatusPages`: a `429` handler with an `{error}` body (keeping `Retry-After`), and a catch-all that logs and answers a generic `500 {error}`.
-- [ ] Refuse bodies above 16 KB with `413`, for both `Content-Length` and chunked bodies (enforced while reading).
-- [ ] Make sure `CallLogging` logs neither `Authorization` nor bodies; no CORS plugin.
-- [ ] Route tests with small configured limits; update `CLAUDE.md` (REST API statuses, Server conventions, configuration variables).
+- [x] Add `ktor-server-rate-limit` and `ktor-server-forwarded-header`.
+- [x] Extend the configuration object with the three limits (`RATE_LIMIT_*`) and a trusted-proxy flag (default on in production, off in development).
+- [x] Install `XForwardedHeaders` only when trusted. Install three named limiters: `register` by address around `POST /devices`; `device` **inside** `authenticate("device")`, keyed on the principal, so random unknown tokens cannot each get a bucket; `pollen` by address around the pollen routes. `/health` unlimited.
+- [x] `StatusPages`: a `429` handler with an `{error}` body (keeping `Retry-After`), and a catch-all that logs and answers a generic `500 {error}`.
+- [x] Refuse bodies above 16 KB with `413`, for both `Content-Length` and chunked bodies (enforced while reading).
+- [x] Make sure `CallLogging` logs neither `Authorization` nor bodies; no CORS plugin.
+- [x] Route tests with small configured limits; update `CLAUDE.md` (REST API statuses, Server conventions, configuration variables).
 
 ### Acceptance criteria
 
-- [ ] For each limiter, a route test shows request N succeeds and request N+1 gets `429` with a `Retry-After` header and an `{error}` body; two addresses (or two devices) are counted independently.
-- [ ] A route test at the default pollen limit sends 120 measurement requests (8 × 15) from one address within a minute — all succeed — and the 121st gets `429`.
-- [ ] With trusted proxy on, the bucket follows `X-Forwarded-For`; with it off, a spoofed `X-Forwarded-For` does not change the bucket.
-- [ ] A 17 KB body is answered `413`, sent both with `Content-Length` and chunked, and the route's handler is not invoked (asserted through a fake store that records calls).
-- [ ] A route that throws `IllegalStateException("secret detail")` answers `500` whose body contains neither "secret detail" nor a stack trace, and the log contains the exception.
-- [ ] A request with an `Origin` header and a CORS preflight `OPTIONS` receive no `Access-Control-Allow-Origin` header.
-- [ ] Configuration tests cover the limit variables' defaults and a malformed value.
+- [x] For each limiter, a route test shows request N succeeds and request N+1 gets `429` with a `Retry-After` header and an `{error}` body; two addresses (or two devices) are counted independently.
+- [x] A route test at the default pollen limit sends 120 measurement requests (8 × 15) from one address within a minute — all succeed — and the 121st gets `429`.
+- [x] With trusted proxy on, the bucket follows `X-Forwarded-For`; with it off, a spoofed `X-Forwarded-For` does not change the bucket.
+- [x] A 17 KB body is answered `413`, sent both with `Content-Length` and chunked, and the route's handler is not invoked (asserted through a fake store that records calls).
+- [x] A route that throws `IllegalStateException("secret detail")` answers `500` whose body contains neither "secret detail" nor a stack trace, and the log contains the exception.
+- [x] A request with an `Origin` header and a CORS preflight `OPTIONS` receive no `Access-Control-Allow-Origin` header.
+- [x] Configuration tests cover the limit variables' defaults and a malformed value.
 
 ### Quality gates
 
-- [ ] `./gradlew :server:test` passes.
-- [ ] No new compiler warning.
+- [x] `./gradlew :server:test` passes.
+- [x] No new compiler warning.
 
 ## Task 06-container-image-pipeline
 

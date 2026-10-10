@@ -13,6 +13,7 @@ class RoutingTest {
     fun `health endpoint reports OK`() = testApplication {
         application {
             configureSerialization()
+            configureSecurity()
             configureRouting()
         }
 
@@ -26,6 +27,7 @@ class RoutingTest {
     fun `an unmapped path returns 404`() = testApplication {
         application {
             configureSerialization()
+            configureSecurity()
             configureRouting()
         }
 

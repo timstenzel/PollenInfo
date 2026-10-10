@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.server.pollen
 
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
+import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
@@ -48,6 +49,7 @@ class PollenRoutesTest {
     ) {
         application {
             configureSerialization()
+            configureSecurity()
             configureRouting(thresholds, measurementService, historyService)
         }
     }

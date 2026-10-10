@@ -6,6 +6,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -168,6 +169,67 @@ class ServerConfigTest {
         val printed = load(production).database.toString()
 
         assertTrue("owner-secret" !in printed && "app-secret" !in printed, printed)
+    }
+
+    @Test
+    fun `the rate limits default to five registrations an hour and 60 device and 120 pollen calls a minute`() {
+        listOf(load(emptyMap()), load(production)).forEach { config ->
+            assertEquals(RateLimits(registerPerHour = 5, devicePerMinute = 60, pollenPerMinute = 120), config.rateLimits)
+        }
+    }
+
+    @Test
+    fun `each rate limit can be set on its own`() {
+        val config = load(
+            mapOf(
+                "RATE_LIMIT_REGISTER_PER_HOUR" to "10",
+                "RATE_LIMIT_DEVICE_PER_MINUTE" to "1",
+                "RATE_LIMIT_POLLEN_PER_MINUTE" to "300",
+            ),
+        )
+
+        assertEquals(RateLimits(registerPerHour = 10, devicePerMinute = 1, pollenPerMinute = 300), config.rateLimits)
+    }
+
+    @Test
+    fun `malformed rate limits fail naming every one`() {
+        val error = assertFailsWith<ConfigException> {
+            load(
+                mapOf(
+                    "RATE_LIMIT_REGISTER_PER_HOUR" to "five",
+                    "RATE_LIMIT_DEVICE_PER_MINUTE" to "0",
+                    "RATE_LIMIT_POLLEN_PER_MINUTE" to "-1",
+                ),
+            )
+        }
+
+        assertEquals(
+            listOf(
+                "RATE_LIMIT_REGISTER_PER_HOUR must be a whole number above 0, not 'five'",
+                "RATE_LIMIT_DEVICE_PER_MINUTE must be a whole number above 0, not '0'",
+                "RATE_LIMIT_POLLEN_PER_MINUTE must be a whole number above 0, not '-1'",
+            ),
+            error.problems,
+        )
+    }
+
+    @Test
+    fun `the proxy is trusted in production and not in development by default`() {
+        assertTrue(load(production).trustedProxy)
+        assertFalse(load(emptyMap()).trustedProxy)
+    }
+
+    @Test
+    fun `TRUSTED_PROXY overrides the default either way`() {
+        assertFalse(load(production + ("TRUSTED_PROXY" to "false")).trustedProxy)
+        assertTrue(load(mapOf("TRUSTED_PROXY" to "TRUE")).trustedProxy)
+    }
+
+    @Test
+    fun `a malformed TRUSTED_PROXY fails`() {
+        val error = assertFailsWith<ConfigException> { load(mapOf("TRUSTED_PROXY" to "yes")) }
+
+        assertEquals(listOf("TRUSTED_PROXY must be 'true' or 'false', not 'yes'"), error.problems)
     }
 
     @Test

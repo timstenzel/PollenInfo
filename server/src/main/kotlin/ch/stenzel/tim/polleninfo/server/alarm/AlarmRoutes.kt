@@ -21,12 +21,15 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.CreateResult
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.MAX_ALARMS_PER_DEVICE
 import ch.stenzel.tim.polleninfo.server.plugins.DEVICE_AUTH
+import ch.stenzel.tim.polleninfo.server.plugins.DEVICE_LIMIT
 import ch.stenzel.tim.polleninfo.server.plugins.DevicePrincipal
+import ch.stenzel.tim.polleninfo.server.plugins.REGISTER_LIMIT
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -48,67 +51,72 @@ import io.ktor.server.util.getOrFail
  */
 fun Route.alarmRoutes(devices: DeviceStore, alarms: AlarmStore) {
     route("/devices") {
-        post {
-            // Caught here rather than left to StatusPages, whose catch-all would answer a malformed
-            // body with a 500.
-            val fcmToken = call.receiveFcmToken() ?: return@post
-            val token = devices.register(fcmToken)
-            call.respond(HttpStatusCode.Created, RegisterDeviceResponse(token.value))
+        rateLimit(REGISTER_LIMIT) {
+            post {
+                // Caught here rather than left to StatusPages, so the 400 says what was expected.
+                val fcmToken = call.receiveFcmToken() ?: return@post
+                val token = devices.register(fcmToken)
+                call.respond(HttpStatusCode.Created, RegisterDeviceResponse(token.value))
+            }
         }
 
+        // The device limiter inside authentication, so it counts per device and an unknown token
+        // never gets a bucket of its own.
         authenticate(DEVICE_AUTH) {
-            route("/me") {
-                delete {
-                    // Its alarms and their notification log go with it. A device that vanished since
-                    // authenticating has been deleted already, which is what was asked for.
-                    devices.delete(call.deviceId())
-                    call.respond(HttpStatusCode.NoContent)
-                }
-
-                put("/fcm-token") {
-                    val deviceId = call.deviceId()
-                    val fcmToken = call.receiveFcmToken() ?: return@put
-                    if (devices.updateFcmToken(deviceId, fcmToken)) {
+            rateLimit(DEVICE_LIMIT) {
+                route("/me") {
+                    delete {
+                        // Its alarms and their notification log go with it. A device that vanished
+                        // since authenticating has been deleted already, which is what was asked for.
+                        devices.delete(call.deviceId())
                         call.respond(HttpStatusCode.NoContent)
-                    } else {
-                        call.respond(HttpStatusCode.Unauthorized)
                     }
-                }
 
-                get("/alarms") {
-                    call.respond(alarms.list(call.deviceId()).map { it.toDto() })
-                }
-
-                post("/alarms") {
-                    val deviceId = call.deviceId()
-                    val spec = call.receiveAlarmSpec() ?: return@post
-                    when (val result = alarms.create(deviceId, spec)) {
-                        is CreateResult.Created -> call.respond(HttpStatusCode.Created, result.alarm.toDto())
-                        CreateResult.LimitReached -> call.respond(
-                            HttpStatusCode.Conflict,
-                            ErrorDto("A device can hold at most $MAX_ALARMS_PER_DEVICE alarms"),
-                        )
+                    put("/fcm-token") {
+                        val deviceId = call.deviceId()
+                        val fcmToken = call.receiveFcmToken() ?: return@put
+                        if (devices.updateFcmToken(deviceId, fcmToken)) {
+                            call.respond(HttpStatusCode.NoContent)
+                        } else {
+                            call.respond(HttpStatusCode.Unauthorized)
+                        }
                     }
-                }
 
-                // An unknown alarm, another device's alarm and an id that is not a UUID are all the
-                // same 404, so an alarm id reveals nothing to a device it does not belong to.
-                put("/alarms/{alarmId}") {
-                    val deviceId = call.deviceId()
-                    val alarmId = AlarmId(call.parameters.getOrFail("alarmId"))
-                    val spec = call.receiveAlarmSpec() ?: return@put
-                    val updated = alarms.update(deviceId, alarmId, spec)
-                        ?: return@put call.respond(HttpStatusCode.NotFound)
-                    call.respond(updated.toDto())
-                }
+                    get("/alarms") {
+                        call.respond(alarms.list(call.deviceId()).map { it.toDto() })
+                    }
 
-                delete("/alarms/{alarmId}") {
-                    val deviceId = call.deviceId()
-                    val alarmId = AlarmId(call.parameters.getOrFail("alarmId"))
-                    if (alarms.delete(deviceId, alarmId)) {
-                        call.respond(HttpStatusCode.NoContent)
-                    } else {
-                        call.respond(HttpStatusCode.NotFound)
+                    post("/alarms") {
+                        val deviceId = call.deviceId()
+                        val spec = call.receiveAlarmSpec() ?: return@post
+                        when (val result = alarms.create(deviceId, spec)) {
+                            is CreateResult.Created -> call.respond(HttpStatusCode.Created, result.alarm.toDto())
+                            CreateResult.LimitReached -> call.respond(
+                                HttpStatusCode.Conflict,
+                                ErrorDto("A device can hold at most $MAX_ALARMS_PER_DEVICE alarms"),
+                            )
+                        }
+                    }
+
+                    // An unknown alarm, another device's alarm and an id that is not a UUID are all the
+                    // same 404, so an alarm id reveals nothing to a device it does not belong to.
+                    put("/alarms/{alarmId}") {
+                        val deviceId = call.deviceId()
+                        val alarmId = AlarmId(call.parameters.getOrFail("alarmId"))
+                        val spec = call.receiveAlarmSpec() ?: return@put
+                        val updated = alarms.update(deviceId, alarmId, spec)
+                            ?: return@put call.respond(HttpStatusCode.NotFound)
+                        call.respond(updated.toDto())
+                    }
+
+                    delete("/alarms/{alarmId}") {
+                        val deviceId = call.deviceId()
+                        val alarmId = AlarmId(call.parameters.getOrFail("alarmId"))
+                        if (alarms.delete(deviceId, alarmId)) {
+                            call.respond(HttpStatusCode.NoContent)
+                        } else {
+                            call.respond(HttpStatusCode.NotFound)
+                        }
                     }
                 }
             }
@@ -139,7 +147,7 @@ private suspend fun ApplicationCall.receiveFcmToken(): String? {
  * comes before any store lookup, so an invalid body for an unknown alarm is a `400`.
  */
 private suspend fun ApplicationCall.receiveAlarmSpec(): AlarmSpec? {
-    // As for registration: a malformed body is the client's error, not a 500.
+    // As for registration: a malformed body gets a 400 that says so.
     val input = try {
         receive<AlarmInputDto>()
     } catch (e: BadRequestException) {

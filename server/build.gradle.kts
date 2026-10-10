@@ -19,6 +19,11 @@ dependencies {
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.server.auth)
+    // Abuse protection: per-address and per-device limits, the client address behind the proxy and
+    // a cap on request bodies.
+    implementation(libs.ktor.server.rate.limit)
+    implementation(libs.ktor.server.forwarded.header)
+    implementation(libs.ktor.server.body.limit)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)

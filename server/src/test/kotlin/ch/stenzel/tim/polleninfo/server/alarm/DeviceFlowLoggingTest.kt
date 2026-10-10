@@ -10,6 +10,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
+import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
@@ -63,6 +64,7 @@ class DeviceFlowLoggingTest {
     fun `a full device flow logs neither the device token nor a push address`() = testApplication {
         application {
             configureSerialization()
+            configureSecurity()
             configureLogging()
             configureAlarmRouting(devices = ExposedDeviceStore(database), alarms = ExposedAlarmStore(database))
         }

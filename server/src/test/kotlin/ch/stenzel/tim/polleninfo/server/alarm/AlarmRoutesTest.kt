@@ -14,6 +14,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.thresholdAlarm
 import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
+import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import io.ktor.client.call.body
@@ -57,6 +58,7 @@ class AlarmRoutesTest {
     private fun ApplicationTestBuilder.installApp() {
         application {
             configureSerialization()
+            configureSecurity()
             configureAlarmRouting(devices = devices, alarms = alarms)
         }
     }

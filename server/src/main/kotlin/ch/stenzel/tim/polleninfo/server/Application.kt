@@ -13,6 +13,7 @@ import ch.stenzel.tim.polleninfo.server.config.ServerConfig
 import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
+import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import ch.stenzel.tim.polleninfo.server.plugins.meteoSwissMeasurementService
 import ch.stenzel.tim.polleninfo.server.plugins.meteoSwissPollenService
@@ -52,6 +53,7 @@ fun main() {
 fun Application.module(config: ServerConfig) {
     configureSerialization()
     configureLogging()
+    configureSecurity(rateLimits = config.rateLimits, trustedProxy = config.trustedProxy)
     log.info("Starting in ${config.environment} on port ${config.port}")
 
     val thresholds = PollenThresholds()
