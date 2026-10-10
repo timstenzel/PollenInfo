@@ -9,10 +9,6 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** An anonymous app install. Whoever holds the value can read and change its alarms. */
-@JvmInline
-value class DeviceId(val value: String)
-
 @JvmInline
 value class AlarmId(val value: String)
 

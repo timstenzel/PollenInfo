@@ -39,8 +39,12 @@ fun Application.configureRouting(
     }
 }
 
-/** The device and alarm routes, over stores the caller has built — there are no defaults. */
+/**
+ * The device and alarm routes with the device authentication they need, over stores the caller has
+ * built — there are no defaults.
+ */
 fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) {
+    configureDeviceAuthentication(devices)
     routing {
         alarmRoutes(devices, alarms)
     }

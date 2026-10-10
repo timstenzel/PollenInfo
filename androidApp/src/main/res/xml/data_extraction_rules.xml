@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 (API 31) and later. The device token (:composeApp's polleninfo_device DataStore) is
+  this install's identity on the backend: copied to a cloud backup or a new phone, two installs
+  would share one identity. Leaving it out makes a restored install register afresh. Everything
+  else, the diary included, is backed up as before.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/polleninfo_device.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/polleninfo_device.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

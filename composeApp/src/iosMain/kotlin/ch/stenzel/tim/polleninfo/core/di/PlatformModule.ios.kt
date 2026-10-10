@@ -24,7 +24,8 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 
 actual val platformModule: Module = module {
-    single<DataStore<Preferences>> { createDataStore() }
+    single<DataStore<Preferences>> { createDataStore(DATA_STORE_NAME) }
+    single<DataStore<Preferences>>(DEVICE_DATA_STORE) { createDataStore(DEVICE_DATA_STORE_NAME) }
     single<CoarseLocationProvider> { IosCoarseLocationProvider() }
     single<PushTokenProvider> { UnavailablePushTokenProvider() }
     single<AppInfo> { IosAppInfo() }
@@ -36,10 +37,10 @@ actual val platformModule: Module = module {
  * Kotlin/Native, so it cannot be used here. Each platform actual picks its own dispatcher for
  * exactly this reason — the choice is not portable.
  */
-private fun createDataStore(): DataStore<Preferences> =
+private fun createDataStore(name: String): DataStore<Preferences> =
     PreferenceDataStoreFactory.createWithPath(
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        produceFile = { dataStorePath().toPath() },
+        produceFile = { dataStorePath("$name.preferences_pb").toPath() },
     )
 
 /**
@@ -49,7 +50,7 @@ private fun createDataStore(): DataStore<Preferences> =
  * compile-verified only and will first run when the wrapper is created.
  */
 @OptIn(ExperimentalForeignApi::class)
-private fun dataStorePath(): String {
+private fun dataStorePath(fileName: String): String {
     val documentDirectory: NSURL? = NSFileManager.defaultManager.URLForDirectory(
         directory = NSDocumentDirectory,
         inDomain = NSUserDomainMask,
@@ -58,7 +59,7 @@ private fun dataStorePath(): String {
         error = null,
     )
     return requireNotNull(documentDirectory?.path) { "Documents directory is unavailable" } +
-        "/$DATA_STORE_FILE_NAME"
+        "/$fileName"
 }
 
-private const val DATA_STORE_FILE_NAME = "polleninfo_preferences.preferences_pb"
+private const val DATA_STORE_NAME = "polleninfo_preferences"

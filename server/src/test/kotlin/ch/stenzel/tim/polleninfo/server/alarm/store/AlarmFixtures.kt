@@ -59,5 +59,14 @@ fun Database.insertAlarm(alarm: Alarm, createdAtMillis: Long) {
     }
 }
 
+/**
+ * Registers a device and returns its internal id, which is what the stores take — through
+ * [DeviceStore.authenticate], as a request would.
+ */
+suspend fun DeviceStore.registerDevice(fcmToken: String): DeviceId = checkNotNull(authenticate(register(fcmToken)))
+
+/** A device id no device has. */
+fun unknownDeviceId() = DeviceId(UUID.randomUUID())
+
 /** A fixed alarm id that sorts by its last digit, for tests that need id order to differ from creation order. */
 fun alarmId(lastDigit: Char) = AlarmId("00000000-0000-0000-0000-00000000000$lastDigit")

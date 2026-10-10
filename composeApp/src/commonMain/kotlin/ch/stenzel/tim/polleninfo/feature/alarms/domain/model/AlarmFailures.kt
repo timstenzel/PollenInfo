@@ -20,8 +20,9 @@ class InvalidAlarmException(message: String) : Exception(message)
 class AlarmNotFoundException : Exception("This alarm no longer exists")
 
 /**
- * The backend does not know the stored device id — its database was reset, or the id is stale. The
- * repository re-registers once on it; it only reaches a caller if the fresh id is unknown too.
+ * The backend does not know the stored device token (`401`) — its database was reset, or the install
+ * was erased or cleaned up. The repository re-registers once on it; it only reaches a caller if the
+ * fresh token is refused too.
  */
 class UnknownDeviceException : Exception("The backend does not know this device")
 
@@ -30,7 +31,7 @@ const val MAX_ALARMS = 10
 
 /**
  * The device already holds [MAX_ALARMS] alarms (`409`). The list disables "Create alarm" at the
- * limit, so this means it was reached anyway — from another install sharing the id, or a race.
+ * limit, so this means it was reached anyway — from another install sharing the token, or a race.
  */
 class AlarmLimitReachedException :
     Exception("You can have at most $MAX_ALARMS alarms. Delete one to create another.")

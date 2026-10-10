@@ -13,6 +13,7 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -31,7 +32,7 @@ class AlarmRulesTest {
         at: LocalTime = LocalTime.of(8, 0),
     ) = Alarm(
         id = AlarmId("alarm-1"),
-        deviceId = DeviceId("device-1"),
+        deviceId = DeviceId(UUID.fromString("00000000-0000-0000-0000-0000000000d1")),
         enabled = enabled,
         station = PollenStation.ZUERICH,
         species = species,

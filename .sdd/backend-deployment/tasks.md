@@ -63,32 +63,32 @@ token is kept in its own small preferences file, excluded from cloud backup and 
 
 ### Implementation steps
 
-- [ ] Amend `V1__init.sql` to the final `devices` shape (`id uuid`, `token_hash bytea unique`, `fcm_token`, `created_at`, `last_seen_at`) and `alarms.device_id uuid`.
-- [ ] Add the device-token domain (32 random bytes from `SecureRandom`, base64url without padding; SHA-256 hash) replacing the old id generator; `DeviceId` becomes the internal UUID.
-- [ ] Reshape the device store: `register` returns the token; `authenticate(token)` returns the device id or `null` and refreshes `last_seen_at` when it is older than a day; `updateFcmToken`; conditional `clearFcmToken`; `delete` (cascading). Drop `exists` and the alarm store's "unknown device" outcomes; adapt the scheduler's token drop.
-- [ ] Add `ktor-server-auth`; install a bearer provider `device` resolving to a device principal (`401` with `WWW-Authenticate: Bearer` otherwise) and rewrite the alarm routes to `POST /devices`, `DELETE /devices/me`, `PUT /devices/me/fcm-token`, `GET|POST /devices/me/alarms`, `PUT|DELETE /devices/me/alarms/{alarmId}`; authentication precedes body validation; a non-UUID alarm id is `404`.
-- [ ] App: `AlarmApiService` adds the bearer header to every device call, uses the new paths, maps `401` to `UnknownDeviceException` and a single-alarm `404` to `AlarmNotFoundException` with no list request; registration reads `deviceToken`.
-- [ ] App: `AlarmRepositoryImpl` and `DeviceRegistrationRepository` hold the token (renamed from id); `updateToken` on `401` clears only the token it used.
-- [ ] App: back `DeviceRegistrationRepository` with a second DataStore file `polleninfo_device`, provided by both platform modules under a Koin qualifier.
-- [ ] Android: data-extraction rules (API 31+) and full-backup rules (≤ API 30) excluding that file from cloud backup and device transfer, referenced from the manifest.
-- [ ] Update server and app tests; update `CLAUDE.md`: REST API table, Devices and alarms, Alarms (registration and `AlarmApiService`), Persisted user selections, Error handling.
+- [x] Amend `V1__init.sql` to the final `devices` shape (`id uuid`, `token_hash bytea unique`, `fcm_token`, `created_at`, `last_seen_at`) and `alarms.device_id uuid`.
+- [x] Add the device-token domain (32 random bytes from `SecureRandom`, base64url without padding; SHA-256 hash) replacing the old id generator; `DeviceId` becomes the internal UUID.
+- [x] Reshape the device store: `register` returns the token; `authenticate(token)` returns the device id or `null` and refreshes `last_seen_at` when it is older than a day; `updateFcmToken`; conditional `clearFcmToken`; `delete` (cascading). Drop `exists` and the alarm store's "unknown device" outcomes; adapt the scheduler's token drop.
+- [x] Add `ktor-server-auth`; install a bearer provider `device` resolving to a device principal (`401` with `WWW-Authenticate: Bearer` otherwise) and rewrite the alarm routes to `POST /devices`, `DELETE /devices/me`, `PUT /devices/me/fcm-token`, `GET|POST /devices/me/alarms`, `PUT|DELETE /devices/me/alarms/{alarmId}`; authentication precedes body validation; a non-UUID alarm id is `404`.
+- [x] App: `AlarmApiService` adds the bearer header to every device call, uses the new paths, maps `401` to `UnknownDeviceException` and a single-alarm `404` to `AlarmNotFoundException` with no list request; registration reads `deviceToken`.
+- [x] App: `AlarmRepositoryImpl` and `DeviceRegistrationRepository` hold the token (renamed from id); `updateToken` on `401` clears only the token it used.
+- [x] App: back `DeviceRegistrationRepository` with a second DataStore file `polleninfo_device`, provided by both platform modules under a Koin qualifier.
+- [x] Android: data-extraction rules (API 31+) and full-backup rules (≤ API 30) excluding that file from cloud backup and device transfer, referenced from the manifest.
+- [x] Update server and app tests; update `CLAUDE.md`: REST API table, Devices and alarms, Alarms (registration and `AlarmApiService`), Persisted user selections, Error handling.
 
 ### Acceptance criteria
 
-- [ ] Route tests cover every row of the new route table, `401` for a missing, malformed and unknown token, `401` (not `400`) for an invalid body without a token, `404` for another device's alarm and for a non-UUID alarm id, and `401` on every device call after `DELETE /devices/me`.
-- [ ] Store tests prove: register → authenticate round trip; an unknown token authenticates to `null`; the `devices` row holds the token's hash and not the token; `last_seen_at` is refreshed one day after the last refresh and not one millisecond before; deleting a device removes its alarms and their log.
-- [ ] `AlarmRepositoryImplTest` proves: every device call carries `Authorization: Bearer <token>`; a `401` re-registers once and retries once for each call; a second `401` is a `Failure`; a single-alarm `404` fails with `AlarmNotFoundException` with no list request and no registration; registration stores the returned token; `updateToken` on `401` clears the token only if it is still the one used.
-- [ ] A log-capture test drives a full device flow (register, list, create, update token, delete) through `testApplication` and asserts the captured log contains neither the device token nor the push address in full.
-- [ ] Manual: the debug app against the dev backend registers and manages alarms; after its `devices` row is deleted in `psql` it re-registers on its own on the next Alarms visit and shows an empty list without an error.
-- [ ] The merged debug and release manifests reference both backup-rules files, and both files exclude `datastore/polleninfo_device.preferences_pb` and nothing else.
+- [x] Route tests cover every row of the new route table, `401` for a missing, malformed and unknown token, `401` (not `400`) for an invalid body without a token, `404` for another device's alarm and for a non-UUID alarm id, and `401` on every device call after `DELETE /devices/me`.
+- [x] Store tests prove: register → authenticate round trip; an unknown token authenticates to `null`; the `devices` row holds the token's hash and not the token; `last_seen_at` is refreshed one day after the last refresh and not one millisecond before; deleting a device removes its alarms and their log.
+- [x] `AlarmRepositoryImplTest` proves: every device call carries `Authorization: Bearer <token>`; a `401` re-registers once and retries once for each call; a second `401` is a `Failure`; a single-alarm `404` fails with `AlarmNotFoundException` with no list request and no registration; registration stores the returned token; `updateToken` on `401` clears the token only if it is still the one used.
+- [x] A log-capture test drives a full device flow (register, list, create, update token, delete) through `testApplication` and asserts the captured log contains neither the device token nor the push address in full.
+- [x] Manual: the debug app against the dev backend registers and manages alarms; after its `devices` row is deleted in `psql` it re-registers on its own on the next Alarms visit and shows an empty list without an error.
+- [x] The merged debug and release manifests reference both backup-rules files, and both files exclude `datastore/polleninfo_device.preferences_pb` and nothing else.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest :server:test` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] `./gradlew :composeApp:checkTranslations` passes.
-- [ ] `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease` succeed with no new warning.
-- [ ] `grep -rn "{deviceId}\|checkedForAlarm\|deviceExists" server/src composeApp/src CLAUDE.md` finds nothing.
+- [x] `./gradlew :composeApp:testAndroidHostTest :server:test` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] `./gradlew :composeApp:checkTranslations` passes.
+- [x] `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease` succeed with no new warning.
+- [x] `grep -rn "{deviceId}\|checkedForAlarm\|deviceExists" server/src composeApp/src CLAUDE.md` finds nothing.
 
 ## Task 03-inactive-device-cleanup
 

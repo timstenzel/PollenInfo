@@ -463,7 +463,8 @@ alarm exceptions stay in the feature because `core/` may not import one.
 **Every API service checks the status before `body()`** through `core/network`'s
 `HttpResponse.checkSuccess()`, which throws `HttpStatusException(status)` on a non-2xx — so an error
 body is never read as the expected payload and the mapping can tell a 502 from a 404.
-(`AlarmApiService` first turns its own statuses — 400, 404, 409 — into the alarm exceptions.)
+(`AlarmApiService` first turns its own statuses — 400, 401, 409, and 404 on a single alarm — into
+the alarm exceptions.)
 
 **Screens turn an `AppError` into text** with `core/ui/error/AppErrorText.kt`:
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
@@ -521,9 +522,15 @@ whether the notification prompt has ever been shown, which Android needs (see "A
 rules apply: `DataStoreNotificationPermissionPreferences` is logic-free and untested, and consumers
 use `FakeNotificationPermissionPreferences`.
 
-`DeviceRegistrationRepository` is the third: the anonymous `deviceId` the backend issued
+`DeviceRegistrationRepository` is the third: the secret `deviceToken` the backend issued
 (`Flow<String?>`, `store`, `clear`). It is the only key to this install's alarms, so it lives on
-the device alone; clearing app data loses access to them. Same rules again:
+the device alone — in a **DataStore file of its own**, `polleninfo_device` (`DEVICE_DATA_STORE` /
+`DEVICE_DATA_STORE_NAME` in `core/di/PlatformModule.kt`, provided by both platform modules under
+that Koin qualifier), which Android's backup rules exclude from cloud backup and device transfer
+(`androidApp/src/main/res/xml/data_extraction_rules.xml` for API 31+, `backup_rules.xml` below,
+both referenced from the manifest; they name `datastore/polleninfo_device.preferences_pb` and
+nothing else, so the diary and the selections are still backed up). Clearing app data, or restoring
+onto another phone, loses access to the alarms; the app then registers afresh. Same rules again:
 `DataStoreDeviceRegistrationRepository` is logic-free, consumers use
 `FakeDeviceRegistrationRepository`.
 
@@ -626,7 +633,8 @@ Koin, wired in `core/di/AppModule.kt` — one module per layer (`networkModule`,
 
 Bindings that can only be built with platform APIs go in **`core/di/PlatformModule.kt`**
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
-`appModules`. It provides the `DataStore<Preferences>`, the `CoarseLocationProvider`, the
+`appModules`. It provides the two `DataStore<Preferences>` (the unqualified one for the selections
+and the diary, the `DEVICE_DATA_STORE` one for the device token alone), the `CoarseLocationProvider`, the
 `PushTokenProvider`, `AppInfo` and the `LanguageRepository`. The DataStore factory needs a file path and an IO dispatcher, neither of which
 exists in `commonMain`; the two providers are different platform classes on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
@@ -951,7 +959,7 @@ causes no backend contact and no device registration. The ViewModel tracks permi
 separately: a later `ENABLED` does not reload through `onPermissionState`, and a list kept through a
 revocation is shown again unchanged when notifications come back. Reloading on return is
 `onResume()` instead (below). (On Android revoking the permission kills the
-process, so in practice that return is a fresh load of the same list — same stored device id.) It
+process, so in practice that return is a fresh load of the same list — same stored device token.) It
 has Home's cycle: pull-to-refresh keeps the rows with `isRefreshing` for at least
 `MIN_REFRESH_INDICATOR`, and `Error` offers Retry. `Error(AppError.PushUnavailable)` — iOS — says
 "Push notifications aren't available on this device yet" with no Retry. Station names come from
@@ -996,34 +1004,34 @@ list, so it follows every reload — disables the FAB and shows a hint fixed *ab
 first list item a reload into the limit would leave it scrolled out of view). Material's extended
 FAB has no disabled state, so it takes the spec's disabled colours (composited, so rows do not show
 through), ignores clicks and is `disabled()` for TalkBack. If the limit is hit anyway (another
-install sharing the id, or a race), the backend's `409` arrives as `AlarmLimitReachedException`, which
+install sharing the token, or a race), the backend's `409` arrives as `AlarmLimitReachedException`, which
 the editor shows as its `saveError` (`AppError.AlarmLimitReached`).
 
 **`AlarmRepositoryImpl` registers lazily.** Every alarm call — `alarms`, `alarm(id)`, `create`,
 `update`, `delete` — goes through one `withDevice { }` wrapper:
-with no stored id it asks `PushTokenProvider` for a token (`Unavailable` → `PushUnavailableException`,
-before any request), `POST /devices`, and stores the issued id. If a device call answers `404`
-(`UnknownDeviceException` from `AlarmApiService` — the backend lost its database, say) it clears the
-id, registers once and retries once; a second `404` is a `Failure`. Registration is behind a
-`Mutex`, and a re-registration that finds a newer id already stored uses it instead of replacing it
-again, so concurrent calls never register twice. `AlarmApiService` checks status codes itself rather
-than letting `body()` read an error response as data; any status it does not map is
+with no stored device token it asks `PushTokenProvider` for a push address (`Unavailable` →
+`PushUnavailableException`, before any request), `POST /devices`, and stores the issued
+`deviceToken`. Every device call sends it as `Authorization: Bearer …` to a path under
+`/devices/me`. If a device call answers `401` (`UnknownDeviceException` from `AlarmApiService` — the
+backend lost its database, or the device was erased or cleaned up) it clears the token, registers
+once and retries once; a second `401` is a `Failure`. Registration is behind a `Mutex`, and a
+re-registration that finds a newer token already stored uses it instead of replacing it again, so
+concurrent calls never register twice. `AlarmApiService` checks status codes itself rather than
+letting `body()` read an error response as data; any status it does not map is
 `HttpStatusException`. `UnknownDeviceException` lives in `domain/model/AlarmFailures.kt` with the
 other alarm failures, since it can reach a caller.
 
-On a single alarm's path (`PUT` / `DELETE …/alarms/{alarmId}`) the backend answers the **same**
-`404` for an unknown device and for an alarm the device does not have. Treating the latter as an
-unknown device would re-register and cut the install off from all its other alarms, so on that `404`
-`AlarmApiService` asks the device's list: a `404` there is `UnknownDeviceException` (re-register as
-above), otherwise it is `AlarmNotFoundException`, a plain `Failure`. `alarm(id)` has no endpoint of its
+On a single alarm's path (`PUT` / `DELETE /devices/me/alarms/{alarmId}`) a `404` only ever means the
+alarm — an unknown device is a `401` — so `AlarmApiService` turns it into `AlarmNotFoundException`, a
+plain `Failure`, with no further request and no re-registration. `alarm(id)` has no endpoint of its
 own — it is the device's list, filtered — and fails with `AlarmNotFoundException` too.
 
 `AlarmRepositoryImpl` is also `core/push/PushTokenUpdater` (one Koin instance bound as both, so the
 two share the registration `Mutex`). `updateToken(token)` is deliberately **not** a `withDevice`
-call: with no stored id it makes no request and succeeds — the first registration will send
-whichever token is current then — and otherwise sends `PUT /devices/{id}/token`. A `404` there
-drops the stored id (if it is still the one used) so the next alarm call registers afresh, with the
-current token; it never registers from the push service itself.
+call: with no stored device token it makes no request and succeeds — the first registration will
+send whichever push address is current then — and otherwise sends `PUT /devices/me/fcm-token`. A
+`401` there drops the stored device token (only if it is still the one used) so the next alarm call
+registers afresh, with the current push address; it never registers from the push service itself.
 
 `core/notifications/` holds the platform side. `NotificationPermissionState` is `ENABLED`,
 `CAN_REQUEST` (button "Allow notifications", the system prompt) or `MUST_OPEN_SETTINGS` (button
@@ -1051,8 +1059,9 @@ prompts with an alert that does not pause the screen. It waits until `AlarmsView
 
 `AlarmsViewModelTest` covers the mapping, the flag, the list cycle, `onResume` and the optimistic
 switch (`FakeAlarmRepository.gate` holds a load in flight, `updateGate` an update).
-`AlarmRepositoryImplTest` drives registration, the `404` retry for every call, the unknown-alarm
-`404` that must not re-register, `updateToken` with and without a stored id, and both `schedule`
+`AlarmRepositoryImplTest` drives registration, the bearer header on every device call, the `401`
+retry for every call, the single-alarm `404` that must neither re-register nor ask for the list,
+`updateToken` with and without a stored token (and a `401` that keeps a newer one), and both `schedule`
 variants through `MockEngine`, with `FakePushTokenProvider` and
 `FakeDeviceRegistrationRepository`. The permission controllers and `FirebasePushTokenProvider` are
 checked by hand.
@@ -1421,7 +1430,8 @@ server/src/main/kotlin/.../server/
 │   ├── model/          Wire DTOs (@Serializable)
 │   └── PollenRoutes.kt
 └── alarm/
-    ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceId, AlarmId, newDeviceId,
+    ├── domain/         Alarm, AlarmSchedule (Daily | Threshold), DeviceToken (+ newDeviceToken,
+    │                   hash), DeviceId, AlarmId,
     │                   ALARM_ZONE (= SWISS_ZONE), AlarmRules, PushMessage / PushKind / PushChannel,
     │                   AlarmValidation
     ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
@@ -1454,22 +1464,39 @@ independently of the domain.
 | GET    | `/pollen/stations/{abbr}/history?range=week\|month\|year` | That station's daily levels, classified, over the days ending yesterday; `400 {error}` bad or missing range; `404` unknown station; `502` upstream failed with nothing retained |
 | GET    | `/pollen/species`                       | The 7 taxa with display and latin names              |
 | GET    | `/pollen/thresholds`                    | Per-species severity bands + unit                    |
-| POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceId": "…" }`; `400 {error}` if missing or blank |
-| PUT    | `/devices/{deviceId}/token`             | `{ "fcmToken": "…" }` → `204`; `400 {error}` if missing or blank; `404` unknown device |
-| GET    | `/devices/{deviceId}/alarms`            | `200 [Alarm]` in creation order; `404` unknown device |
-| POST   | `/devices/{deviceId}/alarms`            | Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `404` unknown device; `409 {error}` at 10 alarms |
-| PUT    | `/devices/{deviceId}/alarms/{alarmId}`  | Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown device, unknown alarm or another device's alarm |
-| DELETE | `/devices/{deviceId}/alarms/{alarmId}`  | `204`; `404` as for `PUT` |
+| POST   | `/devices`                              | `{ "fcmToken": "…" }` → `201 { "deviceToken": "…" }`; `400 {error}` if missing or blank |
+| DELETE | `/devices/me`                           | (auth) `204`; the device, its alarms and their notification log are deleted |
+| PUT    | `/devices/me/fcm-token`                 | (auth) `{ "fcmToken": "…" }` → `204`; `400 {error}` if missing or blank |
+| GET    | `/devices/me/alarms`                    | (auth) `200 [Alarm]` in creation order |
+| POST   | `/devices/me/alarms`                    | (auth) Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `409 {error}` at 10 alarms |
+| PUT    | `/devices/me/alarms/{alarmId}`          | (auth) Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown alarm, another device's alarm or an id that is not a UUID |
+| DELETE | `/devices/me/alarms/{alarmId}`          | (auth) `204`; `404` as for `PUT` |
+
+(auth) = `Authorization: Bearer <deviceToken>`; a missing, malformed or unknown token is `401` with
+`WWW-Authenticate: Bearer`, checked before the body is read (so an invalid body without a token is
+a `401`, not a `400`).
 
 #### Devices and alarms
 
-There are no accounts. An install registers once, anonymously, and gets a `deviceId` — 128 bits from
-`SecureRandom`, base64url without padding, always 22 characters. **The id is the secret**: whoever
-holds it can read that device's alarms; alarms hold no personal data, so this is accepted for now.
-Every path under `/devices/{deviceId}` answers `404` for an unknown id, which is how the app learns
-to register again. **`PUT …/token`** replaces the device's push token when FCM rotates it
-(`DeviceStore.updateToken`, `false` → `404`); it also brings back a device whose token was dropped. An unknown device's list is a `404`, never `200 []` — `AlarmStore.list` returns
-`null` for it so the two cannot be confused.
+There are no accounts. An install registers once, anonymously, and gets a **device token**
+(`alarm/domain/DeviceToken.kt`): 256 bits from `SecureRandom`, base64url without padding, always 43
+characters, returned by `POST /devices` this once. **The token is the secret** and travels only in
+the `Authorization` header, never in a path, so it does not reach call logs; `DeviceToken.toString`
+hides it too. The server stores only its SHA-256 (`devices.token_hash`, unique) — a fast hash is
+right for 256 random bits, and the lookup by hash happens in the database — and identifies the
+device by an internal UUID, `DeviceId`, which is never sent to the app.
+
+`plugins/Authentication.kt` installs the bearer provider `device` (`configureAlarmRouting` installs
+it with the routes): the token must have the issued shape (`DeviceToken.parseOrNull`, else no
+lookup) and `DeviceStore.authenticate` must know it, giving a `DevicePrincipal(deviceId)`; anything
+else — no header, another scheme, a header Ktor cannot parse, an unknown token — is the same `401`,
+which is how the app learns to register again. `authenticate` also refreshes `last_seen_at`, at most
+once per `LAST_SEEN_RESOLUTION` (1 day, `alarm/store`), so an active install does not write on
+every call. **`PUT /devices/me/fcm-token`** replaces the device's push address when FCM rotates it
+(`DeviceStore.updateFcmToken`); it also brings back a device whose address was dropped.
+**`DELETE /devices/me`** erases the install (`DeviceStore.delete`): its alarms and their
+notification log go with it through `ON DELETE CASCADE`, and every later call with the token is a
+`401`. The app has no call for it yet.
 
 ```json
 { "id": "…", "enabled": true, "stationAbbr": "PZH",
@@ -1484,16 +1511,17 @@ to register again. **`PUT …/token`** replaces the device's push token when FCM
 Swiss local time. The app keeps `minSeverity` a `String` on the wire, mapped through the same
 `toPollenSeverity` / `toWireName` pair as measurement severities.
 
-**Creating** (`POST /devices/{deviceId}/alarms`) takes the same shape without `id`. The body decodes
+**Creating** (`POST /devices/me/alarms`) takes the same shape without `id`. The body decodes
 into `AlarmInputDto`, whose values are all plain strings, and `alarm/domain/AlarmValidation` — pure,
 returning `ValidationResult.Valid(AlarmSpec)` | `Invalid(message)` rather than throwing — decides
 what is wrong and names it in the `400 {error}`: at least one species and one day, known species,
 severity and day names (exact enum names), a known station (case-insensitive, stored in its official
 form), and times that are exactly `HH:mm` (parsed `STRICT`, since the default resolver reads
 `24:00` as midnight). A threshold schedule also needs `until` after `from` (no window across
-midnight) and a severity other than `NONE`, since "Any" would alert on nothing at all. Validation runs before the device is
-looked up, so an invalid body for an unknown device is a `400`. `AlarmStore.create` returns
-`CreateResult.Created(alarm)` | `UnknownDevice` (→ `404`) | `LimitReached` (→ `409`). **A device holds at
+midnight) and a severity other than `NONE`, since "Any" would alert on nothing at all. Validation
+runs after authentication and before the store, so an invalid body for an unknown alarm is a `400`.
+`AlarmStore.create` returns `CreateResult.Created(alarm)` | `LimitReached` (→ `409`); there is no
+"unknown device" outcome, since authentication has already found the device. **A device holds at
 most ten alarms** (`MAX_ALARMS_PER_DEVICE`), counted in the same transaction as the insert, so two
 concurrent creates at nine cannot both get through; the id is a random UUID, and `created_at` is
 kept strictly increasing per device so two alarms created in the same millisecond still list in
@@ -1504,8 +1532,8 @@ creation order.
 `created_at`, so an edited alarm keeps its place in the list. **Deleting** removes the alarm and,
 through `ON DELETE CASCADE`, its notification log. **A device can never touch another device's
 alarm**: `AlarmStore.update` returns `null` and `delete` `false` unless the alarm id *and* the device
-id match in one statement, and the route answers the same `404` for an unknown device, an unknown
-alarm and someone else's alarm, so an alarm id reveals nothing. **An update leaves the notification
+id match in one statement, and the route answers the same `404` for an unknown alarm, someone
+else's alarm and an id that is not a UUID, so an alarm id reveals nothing. **An update leaves the notification
 log alone**: it is keyed per type, so editing a threshold alert neither repeats a type it notified
 about today nor holds back a newly added one. Pausing is an update with `enabled = false`; the
 scheduler only ever loads enabled alarms.
@@ -1535,8 +1563,8 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   from the Kotlin definitions in `Tables.kt`, which only mirror them. A schema change is a new
   migration (an applied one is never edited — Flyway's checksum would refuse to start; during
   development reset the database instead).
-- Tables (`V1__init.sql`): `devices(id PK, fcm_token NULL, created_at timestamptz)` — `fcm_token` is
-  `NULL` once FCM reported it unregistered, which keeps the device and its alarms but stops their
+- Tables (`V1__init.sql`): `devices(id uuid PK, token_hash bytea UNIQUE, fcm_token NULL, created_at,
+  last_seen_at timestamptz)` — `fcm_token` is `NULL` once FCM reported it unregistered, which keeps the device and its alarms but stops their
   delivery until the app sends a new token — `alarms(id uuid PK, device_id → devices ON DELETE
   CASCADE, enabled, station_abbr, species text[], min_severity, days text[], type, at_time /
   from_time / until_time time, created_at timestamptz)` with an index on `(device_id, created_at)`,
@@ -1667,9 +1695,9 @@ never throws for a delivery failure.
   with a warning and uses `LoggingPushSender`, which logs
   the token's last six characters and the message's data map and reports `Sent`. **The key is never
   committed.**
-- On **`Unregistered`** the scheduler calls `DeviceStore.clearToken(deviceId, token)`: the device and
+- On **`Unregistered`** the scheduler calls `DeviceStore.clearFcmToken(deviceId, token)`: the device and
   its alarms stay, but `enabledWithDeliverableDevice()` no longer returns them, so none is evaluated
-  or fetched for until `PUT /devices/{id}/token` sets a new token. The clear is conditional on the
+  or fetched for until `PUT /devices/me/fcm-token` sets a new token. The clear is conditional on the
   token still being the rejected one, so a rotation that landed in the meantime is never wiped.
   Nothing is recorded in the notification log. Other alarms of the same device in the same tick still
   try (and fail) once; from the next tick on they are skipped.
@@ -1827,8 +1855,13 @@ left it, for `MigrationTest` (V1 applies, a second migrate is a no-op, the app r
 write every table and is refused `CREATE` / `ALTER` / `DROP` / `TRUNCATE`). Without Docker every
 such test fails at once with a message saying so; the others need no database.
 `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly (`Database.insertAlarm`) when
-a test needs to choose the id or the creation time (`alarmId('a')` gives a fixed UUID). `AlarmRoutesTest` installs
-`configureAlarmRouting(devices = …, alarms = …)` with its own stores.
+a test needs to choose the id or the creation time (`alarmId('a')` gives a fixed UUID);
+`DeviceStore.registerDevice(fcmToken)` registers and returns the internal `DeviceId` the stores take,
+and `unknownDeviceId()` is one no device has. `AlarmRoutesTest` installs
+`configureAlarmRouting(devices = …, alarms = …)` with its own stores and sends the issued token with
+`bearerAuth`. `DeviceFlowLoggingTest` captures the log (logback's `ListAppender`, which is why
+`logback-classic` is also a test dependency) through a whole device flow and asserts neither the
+device token nor a push address appears in it.
 
 Rules of the road:
 

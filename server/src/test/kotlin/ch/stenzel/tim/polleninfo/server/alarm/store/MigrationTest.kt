@@ -45,12 +45,17 @@ class MigrationTest {
         PollenInfoDatabase.migrate(config)
 
         asApp { connection ->
-            connection.execute("INSERT INTO devices (id, fcm_token, created_at) VALUES ('d1', 't', now())")
+            connection.execute(
+                """
+                INSERT INTO devices (id, token_hash, fcm_token, created_at, last_seen_at)
+                VALUES ('00000000-0000-0000-0000-0000000000d1', '\x00', 't', now(), now())
+                """,
+            )
             connection.execute(
                 """
                 INSERT INTO alarms (id, device_id, enabled, station_abbr, species, min_severity, days, type,
                                     at_time, created_at)
-                VALUES ('00000000-0000-0000-0000-000000000001', 'd1', true, 'PZH', '{BIRCH}', 'NONE',
+                VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1', true, 'PZH', '{BIRCH}', 'NONE',
                         '{MONDAY}', 'daily', '08:00', now())
                 """,
             )

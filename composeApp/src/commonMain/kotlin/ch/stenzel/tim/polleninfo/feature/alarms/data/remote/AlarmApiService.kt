@@ -13,6 +13,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmExcepti
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.UnknownDeviceException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
@@ -28,9 +29,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * The backend's device and alarm endpoints. [baseUrl] is injected, as on every API service, so a
  * test can point it at its `MockEngine`.
  *
- * Status codes are checked here rather than left to `body()`, which would try to read an error
- * response as if it were the expected payload. A `404` on a device path becomes
- * [UnknownDeviceException], the signal the repository re-registers on.
+ * Every device call sends the install's device token as `Authorization: Bearer …` to a path under
+ * `/devices/me`. Status codes are checked here rather than left to `body()`, which would try to read
+ * an error response as if it were the expected payload. A `401` becomes [UnknownDeviceException],
+ * the signal the repository re-registers on.
  */
 class AlarmApiService(
     private val client: HttpClient,
@@ -43,55 +45,55 @@ class AlarmApiService(
             setBody(RegisterDeviceRequestDto(fcmToken))
         }.checkSuccess().body()
 
-    /** `404` is [UnknownDeviceException], as on every device path. */
-    suspend fun updateToken(deviceId: String, fcmToken: String) {
-        val response = client.put("$baseUrl/devices/$deviceId/token") {
+    /** `401` is [UnknownDeviceException], as on every device call. */
+    suspend fun updateToken(deviceToken: String, fcmToken: String) {
+        client.put("$baseUrl/devices/me/fcm-token") {
+            bearerAuth(deviceToken)
             contentType(ContentType.Application.Json)
             setBody(UpdateTokenRequestDto(fcmToken))
-        }
-        if (response.status == HttpStatusCode.NotFound) throw UnknownDeviceException()
-        response.checkSuccess()
+        }.checkedForDevice()
     }
 
-    suspend fun getAlarms(deviceId: String): List<AlarmDto> =
-        client.get("$baseUrl/devices/$deviceId/alarms").checkedForDevice().body()
+    suspend fun getAlarms(deviceToken: String): List<AlarmDto> =
+        client.get("$baseUrl/devices/me/alarms") {
+            bearerAuth(deviceToken)
+        }.checkedForDevice().body()
 
-    suspend fun createAlarm(deviceId: String, input: AlarmInputDto): AlarmDto =
-        client.post("$baseUrl/devices/$deviceId/alarms") {
+    suspend fun createAlarm(deviceToken: String, input: AlarmInputDto): AlarmDto =
+        client.post("$baseUrl/devices/me/alarms") {
+            bearerAuth(deviceToken)
             contentType(ContentType.Application.Json)
             setBody(input)
         }.checkedForDevice().body()
 
-    suspend fun updateAlarm(deviceId: String, alarmId: String, input: AlarmInputDto): AlarmDto =
-        client.put("$baseUrl/devices/$deviceId/alarms/$alarmId") {
+    suspend fun updateAlarm(deviceToken: String, alarmId: String, input: AlarmInputDto): AlarmDto =
+        client.put("$baseUrl/devices/me/alarms/$alarmId") {
+            bearerAuth(deviceToken)
             contentType(ContentType.Application.Json)
             setBody(input)
-        }.checkedForAlarm(deviceId).body()
+        }.checkedForSingleAlarm().body()
 
-    suspend fun deleteAlarm(deviceId: String, alarmId: String) {
-        client.delete("$baseUrl/devices/$deviceId/alarms/$alarmId").checkedForAlarm(deviceId)
+    suspend fun deleteAlarm(deviceToken: String, alarmId: String) {
+        client.delete("$baseUrl/devices/me/alarms/$alarmId") {
+            bearerAuth(deviceToken)
+        }.checkedForSingleAlarm()
     }
 
     /**
-     * On a single alarm's path the backend answers `404` alike for an unknown device and for an alarm
-     * the device does not have, so the alarm's id reveals nothing to anyone else. The two need
-     * different handling here — re-registering because of an alarm deleted elsewhere would cut this
-     * install off from all its other alarms — so a `404` asks the device's list which one it was.
+     * On a single alarm's path a `404` only ever means the alarm — an unknown device is a `401` — so
+     * it is [AlarmNotFoundException] without asking anything else.
      */
-    private suspend fun HttpResponse.checkedForAlarm(deviceId: String): HttpResponse {
-        if (status == HttpStatusCode.NotFound) {
-            getAlarms(deviceId) // Throws UnknownDeviceException if it is the device that is unknown.
-            throw AlarmNotFoundException()
-        }
+    private suspend fun HttpResponse.checkedForSingleAlarm(): HttpResponse {
+        if (status == HttpStatusCode.NotFound) throw AlarmNotFoundException()
         return checkedForDevice()
     }
 
     /**
-     * A `400` from an alarm path carries the backend's reason, which becomes [InvalidAlarmException];
+     * A `400` from a device path carries the backend's reason, which becomes [InvalidAlarmException];
      * a `409` is the alarm limit, [AlarmLimitReachedException].
      */
     private suspend fun HttpResponse.checkedForDevice(): HttpResponse {
-        if (status == HttpStatusCode.NotFound) throw UnknownDeviceException()
+        if (status == HttpStatusCode.Unauthorized) throw UnknownDeviceException()
         if (status == HttpStatusCode.Conflict) throw AlarmLimitReachedException()
         if (status == HttpStatusCode.BadRequest) {
             val reason = try {

@@ -14,6 +14,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
+import ch.stenzel.tim.polleninfo.server.alarm.store.registerDevice
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
@@ -76,7 +77,7 @@ class AlarmSchedulerTest {
         station: PollenStation = PollenStation.ZUERICH,
         minSeverity: PollenSeverity = PollenSeverity.NONE,
     ): DeviceId {
-        val device = devices.register(token)
+        val device = devices.registerDevice(token)
         val alarm = dailyAlarm(device, station = station, at = at).copy(minSeverity = minSeverity)
         database.insertAlarm(alarm, createdAtMillis = nextCreatedAt++)
         return device
@@ -123,7 +124,7 @@ class AlarmSchedulerTest {
         val scheduler = scheduler()
         scheduler.tick()
 
-        devices.updateToken(alarm.deviceId, "token-new")
+        devices.updateFcmToken(alarm.deviceId, "token-new")
         clock.advanceBy(Duration.ofMinutes(1))
         scheduler.tick()
 
@@ -227,7 +228,7 @@ class AlarmSchedulerTest {
         from: LocalTime = LocalTime.of(7, 0),
         until: LocalTime = LocalTime.of(21, 0),
     ): Alarm {
-        val device = devices.register(token)
+        val device = devices.registerDevice(token)
         val alarm = dailyAlarm(device).copy(
             species = species,
             minSeverity = minSeverity,
@@ -388,7 +389,7 @@ class AlarmSchedulerTest {
     @Test
     fun `a paused alarm sends nothing`() = runTest {
         val device = dailyReport("token-daily")
-        val daily = alarms.list(device)!!.single()
+        val daily = alarms.list(device).single()
         val threshold = thresholdAlert("token-threshold")
         alarms.update(device, daily.id, daily.asSpec { copy(enabled = false) })
         alarms.update(threshold.deviceId, threshold.id, threshold.asSpec { copy(enabled = false) })

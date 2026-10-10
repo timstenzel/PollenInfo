@@ -15,13 +15,17 @@ import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
  */
 
 /**
- * One row per registered install. [fcmToken] is nullable so the scheduler can drop a token the push
- * service reports as unregistered without forgetting the device and its alarms.
+ * One row per registered install, keyed by an internal UUID. [tokenHash] is the SHA-256 of the
+ * install's device token — the token itself is never stored. [fcmToken] is nullable so the scheduler
+ * can drop a token the push service reports as unregistered without forgetting the device and its
+ * alarms. [lastSeenAt] is refreshed by authentication at most once per [LAST_SEEN_RESOLUTION].
  */
 internal object DevicesTable : Table("devices") {
-    val id = varchar("id", length = 32)
+    val id = javaUUID("id")
+    val tokenHash = binary("token_hash")
     val fcmToken = text("fcm_token").nullable()
     val createdAt = timestampWithTimeZone("created_at")
+    val lastSeenAt = timestampWithTimeZone("last_seen_at")
 
     override val primaryKey = PrimaryKey(id)
 }

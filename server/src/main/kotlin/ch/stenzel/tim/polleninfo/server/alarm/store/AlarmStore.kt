@@ -35,11 +35,8 @@ import org.jetbrains.exposed.v1.jdbc.update
 /** Every device's alarms. A device only ever sees its own. */
 interface AlarmStore {
 
-    /**
-     * The device's alarms in creation order, or `null` if the device is not registered — which a
-     * caller must be able to tell apart from a registered device with no alarms.
-     */
-    suspend fun list(deviceId: DeviceId): List<Alarm>?
+    /** The device's alarms in creation order. */
+    suspend fun list(deviceId: DeviceId): List<Alarm>
 
     /**
      * Stores [spec] as a new alarm of the device, under a fresh id — unless the device already holds
@@ -70,9 +67,6 @@ data class AlarmWithToken(val alarm: Alarm, val fcmToken: String)
 sealed interface CreateResult {
     data class Created(val alarm: Alarm) : CreateResult
 
-    /** The device is not registered; nothing was stored. */
-    data object UnknownDevice : CreateResult
-
     /** The device already holds [MAX_ALARMS_PER_DEVICE] alarms; nothing was stored. */
     data object LimitReached : CreateResult
 }
@@ -85,10 +79,8 @@ class ExposedAlarmStore(
     private val clock: Clock = Clock.systemUTC(),
 ) : AlarmStore {
 
-    override suspend fun list(deviceId: DeviceId): List<Alarm>? = withContext(Dispatchers.IO) {
-        // One transaction, so a device cannot vanish between the two reads.
+    override suspend fun list(deviceId: DeviceId): List<Alarm> = withContext(Dispatchers.IO) {
         transaction(database) {
-            if (!deviceExists(deviceId)) return@transaction null
             AlarmsTable.selectAll()
                 .where { AlarmsTable.deviceId eq deviceId.value }
                 .orderBy(AlarmsTable.createdAt to SortOrder.ASC, AlarmsTable.id to SortOrder.ASC)
@@ -103,7 +95,9 @@ class ExposedAlarmStore(
             // device waits here and then counts this one. Counting in one transaction is not enough
             // on its own: under READ COMMITTED two concurrent creates at nine would both count nine.
             val locked = DevicesTable.selectAll().where { DevicesTable.id eq deviceId.value }.forUpdate().any()
-            if (!locked) return@transaction CreateResult.UnknownDevice
+            // Authentication established the device; only its own DELETE /devices/me can have
+            // removed it since, and then there is nobody left to answer.
+            check(locked) { "Device vanished between authentication and creating an alarm" }
             val held = AlarmsTable.selectAll().where { AlarmsTable.deviceId eq deviceId.value }.count()
             if (held >= MAX_ALARMS_PER_DEVICE) return@transaction CreateResult.LimitReached
             AlarmsTable.insert {

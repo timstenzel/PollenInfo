@@ -18,6 +18,7 @@ import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmLimitReachedException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.InvalidAlarmException
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.PushUnavailableException
+import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.UnknownDeviceException
 import ch.stenzel.tim.polleninfo.feature.alarms.thresholdAlarm
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -25,6 +26,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
@@ -80,22 +82,31 @@ class AlarmRepositoryImplTest {
     }
 
     /**
-     * A backend that issues `device-N` ids and lists [alarmsJson] for the devices it knows. Any known
-     * device can update or delete the alarms in [alarmIds]; anything else is a `404`, as on the real
-     * backend.
+     * A backend that issues `token-N` device tokens and lists [alarmsJson] for the tokens it knows.
+     * Any known token can update or delete the alarms in [alarmIds]. As on the real backend, a
+     * missing or unknown token is a `401` on every device path, and a `404` on a single alarm's path
+     * only ever means the alarm.
      */
     private fun backend(
-        knownDevices: MutableSet<String> = mutableSetOf(),
+        knownTokens: MutableSet<String> = mutableSetOf(),
         alarmsJson: String = "[]",
         alarmIds: Set<String> = setOf("daily-1"),
     ): suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData = { request ->
         val path = request.url.encodedPath
-        val alarmPath = Regex("/devices/([^/]+)/alarms/([^/]+)").matchEntire(path)
+        val known = request.bearerToken() in knownTokens
+        val alarmPath = Regex("/devices/me/alarms/([^/]+)").matchEntire(path)
         when {
+            request.method == HttpMethod.Post && path == "/devices" -> {
+                val token = "token-${knownTokens.size + 1}"
+                knownTokens += token
+                respond("""{"deviceToken":"$token"}""", HttpStatusCode.Created, jsonHeaders)
+            }
+            !path.startsWith("/devices/me/") -> respondError(HttpStatusCode.NotFound)
+            !known -> respondError(HttpStatusCode.Unauthorized)
             alarmPath != null -> {
-                val (deviceId, alarmId) = alarmPath.destructured
+                val alarmId = alarmPath.groupValues[1]
                 when {
-                    deviceId !in knownDevices || alarmId !in alarmIds -> respondError(HttpStatusCode.NotFound)
+                    alarmId !in alarmIds -> respondError(HttpStatusCode.NotFound)
                     request.method == HttpMethod.Put -> {
                         val input = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
                         val updated = JsonObject(mapOf("id" to JsonPrimitive(alarmId)) + input)
@@ -105,94 +116,118 @@ class AlarmRepositoryImplTest {
                     else -> respondError(HttpStatusCode.MethodNotAllowed)
                 }
             }
-            request.method == HttpMethod.Put && path.endsWith("/token") -> {
-                val deviceId = path.removePrefix("/devices/").removeSuffix("/token")
-                if (deviceId in knownDevices) respond("", HttpStatusCode.NoContent) else respondError(HttpStatusCode.NotFound)
+            request.method == HttpMethod.Put && path == "/devices/me/fcm-token" -> respond("", HttpStatusCode.NoContent)
+            request.method == HttpMethod.Post && path == "/devices/me/alarms" -> {
+                val input = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+                val created = JsonObject(mapOf("id" to JsonPrimitive("created-1")) + input)
+                respond(created.toString(), HttpStatusCode.Created, jsonHeaders)
             }
-            request.method == HttpMethod.Post && path == "/devices" -> {
-                val id = "device-${knownDevices.size + 1}"
-                knownDevices += id
-                respond("""{"deviceId":"$id"}""", HttpStatusCode.Created, jsonHeaders)
-            }
-            request.method == HttpMethod.Post && path.endsWith("/alarms") -> {
-                val deviceId = path.removePrefix("/devices/").removeSuffix("/alarms")
-                if (deviceId in knownDevices) {
-                    val input = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
-                    val created = JsonObject(mapOf("id" to JsonPrimitive("created-1")) + input)
-                    respond(created.toString(), HttpStatusCode.Created, jsonHeaders)
-                } else {
-                    respondError(HttpStatusCode.NotFound)
-                }
-            }
-            request.method == HttpMethod.Get && path.endsWith("/alarms") -> {
-                val deviceId = path.removePrefix("/devices/").removeSuffix("/alarms")
-                if (deviceId in knownDevices) {
-                    respond(alarmsJson, HttpStatusCode.OK, jsonHeaders)
-                } else {
-                    respondError(HttpStatusCode.NotFound)
-                }
-            }
+            request.method == HttpMethod.Get && path == "/devices/me/alarms" ->
+                respond(alarmsJson, HttpStatusCode.OK, jsonHeaders)
             else -> respondError(HttpStatusCode.MethodNotAllowed)
         }
     }
 
-    private fun HttpRequestData.describe() = "${method.value} ${url.encodedPath}"
+    /** The token of an `Authorization: Bearer …` header, or `null` without one. */
+    private fun HttpRequestData.bearerToken(): String? =
+        headers[HttpHeaders.Authorization]?.removePrefix("Bearer ")?.takeIf { it != headers[HttpHeaders.Authorization] }
+
+    /** The request with the device token it was sent with, so a test sees which token each call used. */
+    private fun HttpRequestData.describe() =
+        "${method.value} ${url.encodedPath}" + (bearerToken()?.let { " [$it]" } ?: "")
 
     @Test
-    fun `the first call registers with the push token and stores the issued id`() = runTest {
+    fun `the first call registers with the push token and stores the issued device token`() = runTest {
         val repository = repository(backend())
 
         val result = repository.alarms()
 
         assertIs<Result.Success<List<Alarm>>>(result)
-        assertEquals(listOf("POST /devices", "GET /devices/device-1/alarms"), recorded.map { it.describe() })
+        assertEquals(listOf("POST /devices", "GET /devices/me/alarms [token-1]"), recorded.map { it.describe() })
         val body = Json.parseToJsonElement((recorded.first().body as TextContent).text).jsonObject
         assertEquals("fcm-token-1", body.getValue("fcmToken").jsonPrimitive.content)
-        assertEquals("device-1", registration.stored)
+        assertEquals("token-1", registration.stored)
     }
 
     @Test
-    fun `later calls reuse the stored id without registering again`() = runTest {
+    fun `registration sends no device token`() = runTest {
+        val repository = repository(backend())
+
+        repository.alarms()
+
+        assertEquals(null, recorded.first().headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun `every device call carries the stored device token as a bearer header`() = runTest {
+        registration.store("token-7")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-7"), alarmsJson = "[$dailyJson]"))
+
+        repository.alarms()
+        repository.alarm("daily-1")
+        repository.create(draft)
+        repository.update("daily-1", draft)
+        repository.delete("daily-1")
+        repository.updateToken("fcm-token-2")
+
+        assertEquals(
+            listOf(
+                "GET /devices/me/alarms",
+                "GET /devices/me/alarms",
+                "POST /devices/me/alarms",
+                "PUT /devices/me/alarms/daily-1",
+                "DELETE /devices/me/alarms/daily-1",
+                "PUT /devices/me/fcm-token",
+            ),
+            recorded.map { "${it.method.value} ${it.url.encodedPath}" },
+        )
+        recorded.forEach { request ->
+            assertEquals("Bearer token-7", request.headers[HttpHeaders.Authorization], request.describe())
+        }
+    }
+
+    @Test
+    fun `later calls reuse the stored token without registering again`() = runTest {
         val repository = repository(backend())
 
         repository.alarms()
         repository.alarms()
 
         assertEquals(
-            listOf("POST /devices", "GET /devices/device-1/alarms", "GET /devices/device-1/alarms"),
+            listOf("POST /devices", "GET /devices/me/alarms [token-1]", "GET /devices/me/alarms [token-1]"),
             recorded.map { it.describe() },
         )
         assertEquals(1, pushTokens.callCount)
-        assertEquals(listOf("device-1"), registration.storedIds)
+        assertEquals(listOf("token-1"), registration.storedTokens)
     }
 
     @Test
-    fun `an id stored earlier is used without registering`() = runTest {
-        registration.store("device-7")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-7")))
+    fun `a token stored earlier is used without registering`() = runTest {
+        registration.store("token-7")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-7")))
 
         repository.alarms()
 
-        assertEquals(listOf("GET /devices/device-7/alarms"), recorded.map { it.describe() })
+        assertEquals(listOf("GET /devices/me/alarms [token-7]"), recorded.map { it.describe() })
         assertEquals(0, pushTokens.callCount)
     }
 
     @Test
-    fun `updateToken with a stored id sends PUT token with the new token`() = runTest {
-        registration.store("device-7")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-7")))
+    fun `updateToken with a stored token sends PUT fcm-token with the new push address`() = runTest {
+        registration.store("token-7")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-7")))
 
         val result = repository.updateToken("fcm-token-2")
 
         assertIs<Result.Success<Unit>>(result)
-        assertEquals(listOf("PUT /devices/device-7/token"), recorded.map { it.describe() })
+        assertEquals(listOf("PUT /devices/me/fcm-token [token-7]"), recorded.map { it.describe() })
         val body = Json.parseToJsonElement((recorded.single().body as TextContent).text).jsonObject
         assertEquals("fcm-token-2", body.getValue("fcmToken").jsonPrimitive.content)
-        assertEquals("device-7", registration.stored)
+        assertEquals("token-7", registration.stored)
     }
 
     @Test
-    fun `updateToken without a stored id makes no request and does not register`() = runTest {
+    fun `updateToken without a stored token makes no request and does not register`() = runTest {
         val repository = repository(backend())
 
         val result = repository.updateToken("fcm-token-2")
@@ -204,7 +239,7 @@ class AlarmRepositoryImplTest {
     }
 
     @Test
-    fun `updateToken for a device the backend forgot drops the id so the next call registers afresh`() = runTest {
+    fun `updateToken on a 401 drops the token so the next call registers afresh`() = runTest {
         registration.store("forgotten")
         val repository = repository(backend())
 
@@ -213,21 +248,38 @@ class AlarmRepositoryImplTest {
 
         assertIs<Result.Success<Unit>>(result)
         assertEquals(
-            listOf("PUT /devices/forgotten/token", "POST /devices", "GET /devices/device-1/alarms"),
+            listOf("PUT /devices/me/fcm-token [forgotten]", "POST /devices", "GET /devices/me/alarms [token-1]"),
             recorded.map { it.describe() },
         )
-        assertEquals("device-1", registration.stored)
+        assertEquals("token-1", registration.stored)
     }
 
     @Test
-    fun `updateToken fails on a server error and keeps the stored id`() = runTest {
-        registration.store("device-7")
+    fun `updateToken on a 401 keeps a token stored since by another call`() = runTest {
+        registration.store("forgotten")
+        val repository = repository {
+            // Another call re-registers while this update is on its way.
+            registration.store("token-new")
+            respondError(HttpStatusCode.Unauthorized)
+        }
+
+        val result = repository.updateToken("fcm-token-2")
+
+        assertIs<Result.Success<Unit>>(result)
+        assertEquals(listOf("PUT /devices/me/fcm-token [forgotten]"), recorded.map { it.describe() })
+        assertEquals("token-new", registration.stored)
+        assertEquals(0, registration.clearCount)
+    }
+
+    @Test
+    fun `updateToken fails on a server error and keeps the stored token`() = runTest {
+        registration.store("token-7")
         val repository = repository { respondError(HttpStatusCode.InternalServerError) }
 
         val result = repository.updateToken("fcm-token-2")
 
         assertIs<Result.Failure>(result)
-        assertEquals("device-7", registration.stored)
+        assertEquals("token-7", registration.stored)
         assertEquals(0, registration.clearCount)
     }
 
@@ -244,7 +296,7 @@ class AlarmRepositoryImplTest {
     }
 
     @Test
-    fun `a 404 for the stored id clears it then registers once and retries`() = runTest {
+    fun `a 401 for the stored token clears it then registers once and retries`() = runTest {
         registration.store("forgotten")
         val repository = repository(backend(alarmsJson = "[$dailyJson]"))
 
@@ -252,27 +304,27 @@ class AlarmRepositoryImplTest {
 
         assertEquals(listOf(dailyAlarm()), assertIs<Result.Success<List<Alarm>>>(result).data)
         assertEquals(
-            listOf("GET /devices/forgotten/alarms", "POST /devices", "GET /devices/device-1/alarms"),
+            listOf("GET /devices/me/alarms [forgotten]", "POST /devices", "GET /devices/me/alarms [token-1]"),
             recorded.map { it.describe() },
         )
         assertEquals(1, registration.clearCount)
-        assertEquals("device-1", registration.stored)
+        assertEquals("token-1", registration.stored)
     }
 
     @Test
-    fun `a second 404 after re-registering fails instead of registering again`() = runTest {
+    fun `a second 401 after re-registering fails instead of registering again`() = runTest {
         val repository = repository { request ->
             if (request.method == HttpMethod.Post) {
-                respond("""{"deviceId":"device-1"}""", HttpStatusCode.Created, jsonHeaders)
+                respond("""{"deviceToken":"token-1"}""", HttpStatusCode.Created, jsonHeaders)
             } else {
-                respondError(HttpStatusCode.NotFound)
+                respondError(HttpStatusCode.Unauthorized)
             }
         }
         registration.store("forgotten")
 
         val result = repository.alarms()
 
-        assertIs<Result.Failure>(result)
+        assertIs<UnknownDeviceException>(assertIs<Result.Failure>(result).exception)
         assertEquals(1, recorded.count { it.method == HttpMethod.Post })
         assertEquals(2, recorded.count { it.method == HttpMethod.Get })
     }
@@ -287,8 +339,18 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `a server error on the list fails without re-registering`() = runTest {
-        registration.store("device-1")
+        registration.store("token-1")
         val repository = repository { respondError(HttpStatusCode.InternalServerError) }
+
+        assertIs<Result.Failure>(repository.alarms())
+        assertEquals(1, recorded.size)
+        assertEquals(0, registration.clearCount)
+    }
+
+    @Test
+    fun `a 404 on the list is not taken for an unknown device`() = runTest {
+        registration.store("token-1")
+        val repository = repository { respondError(HttpStatusCode.NotFound) }
 
         assertIs<Result.Failure>(repository.alarms())
         assertEquals(1, recorded.size)
@@ -338,8 +400,8 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `create posts the draft and returns the stored alarm`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1")))
 
         val result = repository.create(draft)
 
@@ -348,7 +410,7 @@ class AlarmRepositoryImplTest {
         assertEquals(draft.stationAbbr, created.stationAbbr)
         assertEquals(draft.species, created.species)
         assertEquals(draft.schedule, created.schedule)
-        assertEquals(listOf("POST /devices/device-1/alarms"), recorded.map { it.describe() })
+        assertEquals(listOf("POST /devices/me/alarms [token-1]"), recorded.map { it.describe() })
         assertEquals(
             Json.parseToJsonElement(
                 """
@@ -367,24 +429,24 @@ class AlarmRepositoryImplTest {
         val repository = repository(backend())
 
         assertIs<Result.Success<Alarm>>(repository.create(draft))
-        assertEquals(listOf("POST /devices", "POST /devices/device-1/alarms"), recorded.map { it.describe() })
+        assertEquals(listOf("POST /devices", "POST /devices/me/alarms [token-1]"), recorded.map { it.describe() })
     }
 
     @Test
-    fun `create re-registers once and retries on an unknown-device 404`() = runTest {
+    fun `create re-registers once and retries on a 401`() = runTest {
         registration.store("forgotten")
         val repository = repository(backend())
 
         assertIs<Result.Success<Alarm>>(repository.create(draft))
         assertEquals(
-            listOf("POST /devices/forgotten/alarms", "POST /devices", "POST /devices/device-1/alarms"),
+            listOf("POST /devices/me/alarms [forgotten]", "POST /devices", "POST /devices/me/alarms [token-1]"),
             recorded.map { it.describe() },
         )
     }
 
     @Test
     fun `a 400 on create fails with InvalidAlarm carrying the backend's reason`() = runTest {
-        registration.store("device-1")
+        registration.store("token-1")
         val repository = repository {
             respond("""{"error":"Select at least one day"}""", HttpStatusCode.BadRequest, jsonHeaders)
         }
@@ -397,7 +459,7 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `a 409 on create fails with AlarmLimitReached without re-registering`() = runTest {
-        registration.store("device-1")
+        registration.store("token-1")
         val repository = repository {
             respond("""{"error":"A device can hold at most 10 alarms"}""", HttpStatusCode.Conflict, jsonHeaders)
         }
@@ -411,7 +473,7 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `a server error on create fails without re-registering`() = runTest {
-        registration.store("device-1")
+        registration.store("token-1")
         val repository = repository { respondError(HttpStatusCode.InternalServerError) }
 
         assertIs<Result.Failure>(repository.create(draft))
@@ -429,16 +491,16 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `alarm finds the alarm in the device's list`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmsJson = "[$dailyJson, $thresholdJson]"))
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1"), alarmsJson = "[$dailyJson, $thresholdJson]"))
 
         assertEquals(thresholdAlarm(), assertIs<Result.Success<Alarm>>(repository.alarm("threshold-1")).data)
     }
 
     @Test
     fun `alarm fails with AlarmNotFound for an id the device does not have`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmsJson = "[$dailyJson]"))
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1"), alarmsJson = "[$dailyJson]"))
 
         val failure = assertIs<Result.Failure>(repository.alarm("gone"))
 
@@ -447,14 +509,14 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `update puts the draft and returns the stored alarm`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1")))
 
         val updated = assertIs<Result.Success<Alarm>>(repository.update("daily-1", draft)).data
 
         assertEquals("daily-1", updated.id)
         assertEquals(draft.schedule, updated.schedule)
-        assertEquals(listOf("PUT /devices/device-1/alarms/daily-1"), recorded.map { it.describe() })
+        assertEquals(listOf("PUT /devices/me/alarms/daily-1 [token-1]"), recorded.map { it.describe() })
         assertEquals(
             Json.parseToJsonElement(draft.toInputDto().let { Json.encodeToString(it) }),
             Json.parseToJsonElement((recorded.single().body as TextContent).text),
@@ -462,17 +524,16 @@ class AlarmRepositoryImplTest {
     }
 
     @Test
-    fun `update re-registers once and retries on an unknown-device 404`() = runTest {
+    fun `update re-registers once and retries on a 401`() = runTest {
         registration.store("forgotten")
         val repository = repository(backend())
 
         assertIs<Result.Success<Alarm>>(repository.update("daily-1", draft))
         assertEquals(
             listOf(
-                "PUT /devices/forgotten/alarms/daily-1",
-                "GET /devices/forgotten/alarms",
+                "PUT /devices/me/alarms/daily-1 [forgotten]",
                 "POST /devices",
-                "PUT /devices/device-1/alarms/daily-1",
+                "PUT /devices/me/alarms/daily-1 [token-1]",
             ),
             recorded.map { it.describe() },
         )
@@ -481,25 +542,24 @@ class AlarmRepositoryImplTest {
 
     @Test
     fun `delete sends a DELETE and succeeds on 204`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1")))
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1")))
 
         assertIs<Result.Success<Unit>>(repository.delete("daily-1"))
-        assertEquals(listOf("DELETE /devices/device-1/alarms/daily-1"), recorded.map { it.describe() })
+        assertEquals(listOf("DELETE /devices/me/alarms/daily-1 [token-1]"), recorded.map { it.describe() })
     }
 
     @Test
-    fun `delete re-registers once and retries on an unknown-device 404`() = runTest {
+    fun `delete re-registers once and retries on a 401`() = runTest {
         registration.store("forgotten")
         val repository = repository(backend())
 
         assertIs<Result.Success<Unit>>(repository.delete("daily-1"))
         assertEquals(
             listOf(
-                "DELETE /devices/forgotten/alarms/daily-1",
-                "GET /devices/forgotten/alarms",
+                "DELETE /devices/me/alarms/daily-1 [forgotten]",
                 "POST /devices",
-                "DELETE /devices/device-1/alarms/daily-1",
+                "DELETE /devices/me/alarms/daily-1 [token-1]",
             ),
             recorded.map { it.describe() },
         )
@@ -507,22 +567,38 @@ class AlarmRepositoryImplTest {
     }
 
     @Test
-    fun `a 404 for an alarm the known device does not have fails without re-registering`() = runTest {
-        registration.store("device-1")
-        val repository = repository(backend(knownDevices = mutableSetOf("device-1"), alarmIds = emptySet()))
+    fun `a single-alarm 404 fails with AlarmNotFound with no list request and no registration`() = runTest {
+        registration.store("token-1")
+        val repository = repository(backend(knownTokens = mutableSetOf("token-1"), alarmIds = emptySet()))
 
         val updateFailure = assertIs<Result.Failure>(repository.update("gone", draft))
         val deleteFailure = assertIs<Result.Failure>(repository.delete("gone"))
 
         assertIs<AlarmNotFoundException>(updateFailure.exception)
         assertIs<AlarmNotFoundException>(deleteFailure.exception)
+        assertEquals(
+            listOf("PUT /devices/me/alarms/gone [token-1]", "DELETE /devices/me/alarms/gone [token-1]"),
+            recorded.map { it.describe() },
+        )
         assertEquals(0, registration.clearCount)
-        assertEquals(0, recorded.count { it.method == HttpMethod.Post })
+        assertEquals(0, pushTokens.callCount)
+    }
+
+    @Test
+    fun `alarm re-registers once and retries on a 401`() = runTest {
+        registration.store("forgotten")
+        val repository = repository(backend(alarmsJson = "[$dailyJson]"))
+
+        assertEquals(dailyAlarm(), assertIs<Result.Success<Alarm>>(repository.alarm("daily-1")).data)
+        assertEquals(
+            listOf("GET /devices/me/alarms [forgotten]", "POST /devices", "GET /devices/me/alarms [token-1]"),
+            recorded.map { it.describe() },
+        )
     }
 
     @Test
     fun `a 400 on update fails with InvalidAlarm carrying the backend's reason`() = runTest {
-        registration.store("device-1")
+        registration.store("token-1")
         val repository = repository {
             respond("""{"error":"Select at least one day"}""", HttpStatusCode.BadRequest, jsonHeaders)
         }

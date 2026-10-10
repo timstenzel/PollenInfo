@@ -4,14 +4,16 @@
 -- (deploy/postgres/init/01-roles.sh).
 
 CREATE TABLE devices (
-    id            varchar(32) PRIMARY KEY,
+    id            uuid        PRIMARY KEY,          -- internal; never sent to the app
+    token_hash    bytea       NOT NULL UNIQUE,      -- SHA-256 of the device token, never the token
     fcm_token     text,                             -- NULL once FCM reported it unregistered
-    created_at    timestamptz NOT NULL
+    created_at    timestamptz NOT NULL,
+    last_seen_at  timestamptz NOT NULL              -- refreshed at most once a day
 );
 
 CREATE TABLE alarms (
     id            uuid        PRIMARY KEY,
-    device_id     varchar(32) NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    device_id     uuid        NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
     enabled       boolean     NOT NULL,
     station_abbr  varchar(3)  NOT NULL,
     species       text[]      NOT NULL,             -- PollenSpecies names

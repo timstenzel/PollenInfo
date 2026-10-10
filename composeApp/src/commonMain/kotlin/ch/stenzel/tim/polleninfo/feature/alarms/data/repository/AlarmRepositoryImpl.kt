@@ -20,8 +20,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Registers lazily: no device id is requested until a call needs one, and the id is stored and
- * reused from then on. If the backend has forgotten the id, the call re-registers once and is
+ * Registers lazily: no device token is requested until a call needs one, and the token is stored and
+ * reused from then on. If the backend no longer accepts it (`401`), the call re-registers once and is
  * retried once; every call goes through [withDevice] so none can forget to.
  *
  * It is also the [PushTokenUpdater], since a rotated token belongs to the registration it keeps.
@@ -36,63 +36,64 @@ class AlarmRepositoryImpl(
     private val registrationLock = Mutex()
 
     override suspend fun alarms(): Result<List<Alarm>> = safeCall {
-        withDevice { deviceId -> api.getAlarms(deviceId).toDomain() }
+        withDevice { deviceToken -> api.getAlarms(deviceToken).toDomain() }
     }
 
     override suspend fun create(draft: AlarmDraft): Result<Alarm> = safeCall {
-        withDevice { deviceId -> api.createAlarm(deviceId, draft.toInputDto()).toDomain() }
+        withDevice { deviceToken -> api.createAlarm(deviceToken, draft.toInputDto()).toDomain() }
     }
 
     /** There is no single-alarm endpoint; the list is small and is what the backend offers. */
     override suspend fun alarm(id: String): Result<Alarm> = safeCall {
-        withDevice { deviceId -> api.getAlarms(deviceId).firstOrNull { it.id == id }?.toDomain() }
+        withDevice { deviceToken -> api.getAlarms(deviceToken).firstOrNull { it.id == id }?.toDomain() }
             ?: throw AlarmNotFoundException()
     }
 
     override suspend fun update(id: String, draft: AlarmDraft): Result<Alarm> = safeCall {
-        withDevice { deviceId -> api.updateAlarm(deviceId, id, draft.toInputDto()).toDomain() }
+        withDevice { deviceToken -> api.updateAlarm(deviceToken, id, draft.toInputDto()).toDomain() }
     }
 
     override suspend fun delete(id: String): Result<Unit> = safeCall {
-        withDevice { deviceId -> api.deleteAlarm(deviceId, id) }
+        withDevice { deviceToken -> api.deleteAlarm(deviceToken, id) }
     }
 
     /**
      * Never registers: on an install that has not registered yet the first registration sends the
-     * token current then. The lock makes a rotation during that first registration wait for its id
-     * rather than be lost. If the backend no longer knows the id, the id is dropped, so the next
-     * alarm call registers afresh — with the current token.
+     * push address current then. The lock makes a rotation during that first registration wait for
+     * its device token rather than be lost. If the backend no longer accepts the device token (`401`),
+     * it is dropped — only if it is still the one used — so the next alarm call registers afresh,
+     * with the current push address.
      */
     override suspend fun updateToken(token: String): Result<Unit> = safeCall {
-        val deviceId = registrationLock.withLock { registration.deviceId.first() } ?: return@safeCall
+        val deviceToken = registrationLock.withLock { registration.deviceToken.first() } ?: return@safeCall
         try {
-            api.updateToken(deviceId, token)
+            api.updateToken(deviceToken, token)
         } catch (e: UnknownDeviceException) {
             registrationLock.withLock {
-                if (registration.deviceId.first() == deviceId) registration.clear().orThrow()
+                if (registration.deviceToken.first() == deviceToken) registration.clear().orThrow()
             }
         }
     }
 
-    private suspend fun <T> withDevice(call: suspend (deviceId: String) -> T): T {
-        val deviceId = ensureRegistered()
+    private suspend fun <T> withDevice(call: suspend (deviceToken: String) -> T): T {
+        val deviceToken = ensureRegistered()
         return try {
-            call(deviceId)
+            call(deviceToken)
         } catch (e: UnknownDeviceException) {
-            call(replaceRegistration(stale = deviceId))
+            call(replaceRegistration(stale = deviceToken))
         }
     }
 
     private suspend fun ensureRegistered(): String = registrationLock.withLock {
-        registration.deviceId.first() ?: register()
+        registration.deviceToken.first() ?: register()
     }
 
     /**
      * Drops [stale] and registers again — unless a concurrent call has already done so, in which
-     * case its id is used rather than replaced a second time.
+     * case its token is used rather than replaced a second time.
      */
     private suspend fun replaceRegistration(stale: String): String = registrationLock.withLock {
-        val current = registration.deviceId.first()
+        val current = registration.deviceToken.first()
         if (current != null && current != stale) return@withLock current
         registration.clear().orThrow()
         register()
@@ -104,11 +105,11 @@ class AlarmRepositoryImpl(
             is PushTokenResult.Available -> result.token
             PushTokenResult.Unavailable -> throw PushUnavailableException()
         }
-        val deviceId = api.registerDevice(token).deviceId
-        // An id that was not stored is lost: fail this call rather than carry on with it, and the
+        val deviceToken = api.registerDevice(token).deviceToken
+        // A token that was not stored is lost: fail this call rather than carry on with it, and the
         // next call registers again.
-        registration.store(deviceId).orThrow()
-        return deviceId
+        registration.store(deviceToken).orThrow()
+        return deviceToken
     }
 }
 

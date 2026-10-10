@@ -145,10 +145,10 @@ class AlarmScheduler(
     /**
      * The push service no longer knows [token] — typically the app was uninstalled. The device and
      * its alarms are kept, but without a token none of them is loaded again until the app sends a
-     * new one through `PUT /devices/{id}/token`.
+     * new one through `PUT /devices/me/fcm-token`.
      */
     private suspend fun dropToken(alarm: Alarm, token: String) {
         logger.warn("Alarm ${alarm.id.value}: push token no longer registered, dropping it")
-        devices.clearToken(alarm.deviceId, token)
+        devices.clearFcmToken(alarm.deviceId, token)
     }
 }

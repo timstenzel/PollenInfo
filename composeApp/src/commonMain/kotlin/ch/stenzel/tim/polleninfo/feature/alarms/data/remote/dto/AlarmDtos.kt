@@ -6,12 +6,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RegisterDeviceRequestDto(val fcmToken: String)
 
-/** Body of `PUT /devices/{deviceId}/token`. */
+/** Body of `PUT /devices/me/fcm-token`. */
 @Serializable
 data class UpdateTokenRequestDto(val fcmToken: String)
 
+/** The device token every later device call sends as `Authorization: Bearer …`. */
 @Serializable
-data class RegisterDeviceResponseDto(val deviceId: String)
+data class RegisterDeviceResponseDto(val deviceToken: String)
 
 /**
  * Wire shape of one alarm, mirroring the server's `AlarmDto`. [days] are `DayOfWeek` names and every

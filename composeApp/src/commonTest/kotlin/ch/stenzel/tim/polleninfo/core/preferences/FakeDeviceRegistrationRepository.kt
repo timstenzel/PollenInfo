@@ -10,27 +10,27 @@ class FakeDeviceRegistrationRepository(
     initial: String? = null,
 ) : DeviceRegistrationRepository {
 
-    private val _deviceId = MutableStateFlow(initial)
-    override val deviceId: Flow<String?> = _deviceId.asStateFlow()
+    private val _deviceToken = MutableStateFlow(initial)
+    override val deviceToken: Flow<String?> = _deviceToken.asStateFlow()
 
-    /** Every id ever stored, in order, so a test can tell "reused" from "registered again". */
-    val storedIds = mutableListOf<String>()
+    /** Every token ever stored, in order, so a test can tell "reused" from "registered again". */
+    val storedTokens = mutableListOf<String>()
 
     var clearCount: Int = 0
         private set
 
-    override suspend fun store(id: String): Result<Unit> {
-        storedIds += id
-        _deviceId.value = id
+    override suspend fun store(token: String): Result<Unit> {
+        storedTokens += token
+        _deviceToken.value = token
         return Result.Success(Unit)
     }
 
     override suspend fun clear(): Result<Unit> {
         clearCount++
-        _deviceId.value = null
+        _deviceToken.value = null
         return Result.Success(Unit)
     }
 
-    /** The currently stored id, for assertions that do not want to collect the flow. */
-    val stored: String? get() = _deviceId.value
+    /** The currently stored token, for assertions that do not want to collect the flow. */
+    val stored: String? get() = _deviceToken.value
 }

@@ -4,21 +4,27 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
+import ch.stenzel.tim.polleninfo.server.alarm.domain.hash
+import ch.stenzel.tim.polleninfo.server.alarm.domain.newDeviceToken
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
+import ch.stenzel.tim.polleninfo.server.pollen.measurement.MutableClock
 import java.time.Clock
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
@@ -40,43 +46,126 @@ class ExposedStoresTest {
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
 
-    @Test
-    fun `a registered device exists`() = runTest {
-        val id = devices.register("token-1")
+    // --- Devices ---
 
-        assertTrue(devices.exists(id))
+    @Test
+    fun `a registered device authenticates with the token it was issued`() = runTest {
+        val token = devices.register("token-1")
+
+        val id = assertNotNull(devices.authenticate(token))
+
+        assertEquals(id, devices.authenticate(token))
     }
 
     @Test
-    fun `a device that never registered does not exist`() = runTest {
-        assertFalse(devices.exists(DeviceId("never-registered")))
-    }
-
-    @Test
-    fun `every registration issues a new 22 character id`() = runTest {
+    fun `every registration issues a different token and a different device`() = runTest {
         val first = devices.register("token-1")
         val second = devices.register("token-1")
 
         assertNotEquals(first, second)
-        assertEquals(22, first.value.length)
-        assertTrue(first.value.all { it.isLetterOrDigit() || it == '-' || it == '_' })
+        assertNotEquals(devices.authenticate(first), devices.authenticate(second))
     }
 
     @Test
-    fun `an unknown device has no alarm list rather than an empty one`() = runTest {
-        assertNull(alarms.list(DeviceId("never-registered")))
+    fun `an unknown token authenticates to no device`() = runTest {
+        devices.register("token-1")
+
+        assertNull(devices.authenticate(newDeviceToken()))
     }
+
+    @Test
+    fun `the devices row holds the token's hash and not the token`() = runTest {
+        val token = devices.register("token-1")
+
+        val row = transaction(database) { DevicesTable.selectAll().single() }
+
+        assertContentEquals(token.hash(), row[DevicesTable.tokenHash])
+        val stored = transaction(database) {
+            exec("SELECT * FROM devices") { rows ->
+                buildList {
+                    while (rows.next()) {
+                        for (column in 1..rows.metaData.columnCount) add(rows.getString(column).orEmpty())
+                    }
+                }
+            }
+        }.orEmpty()
+        assertTrue(stored.none { token.value in it }, "a column holds the token: $stored")
+    }
+
+    private fun lastSeenAt(id: DeviceId): Instant = transaction(database) {
+        DevicesTable.selectAll().where { DevicesTable.id eq id.value }.single()[DevicesTable.lastSeenAt].toInstant()
+    }
+
+    @Test
+    fun `last seen is refreshed one day after the last refresh and not one millisecond before`() = runTest {
+        val clock = MutableClock(Instant.parse("2026-08-03T06:00:00Z"))
+        val store = ExposedDeviceStore(database, clock)
+        val token = store.register("token-1")
+        val id = checkNotNull(store.authenticate(token))
+        val registeredAt = clock.now
+
+        clock.advanceBy(Duration.ofDays(1).minusMillis(1))
+        store.authenticate(token)
+        assertEquals(registeredAt, lastSeenAt(id))
+
+        clock.advanceBy(Duration.ofMillis(1))
+        store.authenticate(token)
+        assertEquals(clock.now, lastSeenAt(id))
+
+        val refreshedAt = clock.now
+        clock.advanceBy(Duration.ofHours(23))
+        store.authenticate(token)
+        assertEquals(refreshedAt, lastSeenAt(id))
+    }
+
+    @Test
+    fun `deleting a device removes its alarms and their log and keeps other devices`() = runTest {
+        val mine = devices.registerDevice("token-mine")
+        val theirs = devices.registerDevice("token-theirs")
+        val myAlarm = thresholdAlarm(mine)
+        val theirAlarm = thresholdAlarm(theirs)
+        database.insertAlarm(myAlarm, createdAtMillis = 1)
+        database.insertAlarm(theirAlarm, createdAtMillis = 2)
+        log.record(myAlarm.id, setOf(PollenSpecies.BIRCH), today)
+        log.record(theirAlarm.id, setOf(PollenSpecies.BIRCH), today)
+
+        assertTrue(devices.delete(mine))
+
+        assertEquals(emptyList(), alarms.list(mine))
+        assertEquals(emptySet(), log.notifiedSpecies(myAlarm.id, today))
+        assertEquals(listOf(theirAlarm), alarms.list(theirs))
+        assertEquals(setOf(PollenSpecies.BIRCH), log.notifiedSpecies(theirAlarm.id, today))
+        assertEquals(1L, transaction(database) { DevicesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `a deleted device no longer authenticates`() = runTest {
+        val token = devices.register("token-1")
+        val id = checkNotNull(devices.authenticate(token))
+
+        assertTrue(devices.delete(id))
+
+        assertNull(devices.authenticate(token))
+        assertFalse(devices.delete(id))
+    }
+
+    @Test
+    fun `updating the push address of an unknown device returns false`() = runTest {
+        assertFalse(devices.updateFcmToken(unknownDeviceId(), "token-1"))
+    }
+
+    // --- Alarms ---
 
     @Test
     fun `a registered device without alarms has an empty list`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
 
         assertEquals(emptyList(), alarms.list(id))
     }
 
     @Test
     fun `alarms are listed in creation order`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         // Ids chosen so that id order is the reverse of creation order.
         val first = dailyAlarm(id, alarmId('c'))
         val second = thresholdAlarm(id, alarmId('b'))
@@ -90,7 +179,7 @@ class ExposedStoresTest {
 
     @Test
     fun `both schedule types read back exactly as stored`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val daily = dailyAlarm(id)
         val threshold = thresholdAlarm(id)
         database.insertAlarm(daily, createdAtMillis = 1)
@@ -101,8 +190,8 @@ class ExposedStoresTest {
 
     @Test
     fun `a device sees only its own alarms`() = runTest {
-        val mine = devices.register("token-1")
-        val theirs = devices.register("token-2")
+        val mine = devices.registerDevice("token-1")
+        val theirs = devices.registerDevice("token-2")
         val myAlarm = dailyAlarm(mine)
         database.insertAlarm(myAlarm, createdAtMillis = 1)
         database.insertAlarm(dailyAlarm(theirs), createdAtMillis = 2)
@@ -121,7 +210,7 @@ class ExposedStoresTest {
 
     @Test
     fun `a created alarm is returned and listed for its device`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
 
         val created = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
 
@@ -131,7 +220,7 @@ class ExposedStoresTest {
 
     @Test
     fun `every created alarm gets its own id`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
 
         val first = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
         val second = assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm
@@ -141,7 +230,7 @@ class ExposedStoresTest {
 
     @Test
     fun `alarms created within the same millisecond keep their creation order`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val frozen = ExposedAlarmStore(database, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
 
         val created = (0 until 5).map { minute ->
@@ -155,7 +244,7 @@ class ExposedStoresTest {
     fun `two concurrent creates at nine alarms let exactly one through`() = runTest {
         // Several devices, so a missing lock has more than one chance to show.
         repeat(5) {
-            val id = devices.register("token-1")
+            val id = devices.registerDevice("token-1")
             repeat(9) { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())) }
             val start = CompletableDeferred<Unit>()
 
@@ -168,30 +257,25 @@ class ExposedStoresTest {
 
             assertEquals(1, results.count { it is CreateResult.Created }, "results: $results")
             assertEquals(1, results.count { it == CreateResult.LimitReached }, "results: $results")
-            assertEquals(10, alarms.list(id)?.size)
+            assertEquals(10, alarms.list(id).size)
         }
     }
 
     @Test
-    fun `creating an alarm for an unknown device stores nothing`() = runTest {
-        assertEquals(CreateResult.UnknownDevice, alarms.create(DeviceId("never-registered"), dailySpec()))
-    }
-
-    @Test
     fun `the tenth alarm is created and the eleventh reaches the limit`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         repeat(9) { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())) }
 
         assertIs<CreateResult.Created>(alarms.create(id, dailySpec()))
         assertEquals(CreateResult.LimitReached, alarms.create(id, dailySpec()))
 
-        assertEquals(10, alarms.list(id)?.size)
+        assertEquals(10, alarms.list(id).size)
     }
 
     @Test
     fun `the limit counts only the device's own alarms`() = runTest {
-        val full = devices.register("token-1")
-        val other = devices.register("token-2")
+        val full = devices.registerDevice("token-1")
+        val other = devices.registerDevice("token-2")
         repeat(10) { alarms.create(full, dailySpec()) }
 
         assertIs<CreateResult.Created>(alarms.create(other, dailySpec()))
@@ -199,7 +283,7 @@ class ExposedStoresTest {
 
     @Test
     fun `deleting an alarm at the limit makes room for a new one`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val created = (0 until 10).map { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())).alarm }
 
         alarms.delete(id, created.first().id)
@@ -209,7 +293,7 @@ class ExposedStoresTest {
 
     @Test
     fun `an update replaces the settings and keeps the id and the list position`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val first = assertIs<CreateResult.Created>(alarms.create(id, dailySpec(LocalTime.of(6, 0)))).alarm
         val second = assertIs<CreateResult.Created>(alarms.create(id, dailySpec(LocalTime.of(7, 0)))).alarm
         val changed = dailySpec(LocalTime.of(9, 30)).copy(enabled = false, station = PollenStation.LUGANO)
@@ -222,8 +306,8 @@ class ExposedStoresTest {
 
     @Test
     fun `updating another device's alarm returns not found and changes nothing`() = runTest {
-        val mine = devices.register("token-1")
-        val theirs = devices.register("token-2")
+        val mine = devices.registerDevice("token-1")
+        val theirs = devices.registerDevice("token-2")
         val theirAlarm = dailyAlarm(theirs)
         database.insertAlarm(theirAlarm, createdAtMillis = 1)
 
@@ -233,7 +317,7 @@ class ExposedStoresTest {
 
     @Test
     fun `updating an unknown alarm returns not found`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
 
         assertNull(alarms.update(id, AlarmId("never-created"), dailySpec()))
         assertEquals(emptyList(), alarms.list(id))
@@ -241,17 +325,17 @@ class ExposedStoresTest {
 
     @Test
     fun `an alarm id that is not a UUID is not found for update or delete`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         database.insertAlarm(dailyAlarm(id), createdAtMillis = 1)
 
         assertNull(alarms.update(id, AlarmId("not-a-uuid"), dailySpec()))
         assertFalse(alarms.delete(id, AlarmId("not-a-uuid")))
-        assertEquals(1, alarms.list(id)?.size)
+        assertEquals(1, alarms.list(id).size)
     }
 
     @Test
     fun `a deleted alarm is gone from the list`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val alarm = dailyAlarm(id)
         database.insertAlarm(alarm, createdAtMillis = 1)
 
@@ -261,8 +345,8 @@ class ExposedStoresTest {
 
     @Test
     fun `deleting another device's alarm returns not found and keeps it`() = runTest {
-        val mine = devices.register("token-1")
-        val theirs = devices.register("token-2")
+        val mine = devices.registerDevice("token-1")
+        val theirs = devices.registerDevice("token-2")
         val theirAlarm = dailyAlarm(theirs)
         database.insertAlarm(theirAlarm, createdAtMillis = 1)
 
@@ -272,20 +356,20 @@ class ExposedStoresTest {
 
     @Test
     fun `deleting an unknown alarm returns not found`() = runTest {
-        assertFalse(alarms.delete(devices.register("token-1"), AlarmId("never-created")))
+        assertFalse(alarms.delete(devices.registerDevice("token-1"), AlarmId("never-created")))
     }
 
     @Test
     fun `an alarm for an unregistered device is refused because foreign keys are enforced`() {
         assertFailsWith<ExposedSQLException> {
-            database.insertAlarm(dailyAlarm(DeviceId("never-registered")), createdAtMillis = 1)
+            database.insertAlarm(dailyAlarm(unknownDeviceId()), createdAtMillis = 1)
         }
     }
 
     @Test
     fun `enabled alarms are deliverable with their device's token`() = runTest {
-        val mine = devices.register("token-mine")
-        val theirs = devices.register("token-theirs")
+        val mine = devices.registerDevice("token-mine")
+        val theirs = devices.registerDevice("token-theirs")
         val myAlarm = dailyAlarm(mine)
         val theirAlarm = dailyAlarm(theirs)
         database.insertAlarm(myAlarm, createdAtMillis = 1)
@@ -299,7 +383,7 @@ class ExposedStoresTest {
 
     @Test
     fun `a disabled alarm is not deliverable`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         database.insertAlarm(dailyAlarm(id).copy(enabled = false), createdAtMillis = 1)
 
         assertEquals(emptyList(), alarms.enabledWithDeliverableDevice())
@@ -307,67 +391,60 @@ class ExposedStoresTest {
 
     @Test
     fun `an updated token is the one alarms are delivered to`() = runTest {
-        val id = devices.register("token-old")
+        val id = devices.registerDevice("token-old")
         val alarm = dailyAlarm(id)
         database.insertAlarm(alarm, createdAtMillis = 1)
 
-        assertTrue(devices.updateToken(id, "token-new"))
+        assertTrue(devices.updateFcmToken(id, "token-new"))
 
         assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
     }
 
     @Test
-    fun `updating the token of an unknown device returns false`() = runTest {
-        assertFalse(devices.updateToken(DeviceId("never-registered"), "token-1"))
-    }
-
-    @Test
     fun `a cleared token removes only that device's alarms from delivery and keeps the device`() = runTest {
-        val mine = devices.register("token-mine")
-        val theirs = devices.register("token-theirs")
+        val mine = devices.registerDevice("token-mine")
+        val theirs = devices.registerDevice("token-theirs")
         database.insertAlarm(dailyAlarm(mine), createdAtMillis = 1)
         val theirAlarm = dailyAlarm(theirs)
         database.insertAlarm(theirAlarm, createdAtMillis = 2)
 
-        devices.clearToken(mine, "token-mine")
+        devices.clearFcmToken(mine, "token-mine")
 
         assertEquals(listOf(AlarmWithToken(theirAlarm, "token-theirs")), alarms.enabledWithDeliverableDevice())
-        assertTrue(devices.exists(mine))
-        assertEquals(1, alarms.list(mine)?.size)
+        assertEquals(1, alarms.list(mine).size)
     }
 
     @Test
     fun `clearing a token that was already replaced keeps the new one`() = runTest {
-        val id = devices.register("token-old")
+        val id = devices.registerDevice("token-old")
         val alarm = dailyAlarm(id)
         database.insertAlarm(alarm, createdAtMillis = 1)
-        devices.updateToken(id, "token-new")
+        devices.updateFcmToken(id, "token-new")
 
-        devices.clearToken(id, "token-old")
+        devices.clearFcmToken(id, "token-old")
 
         assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
     }
 
     @Test
     fun `a new token after a cleared one makes the device deliverable again`() = runTest {
-        val id = devices.register("token-old")
+        val id = devices.registerDevice("token-old")
         val alarm = dailyAlarm(id)
         database.insertAlarm(alarm, createdAtMillis = 1)
-        devices.clearToken(id, "token-old")
+        devices.clearFcmToken(id, "token-old")
 
-        devices.updateToken(id, "token-new")
+        devices.updateFcmToken(id, "token-new")
 
         assertEquals(listOf(AlarmWithToken(alarm, "token-new")), alarms.enabledWithDeliverableDevice())
     }
 
     @Test
     fun `data is read back through a new connection pool`() = runTest {
-        val id = devices.register("token-1")
+        val id = devices.registerDevice("token-1")
         val alarm = dailyAlarm(id)
         database.insertAlarm(alarm, createdAtMillis = 1)
 
         PollenInfoDatabase.connect(TestPostgres.sharedConfig()).use { reopened ->
-            assertTrue(ExposedDeviceStore(reopened.database).exists(id))
             assertEquals(listOf(alarm), ExposedAlarmStore(reopened.database).list(id))
         }
     }
@@ -377,7 +454,7 @@ class ExposedStoresTest {
     private val today = LocalDate.of(2026, 8, 3)
 
     private suspend fun storedThresholdAlarm(): AlarmId {
-        val alarm = thresholdAlarm(devices.register("token-1"))
+        val alarm = thresholdAlarm(devices.registerDevice("token-1"))
         database.insertAlarm(alarm, createdAtMillis = 1)
         return alarm.id
     }
@@ -453,7 +530,7 @@ class ExposedStoresTest {
 
     @Test
     fun `deleting an alarm through the store removes its log rows`() = runTest {
-        val device = devices.register("token-1")
+        val device = devices.registerDevice("token-1")
         val alarm = thresholdAlarm(device)
         database.insertAlarm(alarm, createdAtMillis = 1)
         log.record(alarm.id, setOf(PollenSpecies.BIRCH), today)
@@ -465,7 +542,7 @@ class ExposedStoresTest {
 
     @Test
     fun `updating an alarm keeps its log rows`() = runTest {
-        val device = devices.register("token-1")
+        val device = devices.registerDevice("token-1")
         val alarm = thresholdAlarm(device)
         database.insertAlarm(alarm, createdAtMillis = 1)
         log.record(alarm.id, setOf(PollenSpecies.BIRCH), today)

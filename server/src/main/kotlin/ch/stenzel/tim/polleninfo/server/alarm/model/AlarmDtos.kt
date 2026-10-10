@@ -5,17 +5,19 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Body of `POST /devices`. */
+/**
+ * Body of `POST /devices` (the install's push address) and of `PUT /devices/me/fcm-token` (the
+ * address FCM rotated to).
+ */
 @Serializable
-data class RegisterDeviceRequest(val fcmToken: String)
+data class FcmTokenRequest(val fcmToken: String)
 
-/** Body of `PUT /devices/{deviceId}/token`: the token FCM rotated to. */
+/**
+ * Response of `POST /devices`: the device token the app sends as `Authorization: Bearer …` with
+ * every later device call. Returned this once; the server keeps only its hash.
+ */
 @Serializable
-data class UpdateTokenRequest(val fcmToken: String)
-
-/** Response of `POST /devices`: the id the app sends with every later alarm call. */
-@Serializable
-data class RegisterDeviceResponse(val deviceId: String)
+data class RegisterDeviceResponse(val deviceToken: String)
 
 /**
  * Wire shape of one alarm. [days] are `java.time.DayOfWeek` names, and every time is `HH:mm` in
@@ -33,7 +35,7 @@ data class AlarmDto(
 )
 
 /**
- * Body of `POST /devices/{deviceId}/alarms`: an [AlarmDto] without its id.
+ * Body of `POST /devices/me/alarms` and `PUT /devices/me/alarms/{alarmId}`: an [AlarmDto] without its id.
  *
  * Every value is a plain string here, unlike in [AlarmDto], so an unknown station, species or day
  * reaches `AlarmValidation` and is answered with a message naming it rather than a decoder error.

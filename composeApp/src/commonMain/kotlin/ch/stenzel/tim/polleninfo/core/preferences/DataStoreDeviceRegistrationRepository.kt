@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * DataStore-backed [DeviceRegistrationRepository].
+ * DataStore-backed [DeviceRegistrationRepository], over a DataStore of its own
+ * (`polleninfo_device`) so Android's backup rules can leave exactly this file out.
  *
  * Deliberately logic-free for the same reason as [DataStoreSelectedStationRepository]: it reads and
  * writes one key and has no unit test of its own. Consumers are tested against
@@ -20,17 +21,17 @@ class DataStoreDeviceRegistrationRepository(
     private val dataStore: DataStore<Preferences>,
 ) : DeviceRegistrationRepository {
 
-    override val deviceId: Flow<String?> = dataStore.data.map { it[DEVICE_ID_KEY] }
+    override val deviceToken: Flow<String?> = dataStore.data.map { it[DEVICE_TOKEN_KEY] }
 
-    override suspend fun store(id: String): Result<Unit> = safeCall {
-        dataStore.edit { it[DEVICE_ID_KEY] = id }
+    override suspend fun store(token: String): Result<Unit> = safeCall {
+        dataStore.edit { it[DEVICE_TOKEN_KEY] = token }
     }
 
     override suspend fun clear(): Result<Unit> = safeCall {
-        dataStore.edit { it.remove(DEVICE_ID_KEY) }
+        dataStore.edit { it.remove(DEVICE_TOKEN_KEY) }
     }
 
     private companion object {
-        val DEVICE_ID_KEY = stringPreferencesKey("alarm_device_id")
+        val DEVICE_TOKEN_KEY = stringPreferencesKey("deviceToken")
     }
 }

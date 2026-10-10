@@ -71,7 +71,7 @@ val dataModule = module {
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
     single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
-    single<DeviceRegistrationRepository> { DataStoreDeviceRegistrationRepository(get()) }
+    single<DeviceRegistrationRepository> { DataStoreDeviceRegistrationRepository(get(DEVICE_DATA_STORE)) }
     // Device-only: no API service takes a diary entry.
     single<DiaryRepository> { DataStoreDiaryRepository(get()) }
 
