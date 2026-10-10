@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceToken
 import ch.stenzel.tim.polleninfo.server.alarm.domain.hash
 import ch.stenzel.tim.polleninfo.server.alarm.domain.newDeviceToken
 import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 import kotlin.time.Duration.Companion.days
 import kotlin.time.toJavaDuration
@@ -12,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -48,10 +51,20 @@ interface DeviceStore {
 
     /** Deletes the device with its alarms and their notification log; `false` for an unknown device. */
     suspend fun delete(id: DeviceId): Boolean
+
+    /**
+     * Deletes, with their alarms and notification log, the devices that can no longer be reached —
+     * no push token — and were last seen more than [INACTIVE_DEVICE_RETENTION] before [now]. A
+     * device with a push token is never removed for inactivity. Returns how many were deleted.
+     */
+    suspend fun pruneInactive(now: Instant): Int
 }
 
 /** How often at most a device's `last_seen_at` is written: a day is all its later cleanup needs. */
 val LAST_SEEN_RESOLUTION = 1.days
+
+/** How long a device without a push token is kept after its last call. */
+val INACTIVE_DEVICE_RETENTION = 90.days
 
 class ExposedDeviceStore(
     private val database: Database,
@@ -111,5 +124,13 @@ class ExposedDeviceStore(
     override suspend fun delete(id: DeviceId): Boolean = withContext(Dispatchers.IO) {
         // Alarms and their notification log go with the device through ON DELETE CASCADE.
         transaction(database) { DevicesTable.deleteWhere { DevicesTable.id eq id.value } > 0 }
+    }
+
+    override suspend fun pruneInactive(now: Instant): Int = withContext(Dispatchers.IO) {
+        val cutoff = now.minus(INACTIVE_DEVICE_RETENTION.toJavaDuration()).toTimestamp()
+        // Alarms and their notification log go with the devices through ON DELETE CASCADE.
+        transaction(database) {
+            DevicesTable.deleteWhere { DevicesTable.fcmToken.isNull() and (DevicesTable.lastSeenAt less cutoff) }
+        }
     }
 }

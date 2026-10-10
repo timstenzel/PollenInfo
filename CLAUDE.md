@@ -1498,6 +1498,14 @@ every call. **`PUT /devices/me/fcm-token`** replaces the device's push address w
 notification log go with it through `ON DELETE CASCADE`, and every later call with the token is a
 `401`. The app has no call for it yet.
 
+**Unreachable installs are removed after 90 days.** `DeviceStore.pruneInactive(now)` deletes every
+device that has no push address (`fcm_token IS NULL`, FCM reported it unregistered) **and** was last
+seen more than `INACTIVE_DEVICE_RETENTION` (90 days, `alarm/store`) before `now` — exactly 90 days is
+kept — with its alarms and their notification log through the same cascade. A device with a push
+address is never removed for inactivity, however long it stays silent: it can still receive its
+alarms. The scheduler runs it once a day (see "Alarm delivery"); since `last_seen_at` is written at
+most daily, a device's 90 days count from its last call to within a day.
+
 ```json
 { "id": "…", "enabled": true, "stationAbbr": "PZH",
   "species": ["BIRCH", "GRASSES"], "minSeverity": "NONE",
@@ -1565,7 +1573,7 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   development reset the database instead).
 - Tables (`V1__init.sql`): `devices(id uuid PK, token_hash bytea UNIQUE, fcm_token NULL, created_at,
   last_seen_at timestamptz)` — `fcm_token` is `NULL` once FCM reported it unregistered, which keeps the device and its alarms but stops their
-  delivery until the app sends a new token — `alarms(id uuid PK, device_id → devices ON DELETE
+  delivery until the app sends a new token (or, 90 days after its last call, the device is pruned) — `alarms(id uuid PK, device_id → devices ON DELETE
   CASCADE, enabled, station_abbr, species text[], min_severity, days text[], type, at_time /
   from_time / until_time time, created_at timestamptz)` with an index on `(device_id, created_at)`,
   and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date date, PK(all
@@ -1659,6 +1667,11 @@ which must find nothing).
   high) does not notify again. The log is pruned of earlier days on the first tick of each Swiss
   day; a failed prune is retried next tick and never costs that minute's alarms.
 
+**Inactive devices.** The same first tick of each Swiss day also calls
+`DeviceStore.pruneInactive(now)` (see "Devices and alarms"), before the minute's alarms. It is a
+step of its own with its own day marker and `try`, so either prune can fail without holding the
+other back; a failure is retried next tick and never costs that minute's alarms.
+
 **Sending** is `alarm/push/PushSender` → `PushResult` `Sent` | `Unregistered` | `Failed(cause)`; it
 never throws for a delivery failure.
 
@@ -1700,7 +1713,8 @@ never throws for a delivery failure.
   or fetched for until `PUT /devices/me/fcm-token` sets a new token. The clear is conditional on the
   token still being the rejected one, so a rotation that landed in the meantime is never wiped.
   Nothing is recorded in the notification log. Other alarms of the same device in the same tick still
-  try (and fail) once; from the next tick on they are skipped.
+  try (and fail) once; from the next tick on they are skipped. Unless the app sends a new token,
+  the device is deleted by the first daily prune more than 90 days after its last call.
 - **`Failed`** is only logged; a daily report is not retried within its minute, a threshold alert is
   retried on the next tick of its window.
 
@@ -1711,7 +1725,10 @@ an SLF4J backend every log line, including the logged pushes, would be dropped.
 `FakePollenService` (whose `failures` map fails single stations), `FakePushSender` and
 `MutableClock` — a scheduler built a second time on the same database stands in for a restart.
 It also pins token handling: an `Unregistered` result clears the token and the device's alarms are
-skipped from the next tick, and a new token brings them back.
+skipped from the next tick, and a new token brings them back. The device prune is pinned too: it runs
+on a Swiss day's first tick and not again that day, a throwing prune (`FlakyPrune`, a delegating
+`DeviceStore`) still lets the minute's report through and is retried next tick, and a device whose
+token was dropped is kept at exactly 90 days and removed by the next day's prune.
 `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers, both window edges),
 each `PushKind` and the `levels` order, batching, the per-day exclusion and every staleness case
 (`measuredAt` only for `NO_CURRENT_READING`); `FcmPushSenderTest` pins the data-only request and its

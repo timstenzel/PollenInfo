@@ -150,6 +150,32 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `pruning removes unreachable devices last seen more than 90 days ago with their alarms and log`() = runTest {
+        val now = Instant.parse("2026-11-01T06:00:00Z")
+        val retention = Duration.ofDays(90)
+
+        suspend fun deviceSeenAt(at: Instant, fcmToken: String, unreachable: Boolean): DeviceId {
+            val store = ExposedDeviceStore(database, MutableClock(at))
+            val id = store.registerDevice(fcmToken)
+            if (unreachable) store.clearFcmToken(id, fcmToken)
+            return id
+        }
+        val expired = deviceSeenAt(now - retention - Duration.ofMillis(1), "token-expired", unreachable = true)
+        val onTheEdge = deviceSeenAt(now - retention, "token-edge", unreachable = true)
+        val reachable = deviceSeenAt(now - Duration.ofDays(365), "token-reachable", unreachable = false)
+        val expiredAlarm = thresholdAlarm(expired)
+        database.insertAlarm(expiredAlarm, createdAtMillis = 1)
+        log.record(expiredAlarm.id, setOf(PollenSpecies.BIRCH), today)
+
+        assertEquals(1, devices.pruneInactive(now))
+
+        val remaining = transaction(database) { DevicesTable.selectAll().map { DeviceId(it[DevicesTable.id]) }.toSet() }
+        assertEquals(setOf(onTheEdge, reachable), remaining)
+        assertEquals(emptyList(), alarms.list(expired))
+        assertEquals(emptySet(), log.notifiedSpecies(expiredAlarm.id, today))
+    }
+
+    @Test
     fun `updating the push address of an unknown device returns false`() = runTest {
         assertFalse(devices.updateFcmToken(unknownDeviceId(), "token-1"))
     }

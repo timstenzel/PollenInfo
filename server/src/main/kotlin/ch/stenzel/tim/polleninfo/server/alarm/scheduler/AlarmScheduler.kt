@@ -55,11 +55,15 @@ class AlarmScheduler(
     /** The Swiss date the log was last pruned for; pruning runs on the first tick of each day. */
     private var prunedFor: LocalDate? = null
 
+    /** The Swiss date inactive devices were last pruned on, tracked apart so each step retries alone. */
+    private var devicesPrunedFor: LocalDate? = null
+
     suspend fun tick() {
         val now = ZonedDateTime.now(clock).withZoneSameInstant(ALARM_ZONE).truncatedTo(ChronoUnit.MINUTES)
         if (now == lastMinute) return
         lastMinute = now
         pruneLog(now.toLocalDate())
+        pruneInactiveDevices(now)
 
         val due = alarms.enabledWithDeliverableDevice()
             .filter { AlarmRules.isDailyDue(it.alarm, now) || AlarmRules.isThresholdActive(it.alarm, now) }
@@ -92,6 +96,25 @@ class AlarmScheduler(
             throw e
         } catch (e: Exception) {
             logger.warn("Pruning the notification log before $today failed", e)
+        }
+    }
+
+    /**
+     * Removes the devices that have no push token and have not called for 90 days, on the first tick
+     * of each Swiss day. Like the log prune, a failure is retried on the next tick and never costs
+     * this minute's alarms.
+     */
+    private suspend fun pruneInactiveDevices(now: ZonedDateTime) {
+        val today = now.toLocalDate()
+        if (devicesPrunedFor == today) return
+        try {
+            val pruned = devices.pruneInactive(clock.instant())
+            devicesPrunedFor = today
+            if (pruned > 0) logger.info("Removed $pruned inactive devices without a push token")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Removing inactive devices on $today failed", e)
         }
     }
 

@@ -99,21 +99,21 @@ is never removed for inactivity, and a failing cleanup never costs that minute's
 
 ### Implementation steps
 
-- [ ] Add `pruneInactive(now)` to the device store with a 90-day retention constant.
-- [ ] Run it on the scheduler's first tick of each Swiss day next to the notification-log prune, each with its own failure handling and its own retry on the next tick.
-- [ ] Tests for the store boundaries and the scheduler step; update `CLAUDE.md` (Devices and alarms, Alarm delivery).
+- [x] Add `pruneInactive(now)` to the device store with a 90-day retention constant.
+- [x] Run it on the scheduler's first tick of each Swiss day next to the notification-log prune, each with its own failure handling and its own retry on the next tick.
+- [x] Tests for the store boundaries and the scheduler step; update `CLAUDE.md` (Devices and alarms, Alarm delivery).
 
 ### Acceptance criteria
 
-- [ ] Store test: a device without a push address last seen 90 days and 1 ms ago is deleted with its alarms and log; one last seen exactly 90 days ago is kept; one with a push address last seen a year ago is kept.
-- [ ] Scheduler test: the first tick of a Swiss day prunes inactive devices; a later tick the same day does not prune again.
-- [ ] Scheduler test: a prune that throws still lets that minute's due alarms be sent, and the prune is retried on the next tick.
-- [ ] Scheduler test: after `Unregistered` clears a device's push address, the device is kept until 90 days after its last call and deleted by the first daily prune after that.
+- [x] Store test: a device without a push address last seen 90 days and 1 ms ago is deleted with its alarms and log; one last seen exactly 90 days ago is kept; one with a push address last seen a year ago is kept.
+- [x] Scheduler test: the first tick of a Swiss day prunes inactive devices; a later tick the same day does not prune again.
+- [x] Scheduler test: a prune that throws still lets that minute's due alarms be sent, and the prune is retried on the next tick.
+- [x] Scheduler test: after `Unregistered` clears a device's push address, the device is kept until 90 days after its last call and deleted by the first daily prune after that.
 
 ### Quality gates
 
-- [ ] `./gradlew :server:test` passes.
-- [ ] No new compiler warning.
+- [x] `./gradlew :server:test` passes.
+- [x] No new compiler warning.
 
 ## Task 04-scheduler-restart-catch-up
 

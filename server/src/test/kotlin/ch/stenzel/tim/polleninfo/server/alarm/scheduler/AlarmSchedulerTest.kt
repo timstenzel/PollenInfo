@@ -8,6 +8,8 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.PushChannel
 import ch.stenzel.tim.polleninfo.server.alarm.domain.PushKind
 import ch.stenzel.tim.polleninfo.server.alarm.push.PushResult
 import ch.stenzel.tim.polleninfo.server.alarm.push.FakePushSender
+import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.DevicesTable
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
@@ -32,7 +34,12 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 class AlarmSchedulerTest {
 
@@ -40,7 +47,7 @@ class AlarmSchedulerTest {
     private val clock = MutableClock(Instant.parse("2026-08-03T06:00:00Z"))
 
     private val database = TestPostgres.cleanDatabase()
-    private val devices = ExposedDeviceStore(database)
+    private val devices = ExposedDeviceStore(database, clock)
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
 
@@ -59,7 +66,10 @@ class AlarmSchedulerTest {
     )
 
     /** A fresh scheduler with a fresh cache, as after a restart; only the database is shared. */
-    private fun scheduler(measurements: MeasurementService = measurementService()) = AlarmScheduler(
+    private fun scheduler(
+        measurements: MeasurementService = measurementService(),
+        devices: DeviceStore = this.devices,
+    ) = AlarmScheduler(
         alarms = alarms,
         devices = devices,
         log = log,
@@ -415,5 +425,99 @@ class AlarmSchedulerTest {
         scheduler.tick()
 
         assertEquals(listOf(listOf(PollenSpecies.BIRCH to PollenSeverity.HIGH), listOf(PollenSpecies.GRASSES to PollenSeverity.HIGH)), push.sent.map { it.message.levels })
+    }
+
+    // --- Inactive devices ---
+
+    private fun isStored(id: DeviceId): Boolean = transaction(database) {
+        DevicesTable.selectAll().where { DevicesTable.id eq id.value }.count() > 0
+    }
+
+    /** Registers a device at [at], without alarms, and drops its push token as FCM would. */
+    private suspend fun unreachableDevice(at: Instant): DeviceId {
+        val store = ExposedDeviceStore(database, MutableClock(at))
+        val id = store.registerDevice("token-$at")
+        store.clearFcmToken(id, "token-$at")
+        return id
+    }
+
+    /** Counts [pruneInactive] calls and fails the first [failures] of them. */
+    private class FlakyPrune(private val store: DeviceStore, var failures: Int = 0) : DeviceStore by store {
+        var attempts = 0
+
+        override suspend fun pruneInactive(now: Instant): Int {
+            attempts++
+            if (failures-- > 0) throw IOException("database unreachable")
+            return store.pruneInactive(now)
+        }
+    }
+
+    @Test
+    fun `the first tick of a Swiss day prunes inactive devices and a later tick that day does not`() = runTest {
+        // Sunday 1 November 2026, 07:01 in Zürich: 90 days and a minute after the first device's
+        // last call, 90 days less two hours after the second's.
+        val first = unreachableDevice(Instant.parse("2026-08-03T06:00:00Z"))
+        val second = unreachableDevice(Instant.parse("2026-08-03T08:00:00Z"))
+        clock.now = Instant.parse("2026-11-01T06:01:00Z")
+        val scheduler = scheduler()
+
+        scheduler.tick()
+        assertFalse(isStored(first))
+        assertTrue(isStored(second))
+
+        // The second is past 90 days too now, but the day's prune has run.
+        clock.now = Instant.parse("2026-11-01T22:59:00Z")
+        scheduler.tick()
+        assertTrue(isStored(second))
+
+        // Midnight in Zürich.
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertFalse(isStored(second))
+    }
+
+    @Test
+    fun `a failing prune still sends the minute's alarms and is retried on the next tick`() = runTest {
+        dailyReport("token-1")
+        val inactive = unreachableDevice(Instant.parse("2026-05-01T06:00:00Z"))
+        val flaky = FlakyPrune(devices, failures = 1)
+        val scheduler = scheduler(devices = flaky)
+
+        scheduler.tick()
+        assertEquals(listOf("token-1"), push.sent.map { it.token })
+        assertTrue(isStored(inactive))
+
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertFalse(isStored(inactive))
+
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertEquals(2, flaky.attempts)
+    }
+
+    @Test
+    fun `a device whose token was dropped is kept for 90 days after its last call and pruned the day after`() = runTest {
+        val device = dailyReport("token-gone")
+        push.results["token-gone"] = PushResult.Unregistered
+        scheduler().tick()
+        assertEquals(emptyList(), alarms.enabledWithDeliverableDevice())
+
+        // Exactly 90 days after the registration, its last call: kept.
+        clock.now = Instant.parse("2026-11-01T06:00:00Z")
+        val scheduler = scheduler()
+        scheduler.tick()
+        assertTrue(isStored(device))
+
+        // Past 90 days later that day, but the day's prune has run.
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertTrue(isStored(device))
+
+        // Midnight in Zürich: the next day's first tick removes the device and its alarm.
+        clock.now = Instant.parse("2026-11-01T23:00:00Z")
+        scheduler.tick()
+        assertFalse(isStored(device))
+        assertEquals(emptyList(), alarms.list(device))
     }
 }
