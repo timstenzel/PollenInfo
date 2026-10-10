@@ -8,6 +8,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalTime
 import java.util.UUID
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -53,7 +54,10 @@ fun Database.insertAlarm(alarm: Alarm, createdAtMillis: Long) {
     transaction(this) {
         AlarmsTable.insert {
             it.setAlarm(alarm)
-            it[AlarmsTable.createdAt] = createdAtMillis
+            it[AlarmsTable.createdAt] = Instant.ofEpochMilli(createdAtMillis).toTimestamp()
         }
     }
 }
+
+/** A fixed alarm id that sorts by its last digit, for tests that need id order to differ from creation order. */
+fun alarmId(lastDigit: Char) = AlarmId("00000000-0000-0000-0000-00000000000$lastDigit")

@@ -38,12 +38,10 @@ class ExposedNotificationLog(private val database: Database) : NotificationLog {
 
     override suspend fun notifiedSpecies(alarmId: AlarmId, date: LocalDate): Set<PollenSpecies> =
         withContext(Dispatchers.IO) {
+            val uuid = alarmId.toUuidOrNull() ?: return@withContext emptySet()
             transaction(database) {
                 NotificationLogTable.selectAll()
-                    .where {
-                        (NotificationLogTable.alarmId eq alarmId.value) and
-                            (NotificationLogTable.localDate eq date.toString())
-                    }
+                    .where { (NotificationLogTable.alarmId eq uuid) and (NotificationLogTable.localDate eq date) }
                     .map { PollenSpecies.valueOf(it[NotificationLogTable.species]) }
                     .toSet()
             }
@@ -51,16 +49,17 @@ class ExposedNotificationLog(private val database: Database) : NotificationLog {
 
     override suspend fun record(alarmId: AlarmId, species: Set<PollenSpecies>, date: LocalDate) {
         withContext(Dispatchers.IO) {
+            val uuid = alarmId.toUuidOrNull() ?: return@withContext
             transaction(database) {
                 // An alarm deleted since it was evaluated would fail the foreign key; there is
                 // nothing left to protect from a repeat, so there is nothing to record.
-                val alarmExists = AlarmsTable.selectAll().where { AlarmsTable.id eq alarmId.value }.any()
+                val alarmExists = AlarmsTable.selectAll().where { AlarmsTable.id eq uuid }.any()
                 if (!alarmExists) return@transaction
                 species.forEach { type ->
                     NotificationLogTable.insertIgnore {
-                        it[NotificationLogTable.alarmId] = alarmId.value
+                        it[NotificationLogTable.alarmId] = uuid
                         it[NotificationLogTable.species] = type.name
-                        it[localDate] = date.toString()
+                        it[localDate] = date
                     }
                 }
             }
@@ -69,8 +68,7 @@ class ExposedNotificationLog(private val database: Database) : NotificationLog {
 
     override suspend fun pruneBefore(date: LocalDate) {
         withContext(Dispatchers.IO) {
-            // ISO dates compare as strings in calendar order.
-            transaction(database) { NotificationLogTable.deleteWhere { localDate less date.toString() } }
+            transaction(database) { NotificationLogTable.deleteWhere { localDate less date } }
         }
     }
 }

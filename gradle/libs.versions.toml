@@ -22,7 +22,11 @@ androidxActivity = "1.13.0"
 androidxCore = "1.19.1"
 androidxAppcompat = "1.8.0"
 exposed = "1.5.1"
-sqliteJdbc = "3.53.4.0"
+postgresql = "42.7.14"
+hikari = "7.1.0"
+# flyway-core and flyway-database-postgresql must stay on one version.
+flyway = "13.10.0"
+testcontainers = "2.0.5"
 firebaseBom = "35.0.0"
 googleServices = "4.5.0"
 googleAuth = "1.54.0"
@@ -86,10 +90,14 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 # The per-app language: AppCompatDelegate.setApplicationLocales, back-ported below API 33
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxAppcompat" }
 
-# Server persistence — alarms and device registrations in SQLite
+# Server persistence — alarms and device registrations in PostgreSQL, schema by Flyway
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 
 # Server push — an OAuth access token for the FCM HTTP v1 API from a service-account key
 google-auth-oauth2 = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuth" }
@@ -103,6 +111,7 @@ firebase-installations = { module = "com.google.firebase:firebase-installations"
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

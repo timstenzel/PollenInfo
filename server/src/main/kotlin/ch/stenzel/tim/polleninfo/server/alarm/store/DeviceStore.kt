@@ -43,7 +43,7 @@ class ExposedDeviceStore(
             DevicesTable.insert {
                 it[DevicesTable.id] = id.value
                 it[DevicesTable.fcmToken] = fcmToken
-                it[createdAt] = clock.millis()
+                it[createdAt] = clock.instant().toTimestamp()
             }
         }
         id

@@ -1,0 +1,151 @@
+package ch.stenzel.tim.polleninfo.server.config
+
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+
+/**
+ * Everything the server reads from its environment, read once at start by [load].
+ *
+ * In [Environment.DEVELOPMENT] every value has a default matching `deploy/compose.dev.yaml`, so
+ * `./gradlew :server:run` needs no exported variable. In [Environment.PRODUCTION] the database URL,
+ * both password files and the FCM key are mandatory, and a missing or unreadable one stops the
+ * server before it opens a port — with every problem named at once, not the first one found.
+ */
+data class ServerConfig(
+    val environment: Environment,
+    val port: Int,
+    val database: DatabaseConfig,
+    /** The Firebase service-account key; always set in production, optional in development. */
+    val fcmCredentialsPath: Path?,
+) {
+
+    enum class Environment { PRODUCTION, DEVELOPMENT }
+
+    companion object {
+        const val ENVIRONMENT = "POLLENINFO_ENV"
+        const val PORT = "PORT"
+        const val DB_URL = "DB_URL"
+        const val DB_OWNER_USER = "DB_OWNER_USER"
+        const val DB_OWNER_PASSWORD_FILE = "DB_OWNER_PASSWORD_FILE"
+        const val DB_APP_USER = "DB_APP_USER"
+        const val DB_APP_PASSWORD_FILE = "DB_APP_PASSWORD_FILE"
+        const val FCM_CREDENTIALS = "FCM_CREDENTIALS"
+
+        const val DEFAULT_PORT = 8080
+        const val DEFAULT_OWNER_USER = "polleninfo_owner"
+        const val DEFAULT_APP_USER = "polleninfo_app"
+
+        /** The development database of `deploy/compose.dev.yaml`. */
+        const val DEV_DB_URL = "jdbc:postgresql://localhost:5432/polleninfo"
+
+        /** Development-only passwords; the same values as `deploy/dev-secrets/`. */
+        const val DEV_OWNER_PASSWORD = "polleninfo-dev-owner"
+        const val DEV_APP_PASSWORD = "polleninfo-dev-app"
+
+        /**
+         * Reads the configuration from [env], reading password and key files through [readFile],
+         * which returns `null` for a file that does not exist or cannot be read.
+         *
+         * @throws ConfigException naming every missing, unreadable or malformed item.
+         */
+        fun load(env: Map<String, String>, readFile: (Path) -> String?): ServerConfig {
+            val problems = mutableListOf<String>()
+            fun value(name: String): String? = env[name]?.takeIf { it.isNotBlank() }
+
+            val environment = when (val name = value(ENVIRONMENT)?.lowercase()) {
+                null, "development" -> Environment.DEVELOPMENT
+                "production" -> Environment.PRODUCTION
+                else -> {
+                    problems += "$ENVIRONMENT must be 'production' or 'development', not '$name'"
+                    Environment.PRODUCTION
+                }
+            }
+            val production = environment == Environment.PRODUCTION
+
+            val port = when (val text = value(PORT)) {
+                null -> DEFAULT_PORT
+                else -> text.toIntOrNull()?.takeIf { it in 1..65_535 } ?: run {
+                    problems += "$PORT must be a port number between 1 and 65535, not '$text'"
+                    DEFAULT_PORT
+                }
+            }
+
+            val url = value(DB_URL) ?: if (production) {
+                problems += "$DB_URL is not set"
+                ""
+            } else {
+                DEV_DB_URL
+            }
+
+            /** The password in the file [variable] names, or [devDefault] in development. */
+            fun password(variable: String, devDefault: String): String {
+                val path = value(variable)
+                if (path == null) {
+                    if (production) problems += "$variable is not set"
+                    return devDefault
+                }
+                val content = readFile(Path.of(path))?.trim()
+                if (content.isNullOrEmpty()) {
+                    problems += "$variable names $path, which cannot be read or is empty"
+                    return ""
+                }
+                return content
+            }
+
+            val database = DatabaseConfig(
+                url = url,
+                ownerUser = value(DB_OWNER_USER) ?: DEFAULT_OWNER_USER,
+                ownerPassword = password(DB_OWNER_PASSWORD_FILE, DEV_OWNER_PASSWORD),
+                appUser = value(DB_APP_USER) ?: DEFAULT_APP_USER,
+                appPassword = password(DB_APP_PASSWORD_FILE, DEV_APP_PASSWORD),
+            )
+
+            // A key that is configured but unreadable fails in development too: a server that
+            // silently logged instead of sending would look healthy while delivering nothing.
+            val fcmCredentialsPath = when (val path = value(FCM_CREDENTIALS)) {
+                null -> {
+                    if (production) problems += "$FCM_CREDENTIALS is not set"
+                    null
+                }
+                else -> Path.of(path).also {
+                    if (readFile(it).isNullOrBlank()) {
+                        problems += "$FCM_CREDENTIALS names $path, which cannot be read or is empty"
+                    }
+                }
+            }
+
+            if (problems.isNotEmpty()) throw ConfigException(problems)
+            return ServerConfig(environment, port, database, fcmCredentialsPath)
+        }
+
+        /** The [load] file reader for real files: `null` for one that is missing or unreadable. */
+        fun readFileOrNull(path: Path): String? = try {
+            Files.readString(path)
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+}
+
+/**
+ * The two logins of the one database: [ownerUser] owns the schema and runs the migrations, and
+ * [appUser] — the only login the running server keeps connections for — can read and write rows
+ * but not create, alter or drop a table.
+ */
+data class DatabaseConfig(
+    val url: String,
+    val ownerUser: String,
+    val ownerPassword: String,
+    val appUser: String,
+    val appPassword: String,
+) {
+    /** Never prints the passwords, so a logged config leaks nothing. */
+    override fun toString() = "DatabaseConfig(url=$url, ownerUser=$ownerUser, appUser=$appUser)"
+}
+
+/** The configuration cannot be used; [problems] lists every reason. */
+class ConfigException(val problems: List<String>) :
+    RuntimeException("Invalid server configuration:\n" + problems.joinToString("\n") { "  - $it" })

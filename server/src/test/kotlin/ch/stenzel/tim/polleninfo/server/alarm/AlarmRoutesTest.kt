@@ -1,15 +1,15 @@
 package ch.stenzel.tim.polleninfo.server.alarm
 
-import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceResponse
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
-import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
+import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
+import ch.stenzel.tim.polleninfo.server.alarm.store.alarmId
 import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.thresholdAlarm
-import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
+import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -25,6 +25,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -37,14 +38,14 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class AlarmRoutesTest {
 
-    private val database = PollenInfoDatabase.inMemory()
+    private val database = TestPostgres.cleanDatabase()
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
 
     private fun ApplicationTestBuilder.installApp() {
         application {
             configureSerialization()
-            configureRouting(database = database, devices = devices, alarms = alarms)
+            configureAlarmRouting(devices = devices, alarms = alarms)
         }
     }
 
@@ -165,8 +166,8 @@ class AlarmRoutesTest {
     fun `an alarm of each schedule variant serialises with its type discriminator`() = testApplication {
         installApp()
         val deviceId = DeviceId(register())
-        database.insertAlarm(dailyAlarm(deviceId, AlarmId("daily-1")), createdAtMillis = 1)
-        database.insertAlarm(thresholdAlarm(deviceId, AlarmId("threshold-1")), createdAtMillis = 2)
+        database.insertAlarm(dailyAlarm(deviceId, alarmId('1')), createdAtMillis = 1)
+        database.insertAlarm(thresholdAlarm(deviceId, alarmId('2')), createdAtMillis = 2)
 
         val body = client.get("/devices/${deviceId.value}/alarms").bodyAsText()
 
@@ -174,7 +175,7 @@ class AlarmRoutesTest {
         assertEquals(
             Json.parseToJsonElement(
                 """
-                { "id": "daily-1", "enabled": true, "stationAbbr": "PZH",
+                { "id": "00000000-0000-0000-0000-000000000001", "enabled": true, "stationAbbr": "PZH",
                   "species": ["BIRCH", "GRASSES"], "minSeverity": "NONE",
                   "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
                   "schedule": { "type": "daily", "at": "08:00" } }
@@ -186,7 +187,7 @@ class AlarmRoutesTest {
             Json.parseToJsonElement("""{ "type": "threshold", "from": "07:00", "until": "21:00" }"""),
             threshold.getValue("schedule"),
         )
-        assertEquals("threshold-1", threshold.getValue("id").jsonPrimitive.content)
+        assertEquals("00000000-0000-0000-0000-000000000002", threshold.getValue("id").jsonPrimitive.content)
         assertEquals("PBE", threshold.getValue("stationAbbr").jsonPrimitive.content)
         assertEquals("false", threshold.getValue("enabled").jsonPrimitive.content)
     }
@@ -428,6 +429,7 @@ class AlarmRoutesTest {
         val alarmId = createdId(deviceId)
 
         assertEquals(HttpStatusCode.NotFound, putAlarm(deviceId, "never-created", validDailyJson).status)
+        assertEquals(HttpStatusCode.NotFound, putAlarm(deviceId, UUID.randomUUID().toString(), validDailyJson).status)
         assertEquals(HttpStatusCode.NotFound, putAlarm("never-registered", alarmId, validDailyJson).status)
     }
 

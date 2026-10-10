@@ -11,7 +11,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.push.FakePushSender
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedNotificationLog
-import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
+import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import ch.stenzel.tim.polleninfo.server.alarm.store.dailyAlarm
 import ch.stenzel.tim.polleninfo.server.alarm.store.insertAlarm
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
@@ -38,7 +38,7 @@ class AlarmSchedulerTest {
     /** Monday 3 August 2026, 08:00 in Zürich. */
     private val clock = MutableClock(Instant.parse("2026-08-03T06:00:00Z"))
 
-    private val database = PollenInfoDatabase.inMemory()
+    private val database = TestPostgres.cleanDatabase()
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)

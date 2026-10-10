@@ -7,17 +7,13 @@ import ch.stenzel.tim.polleninfo.server.alarm.domain.DeviceId
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSeverity
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenSpecies
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenStation
-import java.nio.file.Files
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
-import kotlin.io.path.deleteRecursively
-import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.exists
-import kotlin.test.AfterTest
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -25,29 +21,24 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.assertFailsWith
 
 class ExposedStoresTest {
 
-    private val database = PollenInfoDatabase.inMemory()
+    private val database = TestPostgres.cleanDatabase()
     private val devices = ExposedDeviceStore(database)
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
-
-    private val tempDir = Files.createTempDirectory("polleninfo-db-test")
-
-    @OptIn(ExperimentalPathApi::class)
-    @AfterTest
-    fun tearDown() {
-        tempDir.deleteRecursively()
-    }
 
     @Test
     fun `a registered device exists`() = runTest {
@@ -87,9 +78,9 @@ class ExposedStoresTest {
     fun `alarms are listed in creation order`() = runTest {
         val id = devices.register("token-1")
         // Ids chosen so that id order is the reverse of creation order.
-        val first = dailyAlarm(id, AlarmId("c"))
-        val second = thresholdAlarm(id, AlarmId("b"))
-        val third = dailyAlarm(id, AlarmId("a"))
+        val first = dailyAlarm(id, alarmId('c'))
+        val second = thresholdAlarm(id, alarmId('b'))
+        val third = dailyAlarm(id, alarmId('a'))
         database.insertAlarm(second, createdAtMillis = 2_000)
         database.insertAlarm(third, createdAtMillis = 3_000)
         database.insertAlarm(first, createdAtMillis = 1_000)
@@ -161,6 +152,27 @@ class ExposedStoresTest {
     }
 
     @Test
+    fun `two concurrent creates at nine alarms let exactly one through`() = runTest {
+        // Several devices, so a missing lock has more than one chance to show.
+        repeat(5) {
+            val id = devices.register("token-1")
+            repeat(9) { assertIs<CreateResult.Created>(alarms.create(id, dailySpec())) }
+            val start = CompletableDeferred<Unit>()
+
+            val results = List(2) {
+                async(Dispatchers.IO) {
+                    start.await()
+                    alarms.create(id, dailySpec())
+                }
+            }.also { start.complete(Unit) }.awaitAll()
+
+            assertEquals(1, results.count { it is CreateResult.Created }, "results: $results")
+            assertEquals(1, results.count { it == CreateResult.LimitReached }, "results: $results")
+            assertEquals(10, alarms.list(id)?.size)
+        }
+    }
+
+    @Test
     fun `creating an alarm for an unknown device stores nothing`() = runTest {
         assertEquals(CreateResult.UnknownDevice, alarms.create(DeviceId("never-registered"), dailySpec()))
     }
@@ -225,6 +237,16 @@ class ExposedStoresTest {
 
         assertNull(alarms.update(id, AlarmId("never-created"), dailySpec()))
         assertEquals(emptyList(), alarms.list(id))
+    }
+
+    @Test
+    fun `an alarm id that is not a UUID is not found for update or delete`() = runTest {
+        val id = devices.register("token-1")
+        database.insertAlarm(dailyAlarm(id), createdAtMillis = 1)
+
+        assertNull(alarms.update(id, AlarmId("not-a-uuid"), dailySpec()))
+        assertFalse(alarms.delete(id, AlarmId("not-a-uuid")))
+        assertEquals(1, alarms.list(id)?.size)
     }
 
     @Test
@@ -339,19 +361,15 @@ class ExposedStoresTest {
     }
 
     @Test
-    fun `data survives closing and reopening a file backed database`() = runTest {
-        val path = tempDir.resolve("nested/dir/polleninfo.db")
-        val first = PollenInfoDatabase.file(path)
-        val id = ExposedDeviceStore(first).register("token-1")
+    fun `data is read back through a new connection pool`() = runTest {
+        val id = devices.register("token-1")
         val alarm = dailyAlarm(id)
-        first.insertAlarm(alarm, createdAtMillis = 1)
-        TransactionManager.closeAndUnregister(first)
+        database.insertAlarm(alarm, createdAtMillis = 1)
 
-        val reopened = PollenInfoDatabase.file(path)
-
-        assertTrue(path.exists())
-        assertTrue(ExposedDeviceStore(reopened).exists(id))
-        assertEquals(listOf(alarm), ExposedAlarmStore(reopened).list(id))
+        PollenInfoDatabase.connect(TestPostgres.sharedConfig()).use { reopened ->
+            assertTrue(ExposedDeviceStore(reopened.database).exists(id))
+            assertEquals(listOf(alarm), ExposedAlarmStore(reopened.database).list(id))
+        }
     }
 
     // --- Notification log ---
@@ -402,9 +420,11 @@ class ExposedStoresTest {
 
     @Test
     fun `recording for an alarm that does not exist does nothing`() = runTest {
-        log.record(AlarmId("never-stored"), setOf(PollenSpecies.BIRCH), today)
+        val neverStored = AlarmId(UUID.randomUUID().toString())
 
-        assertEquals(emptySet(), log.notifiedSpecies(AlarmId("never-stored"), today))
+        log.record(neverStored, setOf(PollenSpecies.BIRCH), today)
+
+        assertEquals(emptySet(), log.notifiedSpecies(neverStored, today))
     }
 
     @Test
@@ -426,7 +446,7 @@ class ExposedStoresTest {
         val id = storedThresholdAlarm()
         log.record(id, setOf(PollenSpecies.BIRCH), today)
 
-        transaction(database) { AlarmsTable.deleteWhere { AlarmsTable.id eq id.value } }
+        transaction(database) { AlarmsTable.deleteWhere { AlarmsTable.id eq UUID.fromString(id.value) } }
 
         assertEquals(0L, transaction(database) { NotificationLogTable.selectAll().count() })
     }
@@ -464,16 +484,12 @@ class ExposedStoresTest {
     }
 
     @Test
-    fun `the log survives closing and reopening a file backed database`() = runTest {
-        val path = tempDir.resolve("polleninfo.db")
-        val first = PollenInfoDatabase.file(path)
-        val alarm = thresholdAlarm(ExposedDeviceStore(first).register("token-1"))
-        first.insertAlarm(alarm, createdAtMillis = 1)
-        ExposedNotificationLog(first).record(alarm.id, setOf(PollenSpecies.BIRCH), today)
-        TransactionManager.closeAndUnregister(first)
+    fun `the log is read back through a new connection pool`() = runTest {
+        val alarmId = storedThresholdAlarm()
+        log.record(alarmId, setOf(PollenSpecies.BIRCH), today)
 
-        val reopened = PollenInfoDatabase.file(path)
-
-        assertEquals(setOf(PollenSpecies.BIRCH), ExposedNotificationLog(reopened).notifiedSpecies(alarm.id, today))
+        PollenInfoDatabase.connect(TestPostgres.sharedConfig()).use { reopened ->
+            assertEquals(setOf(PollenSpecies.BIRCH), ExposedNotificationLog(reopened.database).notifiedSpecies(alarmId, today))
+        }
     }
 }

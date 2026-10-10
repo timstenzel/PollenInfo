@@ -31,10 +31,15 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
 
-    // Alarms and device registrations survive a restart: SQLite through Exposed's DSL.
+    // Alarms and device registrations survive a restart: PostgreSQL through Exposed's DSL, the
+    // schema from Flyway's versioned migrations, the connections from a small Hikari pool.
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
-    implementation(libs.sqlite.jdbc)
+    implementation(libs.exposed.java.time)
+    implementation(libs.postgresql)
+    implementation(libs.hikari)
+    implementation(libs.flyway.core)
+    runtimeOnly(libs.flyway.database.postgresql)
 
     // Push: the FCM HTTP v1 call goes through the Ktor client above; this library only turns the
     // service-account key into an access token.
@@ -45,4 +50,6 @@ dependencies {
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.kotlinx.coroutines.test)
+    // The database tests' PostgreSQL, the production version, in Docker.
+    testImplementation(libs.testcontainers.postgresql)
 }

@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.server.alarm.push
 
+import ch.stenzel.tim.polleninfo.server.config.ServerConfig
 import com.google.auth.oauth2.ServiceAccountCredentials
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -8,28 +9,27 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.log
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Environment variable holding the path of the Firebase service-account key (JSON). */
-const val FCM_CREDENTIALS_ENV = "FCM_CREDENTIALS"
-
 /**
- * The production [PushSender]: FCM when [FCM_CREDENTIALS_ENV] names a service-account key, else a
- * [LoggingPushSender] with a startup warning, so the backend runs without credentials.
+ * The server's [PushSender]: FCM with the service-account key [ServerConfig.fcmCredentialsPath]
+ * names, else — in development only — a [LoggingPushSender] with a startup warning, so a local
+ * backend runs without credentials.
  *
- * The key is never part of the repository. A key that is configured but unreadable fails startup:
- * a backend that silently logs instead of sending would look healthy while delivering nothing.
+ * The key is never part of the repository. Production cannot get here without one
+ * ([ServerConfig.load] refuses to start), so it never falls back to logging: a backend that silently
+ * logs instead of sending would look healthy while delivering nothing.
  */
-fun Application.pushSenderFromEnvironment(): PushSender {
-    val path = System.getenv(FCM_CREDENTIALS_ENV)
-    if (path.isNullOrBlank()) {
-        log.warn("$FCM_CREDENTIALS_ENV is not set: push notifications are logged, not sent")
+fun Application.pushSender(config: ServerConfig): PushSender {
+    val path = config.fcmCredentialsPath
+    if (path == null) {
+        check(config.environment == ServerConfig.Environment.DEVELOPMENT) { "Production needs an FCM key" }
+        log.warn("${ServerConfig.FCM_CREDENTIALS} is not set: push notifications are logged, not sent")
         return LoggingPushSender()
     }
 
-    val key = Files.newInputStream(Path.of(path)).use(ServiceAccountCredentials::fromStream)
+    val key = Files.newInputStream(path).use(ServiceAccountCredentials::fromStream)
     val projectId = requireNotNull(key.projectId) { "$path holds no project_id" }
     val credentials = key.createScoped(FcmPushSender.SCOPE)
 

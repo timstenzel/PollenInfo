@@ -2,6 +2,17 @@ package ch.stenzel.tim.polleninfo.server.alarm.store
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.TextColumnType
+import org.jetbrains.exposed.v1.core.java.javaUUID
+import org.jetbrains.exposed.v1.javatime.date
+import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
+
+/*
+ * The Kotlin view of the tables `db/migration/V1__init.sql` creates. The migrations own the schema;
+ * nothing here is ever used to create or alter a table, so a change starts with a new migration
+ * and is then mirrored here.
+ */
 
 /**
  * One row per registered install. [fcmToken] is nullable so the scheduler can drop a token the push
@@ -10,29 +21,28 @@ import org.jetbrains.exposed.v1.core.Table
 internal object DevicesTable : Table("devices") {
     val id = varchar("id", length = 32)
     val fcmToken = text("fcm_token").nullable()
-    val createdAt = long("created_at")
+    val createdAt = timestampWithTimeZone("created_at")
 
     override val primaryKey = PrimaryKey(id)
 }
 
 /**
- * Sets are stored as comma-separated enum names and times as `HH:mm`, which keeps the file readable
- * with the `sqlite3` shell. [atTime] is set for daily reports, [fromTime] and [untilTime] for
+ * Sets are `text[]` of enum names. [atTime] is set for daily reports, [fromTime] and [untilTime] for
  * threshold alerts, as [type] says.
  */
 internal object AlarmsTable : Table("alarms") {
-    val id = varchar("id", length = 36)
-    val deviceId = reference("device_id", DevicesTable.id)
+    val id = javaUUID("id")
+    val deviceId = reference("device_id", DevicesTable.id, onDelete = ReferenceOption.CASCADE)
     val enabled = bool("enabled")
     val stationAbbr = varchar("station_abbr", length = 3)
-    val species = text("species")
+    val species = array("species", TextColumnType())
     val minSeverity = varchar("min_severity", length = 16)
-    val days = text("days")
+    val days = array("days", TextColumnType())
     val type = varchar("type", length = 16)
-    val atTime = varchar("at_time", length = 5).nullable()
-    val fromTime = varchar("from_time", length = 5).nullable()
-    val untilTime = varchar("until_time", length = 5).nullable()
-    val createdAt = long("created_at")
+    val atTime = time("at_time").nullable()
+    val fromTime = time("from_time").nullable()
+    val untilTime = time("until_time").nullable()
+    val createdAt = timestampWithTimeZone("created_at")
 
     override val primaryKey = PrimaryKey(id)
 
@@ -42,13 +52,13 @@ internal object AlarmsTable : Table("alarms") {
 
 /**
  * Which pollen types each threshold alert has already notified about on a Swiss calendar day
- * ([localDate], ISO `yyyy-MM-dd`). Persisted so that a restart never repeats a notification sent
- * earlier the same day; rows go with their alarm.
+ * ([localDate]). Persisted so that a restart never repeats a notification sent earlier the same
+ * day; rows go with their alarm.
  */
 internal object NotificationLogTable : Table("notification_log") {
     val alarmId = reference("alarm_id", AlarmsTable.id, onDelete = ReferenceOption.CASCADE)
     val species = varchar("species", length = 16)
-    val localDate = varchar("local_date", length = 10)
+    val localDate = date("local_date")
 
     override val primaryKey = PrimaryKey(alarmId, species, localDate)
 }

@@ -1,0 +1,46 @@
+# The development database: `./gradlew :server:run` connects to it with no further configuration.
+#
+#   Start:  docker compose -f deploy/compose.dev.yaml up -d
+#   Reset:  docker compose -f deploy/compose.dev.yaml down -v   (the next start is an empty schema)
+#
+# Every password here is development-only and committed on purpose (deploy/dev-secrets/); the
+# values match ServerConfig's development defaults. Production never uses this file.
+name: polleninfo-dev
+
+services:
+  postgres:
+    # Keep in step with TestPostgres.IMAGE in the server's tests.
+    image: postgres:18.6
+    environment:
+      POSTGRES_PASSWORD: polleninfo-dev-superuser
+      DB_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_APP_PASSWORD_FILE: /run/secrets/db_app_password
+    secrets:
+      - db_owner_password
+      - db_app_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Loopback only: the development database is never reachable from the network.
+      - "127.0.0.1:5432:5432"
+    networks:
+      - polleninfo-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d polleninfo"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+secrets:
+  db_owner_password:
+    file: ./dev-secrets/db_owner_password
+  db_app_password:
+    file: ./dev-secrets/db_app_password
+
+volumes:
+  pgdata:
+
+networks:
+  polleninfo-dev:
+    name: polleninfo-dev

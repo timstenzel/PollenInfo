@@ -9,7 +9,7 @@ plus a Ktor backend that owns all contact with the MeteoSwiss public API.
 ┌─────────────────────┐        REST         ┌──────────────┐  CSV fetch, on demand ┌───────────────────┐
 │ composeApp          │ ──────────────────> │  server      │  + alarm stations     │ MeteoSwiss OGD    │
 │ (Android + iOS)     │ <────────────────── │  (Ktor JVM)  │ ────────────────────> │ pollen (public)   │
-└─────────────────────┘   JSON              │  SQLite      │   30-min TTL cache    └───────────────────┘
+└─────────────────────┘   JSON              │  PostgreSQL  │   30-min TTL cache    └───────────────────┘
          ▲                                  │  scheduler   │
          │                                  └──────────────┘
          │                                        │ FCM HTTP v1 (Android only)
@@ -48,7 +48,7 @@ station metadata and threshold logic in one place and off the devices.
 
 Push notifications deliver the user's alarms (see "Alarms"). The Android app registers with FCM,
 registers the device with the backend under its push address — its Firebase Installation ID (FID) —
-and sends it again whenever FCM re-registers it; the backend keeps devices and alarms in SQLite (see
+and sends it again whenever FCM re-registers it; the backend keeps devices and alarms in PostgreSQL (see
 "Persistence"), delivers daily reports and threshold alerts through FCM (see "Alarm delivery") and
 drops an address FCM reports as unregistered. The backend sends
 **what happened, not text**: a data-only message the app words in its own language (see "Firebase").
@@ -60,7 +60,7 @@ iOS has no push leg.
 | ------------ | --------------------------- | ----------------------------------------------------------- |
 | `:androidApp`| Android application         | The APK: `MainActivity`, `PollenInfoApplication`, the app manifest, launcher icons, `app_name`, locale config, debug cleartext manifest, Firebase config, R8 rules |
 | `:composeApp`| KMP library (android, ios*) | The app's code: UI, ViewModels, repositories, REST client, platform actuals, push service, notification channels, all app tests |
-| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching, device and alarm store (SQLite) |
+| `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching, device and alarm store (PostgreSQL) |
 | `:theme`     | KMP library (android, ios*) | Shared Material 3 colors / typography / `PollenInfoTheme`    |
 
 Package root everywhere: `ch.stenzel.tim.polleninfo`.
@@ -87,11 +87,13 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 | Task                            | Command                                     |
 | ------------------------------- | ------------------------------------------- |
 | App unit tests (fast, JVM)      | `./gradlew :composeApp:testAndroidHostTest` |
-| Server unit tests               | `./gradlew :server:test`                    |
+| Server unit tests (needs Docker) | `./gradlew :server:test`                   |
 | All unit tests we can run here  | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | Verify iOS sources compile      | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Check translations (also part of `check`) | `./gradlew :composeApp:checkTranslations` |
-| Run the backend on :8080        | `./gradlew :server:run` (push is logged unless `FCM_CREDENTIALS` is set) |
+| Start the development database  | `docker compose -f deploy/compose.dev.yaml up -d` |
+| Reset the development database  | `docker compose -f deploy/compose.dev.yaml down -v` (then `up -d` again) |
+| Run the backend on :8080        | `./gradlew :server:run` against the development database (push is logged unless `FCM_CREDENTIALS` is set) |
 | Android debug APK               | `./gradlew :androidApp:assembleDebug`       |
 | Android release APK (R8)        | `./gradlew :androidApp:assembleRelease`     |
 
@@ -104,9 +106,14 @@ Notes:
 - Prefer the targeted test tasks over `./gradlew check` for the same reason.
 - The Gradle configuration cache is enabled; if a build behaves oddly after editing build scripts,
   add `--no-configuration-cache`.
-- `./gradlew :server:run` writes its database to `server/data/polleninfo.db` (override with
-  `POLLENINFO_DB`). Delete the file for a clean backend; the app then re-registers on its own. Inspect
-  it with the SDK's `sqlite3` (`platform-tools/`). The directory is git-ignored.
+- **Docker is required** for the development database and for the server's database tests (Docker
+  Desktop, OrbStack or Colima). `./gradlew :server:run` needs no exported variable: its development
+  defaults (`ServerConfig`, see "Configuration") are `deploy/compose.dev.yaml`'s database and
+  passwords. Reset the database for a clean backend; the app then re-registers on its own. Inspect it
+  with `docker compose -f deploy/compose.dev.yaml exec postgres psql -U postgres -d polleninfo`.
+- Without Docker, the server tests that need no database still pass when run on their own
+  (`--tests '*PollenRoutesTest'` etc.); every database test fails at once with "The database tests
+  need Docker".
 - The Android build needs `androidApp/google-services.json` (committed — see "Firebase").
 - Two Gradle deprecations come from the plugins themselves and cannot be fixed in our build: AGP
   9.4's `Configuration.setVisible` (deprecated since Gradle 9.1) and KGP 2.4's plain-enum
@@ -1393,16 +1400,19 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
 ### Server conventions
 
 Ktor plugin configuration is split into `plugins/` extension functions on `Application`
-(`configureSerialization`, `configureLogging`, `configureRouting`) and composed in
-`Application.module()`, which also builds the long-lived collaborators once — the
+(`configureSerialization`, `configureLogging`, `configureRouting`, `configureAlarmRouting`) and
+composed in `Application.module(config)`, which also builds the long-lived collaborators once — the
 upstream `PollenService` (via `meteoSwissPollenService`), the `MeasurementService` and the
-`HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`, then starts the alarm scheduler with the same
-`MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
+`HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`
+(health and pollen, no database) and `configureAlarmRouting(devices, alarms)` (no defaults), then
+starts the alarm scheduler with the same `MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
 ```
 server/src/main/kotlin/.../server/
-├── plugins/            configureSerialization / configureLogging / configureRouting
+├── config/             ServerConfig (+ DatabaseConfig, ConfigException)
+├── plugins/            configureSerialization / configureLogging / configureRouting /
+│                       configureAlarmRouting
 ├── pollen/
 │   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds, SWISS_ZONE
 │   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
@@ -1417,11 +1427,13 @@ server/src/main/kotlin/.../server/
     ├── store/          DeviceStore, AlarmStore, NotificationLog (+ Exposed implementations), tables,
     │                   PollenInfoDatabase
     ├── push/           PushSender, FcmPushSender, LoggingPushSender, PushPayload (+ toData),
-    │                   pushSenderFromEnvironment
+    │                   pushSender(config)
     ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
     └── AlarmRoutes.kt
 ```
+
+`server/src/main/resources/db/migration/` holds the Flyway migrations (see "Persistence").
 
 **`SWISS_ZONE`** (`pollen/domain`, `Europe/Zurich`) is the one zone in which the server answers
 "which day is it" — the history window and every alarm. `ALARM_ZONE` is an alias of it, so
@@ -1500,36 +1512,64 @@ scheduler only ever loads enabled alarms.
 
 #### Persistence
 
-Devices and alarms are the first state the backend must not lose, so the server is no longer
-stateless: **its database file has to be kept across restarts and deployments.** SQLite through
-JetBrains Exposed's DSL (`exposed-core`, `exposed-jdbc`, `org.xerial:sqlite-jdbc`), on Exposed
-1.x: tables, operators (`eq`, `and`, `less`, … — top-level functions, imported one by one) and
-statement builders come from `org.jetbrains.exposed.v1.core`; `Database`, `SchemaUtils`, the
-queries (`selectAll`, `insert`, `update`, `deleteWhere`, …) and `transaction` from
-`org.jetbrains.exposed.v1.jdbc`. `LegacyDatabaseCompatibilityTest` opens a checked-in database
-written by the pre-1.x server (`server/src/test/resources/fixtures/db/`, see its README), so a file
-from before the migration provably still loads.
+Devices and alarms are the first state the backend must not lose: **its database has to be kept
+across restarts and deployments.** PostgreSQL 18 (`postgres:18.6`, the same tag in
+`deploy/compose.dev.yaml` and `TestPostgres.IMAGE`) through JetBrains Exposed's DSL
+(`exposed-core`, `exposed-jdbc`, `exposed-java-time`), the JDBC driver `org.postgresql:postgresql`
+and a HikariCP pool. On Exposed 1.x tables, operators (`eq`, `and`, `less`, … — top-level
+functions, imported one by one) and statement builders come from `org.jetbrains.exposed.v1.core`;
+`Database`, the queries (`selectAll`, `insert`, `update`, `deleteWhere`, …) and `transaction` from
+`org.jetbrains.exposed.v1.jdbc`; `timestampWithTimeZone`, `time` and `date` from
+`org.jetbrains.exposed.v1.javatime`, `javaUUID` from `org.jetbrains.exposed.v1.core.java`.
 
-- `alarm/store/PollenInfoDatabase` opens it: `fromEnvironment()` reads `POLLENINFO_DB` (default
-  `./data/polleninfo.db`, relative to the working directory — `server/` under `:server:run`) and
-  creates the directory; `file(path)` for a given path; `inMemory()` for tests and routing defaults
-  (a shared-cache memory database kept alive by one held connection, since Exposed closes its
-  connection after every transaction).
-- **Every connection** runs `PRAGMA foreign_keys = ON` (SQLite defaults it off per connection) and a
-  busy timeout. Isolation is `SERIALIZABLE`, one of the two SQLite supports.
-- The schema is `SchemaUtils.create` on start. There is no migration tool: changing an existing
-  table needs one first.
-- Tables: `devices(id PK, fcm_token NULL, created_at)` — `fcm_token` is `NULL` once FCM reported it
-  unregistered, which keeps the device and its alarms but stops their delivery until the app sends a
-  new token — `alarms(id PK, device_id → devices,
-  enabled, station_abbr, species, min_severity, days, type, at_time, from_time, until_time,
-  created_at)` and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date,
-  PK(all three))` — which pollen types each threshold alert has notified about on a Swiss date
-  (ISO `yyyy-MM-dd`). Sets are comma-separated enum names, times `HH:mm`, so the file reads well in
-  `sqlite3`.
+- **Two roles.** `deploy/postgres/init/01-roles.sh` runs once when the data volume is created, as
+  the superuser, with the passwords from `DB_OWNER_PASSWORD_FILE` / `DB_APP_PASSWORD_FILE`: database
+  `polleninfo`, owned with schema `public` by `polleninfo_owner`; `CREATE` on `public` revoked from
+  `PUBLIC`; `polleninfo_app` gets `SELECT, INSERT, UPDATE, DELETE` on every table the owner creates
+  (default privileges, plus sequence usage) and nothing else — it cannot create, alter, drop or
+  truncate a table. Development, the tests and (later) production run the same script.
+- **The schema is Flyway's.** `alarm/store/PollenInfoDatabase.open(config)` first runs `migrate` as
+  the owner over a connection of its own (`flyway-core` + `flyway-database-postgresql`, one version),
+  then opens a Hikari pool of `POOL_SIZE` = 5 as the app login, closed on `ApplicationStopped`.
+  Migrations are `server/src/main/resources/db/migration/V<n>__<name>.sql`; nothing creates tables
+  from the Kotlin definitions in `Tables.kt`, which only mirror them. A schema change is a new
+  migration (an applied one is never edited — Flyway's checksum would refuse to start; during
+  development reset the database instead).
+- Tables (`V1__init.sql`): `devices(id PK, fcm_token NULL, created_at timestamptz)` — `fcm_token` is
+  `NULL` once FCM reported it unregistered, which keeps the device and its alarms but stops their
+  delivery until the app sends a new token — `alarms(id uuid PK, device_id → devices ON DELETE
+  CASCADE, enabled, station_abbr, species text[], min_severity, days text[], type, at_time /
+  from_time / until_time time, created_at timestamptz)` with an index on `(device_id, created_at)`,
+  and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date date, PK(all
+  three))` — which pollen types each threshold alert has notified about on a Swiss date. Arrays hold
+  enum names; instants are written at UTC (`toTimestamp()`). An alarm id that is not a UUID is
+  simply not found (`toUuidOrNull()`), never an error.
+- Isolation is Postgres's default `READ COMMITTED`. **The ten-alarm limit locks the device row**
+  (`SELECT … FOR UPDATE`) before counting, so two concurrent creates at nine cannot both pass;
+  counting in one transaction alone would not stop that under `READ COMMITTED`.
 - Store interfaces are `suspend`; the Exposed implementations run each transaction on
-  `Dispatchers.IO`. `configureRouting`'s store defaults share one private in-memory database, never
-  the production file, so `PollenRoutesTest` and `RoutingTest` need no database setup.
+  `Dispatchers.IO`. `configureRouting` has no database at all, so `PollenRoutesTest` and
+  `RoutingTest` need neither Docker nor a database.
+
+#### Configuration
+
+`config/ServerConfig.load(env, readFile)` — pure, `main()` passes `System.getenv()` and
+`ServerConfig::readFileOrNull` — reads everything once before a port is opened, and throws
+`ConfigException` listing **every** problem at once; `main()` logs it and exits with status 1.
+
+| Variable | Development default | Production |
+| --- | --- | --- |
+| `POLLENINFO_ENV` | `development` (also when unset) | `production`; any other value fails |
+| `PORT` | `8080` | optional; must be 1–65535 |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/polleninfo` | required |
+| `DB_OWNER_USER` / `DB_APP_USER` | `polleninfo_owner` / `polleninfo_app` | optional |
+| `DB_OWNER_PASSWORD_FILE` / `DB_APP_PASSWORD_FILE` | the passwords of `deploy/dev-secrets/` | required, readable, not empty |
+| `FCM_CREDENTIALS` | unset → `LoggingPushSender` | required, readable |
+
+Passwords are only ever read from files (trimmed), never from variables, and `DatabaseConfig`'s
+`toString` omits them. A configured `FCM_CREDENTIALS` that cannot be read fails in development too.
+`deploy/dev-secrets/` holds the development-only passwords, committed on purpose; `ServerConfigTest`
+checks they equal `ServerConfig.DEV_*_PASSWORD`.
 
 #### Alarm delivery
 
@@ -1618,12 +1658,13 @@ never throws for a delivery failure.
   nothing for these messages. `404` with `UNREGISTERED`, or `400` with `INVALID_ARGUMENT`, is
   `Unregistered`; any other non-2xx, a timeout or a transport error is `Failed`. The access token is
   an injected `suspend () -> String`, so `FcmPushSenderTest` never touches Google.
-- `pushSenderFromEnvironment()` (`PushWiring.kt`) builds it when **`FCM_CREDENTIALS`** names a
+- `pushSender(config)` (`PushWiring.kt`) builds it when **`FCM_CREDENTIALS`** names a
   service-account key: `google-auth-library-oauth2-http` turns the key into a token with the
   `firebase.messaging` scope (refreshed when it expires), the project id comes from the key file, and
   the `HttpClient(CIO)` has a 15-second timeout and closes on `ApplicationStopped`. A configured key
-  that cannot be read fails startup rather than silently logging.
-- Without `FCM_CREDENTIALS` the server starts with a warning and uses `LoggingPushSender`, which logs
+  that cannot be read fails startup rather than silently logging (see "Configuration").
+- Without `FCM_CREDENTIALS` — in development only; production refuses to start — the server starts
+  with a warning and uses `LoggingPushSender`, which logs
   the token's last six characters and the message's data map and reports `Sent`. **The key is never
   committed.**
 - On **`Unregistered`** the scheduler calls `DeviceStore.clearToken(deviceId, token)`: the device and
@@ -1774,12 +1815,20 @@ windows at 1 January and across a leap day.
 | Source set                    | Deps                                                        |
 | ----------------------------- | ----------------------------------------------------------- |
 | `composeApp/src/commonTest`   | `kotlin("test")`, `kotlinx-coroutines-test`, `ktor-client-mock` |
-| `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation`, `ktor-client-mock` |
+| `server/src/test`             | `kotlin("test")`, `ktor-server-test-host`, `ktor-client-content-negotiation`, `ktor-client-mock`, `testcontainers-postgresql` (2.x) |
 
-Store tests (`ExposedStoresTest`) run against `PollenInfoDatabase.inMemory()` or a temp file, never
-the real one; `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly
-(`Database.insertAlarm`) when a test needs to choose the id or the creation time. `AlarmRoutesTest` hands its own stores to
-`configureRouting(database = …, devices = …, alarms = …)`.
+**Database tests run on a real PostgreSQL in Docker** — `alarm/store/TestPostgres`: one
+Testcontainers container per test JVM (`IMAGE`, the production tag), started on first use and
+initialised by the same `deploy/postgres/init/01-roles.sh`, so the tests have the production
+roles. `TestPostgres.cleanDatabase()` is the shared `polleninfo` database, migrated once and
+truncated for every test, as the app login — what `ExposedStoresTest`, `AlarmRoutesTest` and
+`AlarmSchedulerTest` use; `unmigratedDatabase()` is a fresh copy of the database as the init script
+left it, for `MigrationTest` (V1 applies, a second migrate is a no-op, the app role can read and
+write every table and is refused `CREATE` / `ALTER` / `DROP` / `TRUNCATE`). Without Docker every
+such test fails at once with a message saying so; the others need no database.
+`alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly (`Database.insertAlarm`) when
+a test needs to choose the id or the creation time (`alarmId('a')` gives a fixed UUID). `AlarmRoutesTest` installs
+`configureAlarmRouting(devices = …, alarms = …)` with its own stores.
 
 Rules of the road:
 

@@ -3,9 +3,6 @@ package ch.stenzel.tim.polleninfo.server.plugins
 import ch.stenzel.tim.polleninfo.server.alarm.alarmRoutes
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
-import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
-import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
-import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
 import ch.stenzel.tim.polleninfo.server.pollen.domain.PollenThresholds
 import ch.stenzel.tim.polleninfo.server.pollen.history.HistoryService
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
@@ -21,29 +18,30 @@ import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
- * Collaborators are parameters with test-friendly defaults, so a test can install the exact
- * configuration it wants to assert against. `Application.module()` builds the production ones and
- * passes them all in.
+ * The health and pollen routes. Collaborators are parameters with test-friendly defaults, so a test
+ * can install the exact configuration it wants to assert against. `Application.module()` builds the
+ * production ones and passes them all in.
  *
- * The store defaults share one private in-memory [database], never the production file: a test that
- * does not care about alarms must not be able to write to it.
+ * Nothing here needs a database, so a test of these routes runs without one.
  */
 fun Application.configureRouting(
     thresholds: PollenThresholds = PollenThresholds(),
     measurementService: MeasurementService = meteoSwissMeasurementService(thresholds),
     historyService: HistoryService = HistoryService(meteoSwissPollenService(), thresholds),
-    database: Database = PollenInfoDatabase.inMemory(),
-    devices: DeviceStore = ExposedDeviceStore(database),
-    alarms: AlarmStore = ExposedAlarmStore(database),
 ) {
     routing {
         get("/health") {
             call.respondText("OK")
         }
         pollenRoutes(thresholds, measurementService, historyService)
+    }
+}
+
+/** The device and alarm routes, over stores the caller has built — there are no defaults. */
+fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) {
+    routing {
         alarmRoutes(devices, alarms)
     }
 }
