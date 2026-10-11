@@ -68,3 +68,6 @@ deploy/local-secrets/
 fcm_credentials.json
 postgres_superuser_password
 !deploy/secrets.example/**
+
+# Android Studio "Generate Signed APK" output (keep mapping.txt of a shipped build elsewhere).
+androidApp/release/
