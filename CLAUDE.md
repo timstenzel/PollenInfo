@@ -1937,7 +1937,8 @@ windows at 1 January and across a leap day.
 ## Deployment
 
 The production stack is versioned in `deploy/` and run with Docker Compose; **`deploy/README.md`
-is the runbook** — the image, the stack, secrets, trying it locally, CI.
+is the runbook** — the image, the stack, secrets, the VPS (DNS, provisioning, first start, deploy and
+rollback, backups), trying it locally, CI.
 
 - `deploy/compose.yaml` — `caddy` (HTTPS, the **only** service with published ports), `server`
   (`ghcr.io/timstenzel/polleninfo-server:${SERVER_TAG}`, read-only root) and `postgres`
@@ -1953,6 +1954,14 @@ is the runbook** — the image, the stack, secrets, trying it locally, CI.
   Postgres, 10001 the server) with mode `0400`, since non-Swarm Compose ignores `uid` / `mode`.
   `deploy/secrets.example/` and `deploy/.env.example` are the placeholders; `deploy/.env` and
   `deploy/local-secrets/` are git-ignored.
+- **Production** is an Infomaniak VPS (Ubuntu 26.04) at `api.polleninfo.ch` — `A` / `AAAA`
+  records at Hostpoint, which must resolve on every name server before the first start (README,
+  "DNS at Hostpoint"). `deploy/provision.sh` (as root, idempotent) hardens a fresh server: operator
+  `tim` by key only, no root or password SSH, `ufw` (22, 80, 443/tcp+udp), fail2ban, unattended
+  upgrades rebooting at 04:00 `Europe/Zurich`, Docker from Docker's apt repository, 2 GB swap,
+  `/opt/polleninfo/{secrets,deploy}`. `deploy/deploy.sh <sha>` (from a clean checkout) copies the
+  stack files to `/opt/polleninfo/deploy`, sets `SERVER_TAG` and pulls and restarts; rollback is the
+  same with the previous tag. `V1__init.sql` is frozen from the first production start on.
 - The Postgres tag of both compose files equals `TestPostgres.IMAGE` (`DeployFilesTest`), and
   Dependabot's `docker-compose` entry proposes new Caddy and Postgres tags.
 

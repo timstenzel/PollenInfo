@@ -291,23 +291,23 @@ notification.
 
 ### Implementation steps
 
-- [ ] `deploy/provision.sh` (idempotent, as root): sudo user with an authorized key; SSH drop-in named to sort first (e.g. `00-polleninfo.conf`, since cloud-init's file may enable passwords) with no root login and no password or keyboard-interactive auth, then restart `ssh`; `ufw` allowing OpenSSH, 80/tcp, 443/tcp, 443/udp, default deny; `fail2ban` sshd jail with `backend = systemd`; `unattended-upgrades` with automatic reboot at 04:00; Docker Engine and the Compose plugin from Docker's apt repository (verify a 26.04 suite exists, else document the fallback); `daemon.json` log defaults; 2 GB swap; `/opt/polleninfo/{secrets,deploy}`.
-- [ ] `deploy/deploy.sh <tag>`: over SSH, set `SERVER_TAG`, `docker compose pull server && docker compose up -d`; rollback is the same with the previous tag.
-- [ ] Complete `deploy/README.md`: Hostpoint `A` (and `AAAA` only if IPv6 is served) record and verifying it before the first start, Infomaniak firewall, provisioning, secret generation (`openssl rand -base64 32`) and ownership, FCM key upload, `docker login ghcr.io` with a `read:packages` token, first start, routine deploy and rollback, manual `pg_dump -Fc`, SSH-tunnel `psql`, the "only Caddy publishes ports" rule, V1 frozen from now on, the privacy-policy requirement for a public Play release.
+- [x] `deploy/provision.sh` (idempotent, as root): sudo user with an authorized key; SSH drop-in named to sort first (e.g. `00-polleninfo.conf`, since cloud-init's file may enable passwords) with no root login and no password or keyboard-interactive auth, then restart `ssh`; `ufw` allowing OpenSSH, 80/tcp, 443/tcp, 443/udp, default deny; `fail2ban` sshd jail with `backend = systemd`; `unattended-upgrades` with automatic reboot at 04:00; Docker Engine and the Compose plugin from Docker's apt repository (verify a 26.04 suite exists, else document the fallback); `daemon.json` log defaults; 2 GB swap; `/opt/polleninfo/{secrets,deploy}`.
+- [x] `deploy/deploy.sh <tag>`: over SSH, set `SERVER_TAG`, `docker compose pull server && docker compose up -d`; rollback is the same with the previous tag.
+- [x] Complete `deploy/README.md`: Hostpoint `A` (and `AAAA` only if IPv6 is served) record and verifying it before the first start, Infomaniak firewall, provisioning, secret generation (`openssl rand -base64 32`) and ownership, FCM key upload, `docker login ghcr.io` with a `read:packages` token, first start, routine deploy and rollback, manual `pg_dump -Fc`, SSH-tunnel `psql`, the "only Caddy publishes ports" rule, V1 frozen from now on, the privacy-policy requirement for a public Play release.
 - [ ] Provision the VPS, create the DNS record, deploy, verify.
 
 ### Acceptance criteria
 
-- [ ] `dig +short A api.polleninfo.ch` returns the VPS address; `https://api.polleninfo.ch/health` returns `OK` with a publicly trusted certificate; `http://` redirects to `https://`.
-- [ ] From outside only 22, 80 and 443 answer (`nmap`); SSH as root and SSH with a password are refused.
-- [ ] On the VPS: `ufw status` shows exactly the allowed ports; `fail2ban-client status sshd` shows the jail active; `systemctl is-enabled unattended-upgrades` is `enabled`; `docker compose version` works; `docker inspect` of each container shows `json-file` with size caps.
-- [ ] Running `provision.sh` a second time completes without errors and reports no change.
-- [ ] After `sudo reboot` the API answers again without manual action.
-- [ ] `deploy.sh <sha>` switches the running version within a minute; `deploy.sh <previous-sha>` rolls back.
-- [ ] A release build on a real phone loads Home and the Diary, creates a daily report due a few minutes later, and receives its notification.
+- [ ] ~~`dig +short A api.polleninfo.ch` returns the VPS address; `https://api.polleninfo.ch/health` returns `OK` with a publicly trusted certificate; `http://` redirects to `https://`.~~ *(skipped: partly verified — all three Hostpoint name servers and 1.1.1.1 return 179.237.126.96 / 2001:1600:18:20b::24c; the HTTPS and redirect checks need the stack running, not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~From outside only 22, 80 and 443 answer (`nmap`); SSH as root and SSH with a password are refused.~~ *(skipped: not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~On the VPS: `ufw status` shows exactly the allowed ports; `fail2ban-client status sshd` shows the jail active; `systemctl is-enabled unattended-upgrades` is `enabled`; `docker compose version` works; `docker inspect` of each container shows `json-file` with size caps.~~ *(skipped: not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~Running `provision.sh` a second time completes without errors and reports no change.~~ *(skipped: not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~After `sudo reboot` the API answers again without manual action.~~ *(skipped: not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~`deploy.sh <sha>` switches the running version within a minute; `deploy.sh <previous-sha>` rolls back.~~ *(skipped: not run yet: provisioning, the first start and deploys run on the VPS with the operator's SSH session, sudo password, GHCR token and Firebase key, and no image is on GHCR until `main` is pushed)*
+- [ ] ~~A release build on a real phone loads Home and the Diary, creates a daily report due a few minutes later, and receives its notification.~~ *(skipped: needs the deployed backend and a real phone)*
 
 ### Quality gates
 
-- [ ] `shellcheck deploy/*.sh` reports no errors.
-- [ ] `git ls-files` lists no secret file.
-- [ ] Every command and path in `CLAUDE.md`'s Deployment section matches `deploy/README.md`.
+- [x] `shellcheck deploy/*.sh` reports no errors.
+- [x] `git ls-files` lists no secret file.
+- [x] Every command and path in `CLAUDE.md`'s Deployment section matches `deploy/README.md`.

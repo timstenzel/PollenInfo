@@ -1,6 +1,6 @@
 # Deploying the PollenInfo backend
 
-The runbook for the server's container image and the production stack.
+The runbook for the server's container image, the production stack and the VPS it runs on.
 
 ## Build and run the server image locally
 
@@ -135,6 +135,148 @@ SELECT * FROM scheduler_state;         -- the last minute the alarm scheduler fi
 What it cannot tell you: which phone a device is (only the token's SHA-256 is stored, and devices
 are anonymous), anything from the diary (it never leaves the phone), or whether a push arrived —
 for what was sent and FCM's answer, see `docker compose logs server`.
+
+## Running it on the VPS
+
+Production is one Infomaniak VPS (Ubuntu 26.04, 1 vCPU, 2 GB RAM, 20 GB disk) at
+`179.237.126.96` / `2001:1600:18:20b::24c`, answering as `https://api.polleninfo.ch`. The operator
+logs in as `tim` (key only); the stack lives in `/opt/polleninfo/deploy`, its secrets in
+`/opt/polleninfo/secrets`.
+
+### DNS at Hostpoint
+
+`polleninfo.ch`'s DNS is at Hostpoint, whose wildcard `*.polleninfo.ch` points at its own hosting
+(`217.26.48.101`). `api` needs records of its own, which win over the wildcard:
+
+| Name | Type | Value | TTL |
+| --- | --- | --- | --- |
+| `api.polleninfo.ch` | `A` | `179.237.126.96` | 300 |
+| `api.polleninfo.ch` | `AAAA` | `2001:1600:18:20b::24c` | 300 |
+
+Add the `AAAA` record only while the server really answers on that address
+(`ip -6 addr show scope global` lists it, and the firewall below admits IPv6): clients prefer IPv6,
+and an address that does not answer breaks them and certificate validation. Leave the other records
+alone. Nothing in Infomaniak's panel affects this — at most reverse DNS, which nothing here needs.
+
+**Before the first start, every Hostpoint name server must give the new address.** Caddy asks Let's
+Encrypt for a certificate as soon as it starts; validation against the old address fails, and
+repeated failures are rate-limited for hours:
+
+```sh
+for ns in ns.hostpoint.ch ns2.hostpoint.ch ns3.hostpoint.ch 1.1.1.1; do
+  echo "$ns: $(dig @$ns +short A api.polleninfo.ch) $(dig @$ns +short AAAA api.polleninfo.ch)"
+done
+```
+
+### Infomaniak's firewall
+
+The panel's firewall sits in front of the VPS; `ufw` on the server enforces the same set again.
+Allow, from everywhere (IPv4 and IPv6), and nothing else: TCP 22, TCP 80 (certificate validation
+and the redirect to HTTPS), TCP 443, UDP 443 (HTTP/3) and ICMP (IPv6 needs it for path-MTU
+discovery). Never 5432 or 8080 — see "Only Caddy publishes ports" below.
+
+### Provisioning
+
+Once, on the fresh server, as root over SSH with your key in `/root/.ssh/authorized_keys`:
+
+```sh
+scp deploy/provision.sh root@179.237.126.96:
+ssh -t root@179.237.126.96 bash provision.sh          # --user <name> for another operator than tim
+```
+
+`provision.sh` creates the operator (sudo and docker groups, root's authorized key, a password that
+it asks for — sudo needs it, SSH never accepts it), switches off root and password login over SSH,
+enables `ufw` (OpenSSH, 80/tcp, 443/tcp, 443/udp), fail2ban's sshd jail and unattended security
+upgrades (rebooting at 04:00 when one needs it), sets the time zone to `Europe/Zurich` (so 04:00 is
+Swiss night, away from the alarms), installs Docker Engine and the Compose plugin from Docker's apt
+repository with capped `json-file` logs, adds a 2 GB swap file and creates `/opt/polleninfo/`. Its
+header lists every step.
+
+**Keep the root session open** until `ssh tim@179.237.126.96` works in a second terminal and
+`ssh root@179.237.126.96` is refused. Run again, the script re-checks everything and ends with "No
+change: the server was already provisioned." Docker publishes a `resolute` (26.04) suite; on a
+release it does not support yet the script stops before touching apt — use Ubuntu's own `docker.io`
+and `docker-compose-v2` packages until it does.
+
+### First start
+
+1. **Secrets.** Download a service-account key in the Firebase console (Project settings → Service
+   accounts → Generate new private key), copy it and the secrets script over, install, and delete
+   the copies:
+
+   ```sh
+   scp deploy/install-secrets.sh ~/Downloads/polleninfo-firebase-adminsdk-*.json tim@api.polleninfo.ch:
+   ssh -t tim@api.polleninfo.ch 'sudo ./install-secrets.sh --fcm-key polleninfo-firebase-adminsdk-*.json \
+     && rm install-secrets.sh polleninfo-firebase-adminsdk-*.json'
+   ```
+
+   The database passwords are generated on the server (`openssl rand -base64 32`) and never leave
+   it. **Never re-create them once Postgres has started** — it read them into its volume.
+2. **Registry login** as `tim` (see "Pulling the image"): `ssh tim@api.polleninfo.ch`, then
+   `docker login ghcr.io -u timstenzel --password-stdin`.
+3. **DNS** resolves on every name server (above).
+4. **Deploy** a tag CI published (below). The first start creates the database, runs `V1` and
+   obtains the certificate; then `https://api.polleninfo.ch/health` answers `OK`.
+
+**`V1__init.sql` is frozen from the first production start on.** Every schema change is a new
+migration; editing an applied one makes Flyway refuse to start.
+
+### Deploying and rolling back
+
+From a clean checkout on your machine, with the full commit SHA of a green `server.yml` run on
+`main` (its package `polleninfo-server` on GitHub lists them):
+
+```sh
+deploy/deploy.sh <sha>
+```
+
+It copies `compose.yaml`, `caddy/`, `postgres/`, `install-secrets.sh` and `.env.example` to
+`/opt/polleninfo/deploy`, sets `SERVER_TAG` in `.env` there (created from `.env.example` the first
+time), runs `docker compose pull server && docker compose up -d --wait`, waits up to a minute for
+`/health` and prints the tag it replaced. **Rollback is the same command with that tag** — mind that
+it also copies this checkout's stack files, so roll those back in git first if they changed. Only the
+server is replaced; Postgres and Caddy are recreated only when their entry in `compose.yaml`
+changes. A changed `caddy/Caddyfile` or `postgres/pg_hba.conf` is a mounted file compose does not
+compare, so restart that service afterwards:
+`ssh tim@api.polleninfo.ch 'cd /opt/polleninfo/deploy && docker compose restart caddy'`. `POLLENINFO_SSH`
+overrides the login (default `tim@api.polleninfo.ch`).
+
+After a reboot (unattended upgrades, or `sudo reboot`) Docker starts on boot and every service is
+`restart: unless-stopped`, so the API comes back without anything to do.
+
+### Backups
+
+There are no automatic backups yet. Dump by hand, in Postgres's custom format, and copy the file off
+the server:
+
+```sh
+ssh tim@api.polleninfo.ch 'cd /opt/polleninfo/deploy && docker compose exec -T -u postgres postgres \
+  pg_dump -Fc -d polleninfo' > polleninfo-$(date +%F).dump
+```
+
+Restore into an empty database with `pg_restore -d polleninfo` (as the superuser, inside the
+container). The file holds the device table (token hashes and push addresses), so keep it private.
+
+To look into the database from your machine, open an SSH session into the container's `psql` —
+Postgres publishes no port, so there is nothing to forward a port to (see "Looking into the
+database" for the logins):
+
+```sh
+ssh -t tim@api.polleninfo.ch 'cd /opt/polleninfo/deploy && docker compose exec -u postgres postgres sh -c \
+  "PGPASSWORD=\$(cat /run/secrets/db_app_password) psql -U polleninfo_app -d polleninfo"'
+```
+
+### Only Caddy publishes ports
+
+Never add `ports:` to `server` or `postgres`. Besides exposing them, Docker writes its own iptables
+rules for a published port, **ahead of `ufw`** — a published 5432 would be open to the internet
+whatever `ufw status` says. Only Infomaniak's firewall would still stand in the way.
+
+### Before a public Play release
+
+The app sends a device identifier and a push address to this server, so a public listing on Google
+Play needs a privacy-policy URL (for example a page on `polleninfo.ch`, which this stack does not
+serve). Internal and closed testing tracks do not.
 
 ## Try the production stack locally
 
