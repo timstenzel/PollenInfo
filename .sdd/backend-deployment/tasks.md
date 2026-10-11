@@ -228,31 +228,31 @@ down gracefully within the compose stop period, so a deploy lets the running tic
 
 ### Implementation steps
 
-- [ ] `deploy/compose.yaml`: `caddy`, `server` (tag from `SERVER_TAG`), `postgres` (the Testcontainers tag, volume `pgdata`, `pg_isready` healthcheck, `shared_buffers` 128 MB, `max_connections` 20, `scram-sha-256` with `pg_hba` limited to the compose network); only Caddy publishes `80`, `443/tcp`, `443/udp`; `restart: unless-stopped`, memory limits, `json-file` rotation, `no-new-privileges`, server read-only root with a `/tmp` tmpfs, `depends_on` healthy Postgres, `stop_grace_period` longer than the Netty grace plus one tick.
-- [ ] Compose secrets from `/opt/polleninfo/secrets/`; document and script that each file is owned by its reader's uid with mode `0400` (Postgres files uid 999, server files the image's uid), since non-Swarm compose ignores `uid`/`mode`.
-- [ ] Postgres runs the shared role-init script with the production password files.
-- [ ] `Caddyfile` for `api.polleninfo.ch`: reverse proxy to `server:8080`, HSTS `max-age=31536000; includeSubDomains`, `nosniff`, `no-referrer`, `Server` removed, 16 KB body limit, read/write timeouts, no access log.
-- [ ] `deploy/compose.local.yaml` override (`localhost` site, local image), `deploy/secrets.example/`, `deploy/.env.example` with `SERVER_TAG`; `.gitignore` for real secrets and `.env`.
-- [ ] Graceful shutdown: Netty grace period and timeout; the scheduler loop lets an in-flight tick finish before cancelling.
-- [ ] Runbook section "Try the production stack locally"; `CLAUDE.md` gains a Deployment section pointing to `deploy/README.md`.
+- [x] `deploy/compose.yaml`: `caddy`, `server` (tag from `SERVER_TAG`), `postgres` (the Testcontainers tag, volume `pgdata`, `pg_isready` healthcheck, `shared_buffers` 128 MB, `max_connections` 20, `scram-sha-256` with `pg_hba` limited to the compose network); only Caddy publishes `80`, `443/tcp`, `443/udp`; `restart: unless-stopped`, memory limits, `json-file` rotation, `no-new-privileges`, server read-only root with a `/tmp` tmpfs, `depends_on` healthy Postgres, `stop_grace_period` longer than the Netty grace plus one tick.
+- [x] Compose secrets from `/opt/polleninfo/secrets/`; document and script that each file is owned by its reader's uid with mode `0400` (Postgres files uid 999, server files the image's uid), since non-Swarm compose ignores `uid`/`mode`.
+- [x] Postgres runs the shared role-init script with the production password files.
+- [x] `Caddyfile` for `api.polleninfo.ch`: reverse proxy to `server:8080`, HSTS `max-age=31536000; includeSubDomains`, `nosniff`, `no-referrer`, `Server` removed, 16 KB body limit, read/write timeouts, no access log.
+- [x] `deploy/compose.local.yaml` override (`localhost` site, local image), `deploy/secrets.example/`, `deploy/.env.example` with `SERVER_TAG`; `.gitignore` for real secrets and `.env`.
+- [x] Graceful shutdown: Netty grace period and timeout; the scheduler loop lets an in-flight tick finish before cancelling.
+- [x] Runbook section "Try the production stack locally"; `CLAUDE.md` gains a Deployment section pointing to `deploy/README.md`.
 
 ### Acceptance criteria
 
-- [ ] Following the runbook's local section with real `0400` secret files, the stack starts; `curl https://localhost/health` returns `OK` with `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and no `Server` header; `http://localhost/health` redirects to HTTPS.
-- [ ] `docker compose ps` shows published ports only on `caddy`; connections from the host to 5432 and 8080 are refused.
-- [ ] `docker inspect` shows no password or key in the server's environment, and shows the memory limits, `no-new-privileges` and the server's read-only root filesystem.
-- [ ] With `FCM_CREDENTIALS` pointing at a non-existent file, the server container exits with an error naming it.
-- [ ] Inside the stack, `psql` as `polleninfo_app` is refused `DROP TABLE alarms`.
-- [ ] On the local stack, requests with a forged `X-Forwarded-For` beyond the registration limit still get `429` (the limit follows the real address).
-- [ ] `docker compose stop server` during a tick logs that tick's completion before the process exits (manual, with a log line), and `docker compose up -d` brings it back.
+- [x] Following the runbook's local section with real `0400` secret files, the stack starts; `curl https://localhost/health` returns `OK` with `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and no `Server` header; `http://localhost/health` redirects to HTTPS.
+- [x] `docker compose ps` shows published ports only on `caddy`; connections from the host to 5432 and 8080 are refused.
+- [x] `docker inspect` shows no password or key in the server's environment, and shows the memory limits, `no-new-privileges` and the server's read-only root filesystem.
+- [x] With `FCM_CREDENTIALS` pointing at a non-existent file, the server container exits with an error naming it.
+- [x] Inside the stack, `psql` as `polleninfo_app` is refused `DROP TABLE alarms`.
+- [x] On the local stack, requests with a forged `X-Forwarded-For` beyond the registration limit still get `429` (the limit follows the real address).
+- [x] `docker compose stop server` during a tick logs that tick's completion before the process exits (manual, with a log line), and `docker compose up -d` brings it back.
 
 ### Quality gates
 
-- [ ] `docker compose --env-file deploy/.env.example -f deploy/compose.yaml config` validates without warnings.
-- [ ] The Postgres image tag in `deploy/compose.yaml` and `deploy/compose.dev.yaml` equals the Testcontainers constant (a grep or a test).
-- [ ] `git ls-files deploy` contains only placeholder secrets.
-- [ ] Dependabot gains the `docker-compose` ecosystem for `deploy/`.
-- [ ] `./gradlew :server:test` passes.
+- [x] `docker compose --env-file deploy/.env.example -f deploy/compose.yaml config` validates without warnings.
+- [x] The Postgres image tag in `deploy/compose.yaml` and `deploy/compose.dev.yaml` equals the Testcontainers constant (a grep or a test).
+- [x] `git ls-files deploy` contains only placeholder secrets.
+- [x] Dependabot gains the `docker-compose` ecosystem for `deploy/`.
+- [x] `./gradlew :server:test` passes.
 
 ## Task 08-app-production-base-url
 

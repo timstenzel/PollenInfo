@@ -1,0 +1,13 @@
+# Override for trying the production stack on a developer machine (deploy/README.md, "Try the
+# production stack locally"): Caddy serves `localhost` with a certificate from its own local CA,
+# and the server runs the image built from this checkout.
+#
+#   SERVER_TAG=local SECRETS_DIR=./local-secrets \
+#     docker compose -f deploy/compose.yaml -f deploy/compose.local.yaml up -d
+services:
+  caddy:
+    environment:
+      SITE_ADDRESS: localhost
+
+  server:
+    image: polleninfo-server:local

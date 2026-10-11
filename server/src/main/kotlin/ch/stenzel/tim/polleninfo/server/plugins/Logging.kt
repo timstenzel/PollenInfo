@@ -16,6 +16,9 @@ import org.slf4j.event.Level
 fun Application.configureLogging() {
     install(CallLogging) {
         level = Level.INFO
+        // The format below has no colours; with them on, the plugin loads Jansi's native library,
+        // which the production container's read-only root and noexec /tmp refuse.
+        disableDefaultColors()
         format { call ->
             "${call.response.status()}: ${call.request.httpMethod.value} ${call.request.path()} " +
                 "in ${call.processingTimeMillis()} ms"

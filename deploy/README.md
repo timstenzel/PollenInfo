@@ -1,6 +1,6 @@
 # Deploying the PollenInfo backend
 
-The runbook for the server's container image and, later, the production stack.
+The runbook for the server's container image and the production stack.
 
 ## Build and run the server image locally
 
@@ -38,6 +38,148 @@ What the image is:
 - Listens on `8080`. Configuration comes from the environment (see "Configuration" in `CLAUDE.md`);
   the image contains no secrets and no test classes (`server/.dockerignore` admits only
   `build/install/server`).
+
+## The production stack
+
+`deploy/compose.yaml` is the whole production setup, three services:
+
+| Service | Image | Published ports | Memory | Notes |
+| --- | --- | --- | --- | --- |
+| `caddy` | `caddy:2.11.7` | `80`, `443/tcp`, `443/udp` | 128 MB | HTTPS for `SITE_ADDRESS` (default `api.polleninfo.ch`), certificates obtained and renewed automatically |
+| `server` | `ghcr.io/timstenzel/polleninfo-server:${SERVER_TAG}` | none | 700 MB | Read-only root, `/tmp` a tmpfs, the image's uid 10001, `POLLENINFO_ENV=production` |
+| `postgres` | `postgres:18.6` (= `TestPostgres.IMAGE`) | none | 512 MB | Volume `pgdata`, `shared_buffers` 128 MB, `max_connections` 20, SCRAM only |
+
+- **Only `caddy` publishes ports — never add a `ports:` to another service.** The database and the
+  server's `8080` are reachable only on the stack's networks: `edge` (Caddy and the server, with a
+  route out for certificates, MeteoSwiss and FCM) and `db` (the server and Postgres, `internal`, no
+  route out). `postgres/pg_hba.conf` lets the two PollenInfo roles in by password from those
+  networks only, and the superuser only over the container's socket as the OS user `postgres`.
+- Every service: `restart: unless-stopped`, `no-new-privileges`, a memory limit and `json-file`
+  logs capped at 3 × 10 MB.
+- **`caddy/Caddyfile`:** reverse proxy to `server:8080`; `Strict-Transport-Security
+  "max-age=31536000; includeSubDomains"`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`; no `Server` or `Via` header; bodies over 16 KB refused; header,
+  body, write and idle timeouts; no access log (the server's call log covers requests); plain HTTP
+  redirected to HTTPS. Caddy sets `X-Forwarded-For` itself and drops what a client sent, which is
+  why the server may trust it (`TRUSTED_PROXY`, `true` in production).
+- **Stopping** (`docker compose stop`, a deploy) sends `SIGTERM`: Netty refuses new requests and
+  gives running ones 2 s (at most 5 s), then the alarm scheduler lets a running tick finish (at
+  most 45 s, `TICK_STOP_TIMEOUT`) and logs "Alarm scheduler: the running tick finished, stopped",
+  then the database pool closes. `stop_grace_period: 75s` covers all of it; `DeployFilesTest`
+  keeps the two in step. Usually no tick is running and the server is gone in about 2 s.
+- `deploy/.env` (from `.env.example`, never committed) sets `SERVER_TAG` and `SECRETS_DIR`.
+
+### Secrets
+
+Every password and key is a file under `SECRETS_DIR` (default `/opt/polleninfo/secrets`), mounted
+into `/run/secrets/` — never an environment variable, never in the repository
+(`secrets.example/` holds placeholders of the layout). Compose without Swarm bind-mounts a secret
+file as it is and ignores `uid` / `mode`, so **each file is owned by the uid of the container that
+reads it, mode `0400`**: the `postgres/` files by 999 (`postgres` in the Postgres image), the
+`server/` files by 10001 (the server image). The two database passwords are needed by both
+containers, so each exists twice. `install-secrets.sh` creates all of it:
+
+```sh
+sudo deploy/install-secrets.sh --fcm-key ~/polleninfo-firebase-adminsdk.json   # /opt/polleninfo/secrets
+```
+
+It generates each missing password (`openssl rand -base64 32`), keeps existing ones — Postgres reads
+them only when its volume is created, so a new one would lock the server out — and installs or
+replaces the FCM key. Run again, it only re-asserts ownership and modes.
+
+### Pulling the image
+
+The image's package on GHCR is private, so the VPS has to log in before `docker compose pull` (or
+the first `up`) can fetch `ghcr.io/timstenzel/polleninfo-server`. Create a **classic** personal
+access token with the scope **`read:packages` only** (GitHub Packages does not accept fine-grained
+tokens) and an expiry, then, as the user that runs compose:
+
+```sh
+echo <token> | docker login ghcr.io -u timstenzel --password-stdin
+```
+
+Docker keeps it in that user's `~/.docker/config.json`, base64-encoded rather than encrypted, so the
+token can do nothing but read packages. When it expires, pulls fail with `denied`: create a new one
+and log in again. The running stack is unaffected until the next pull.
+
+### Looking into the database
+
+Postgres publishes no port, so there is no connection from outside the VPS: SSH in and run `psql`
+inside the container (`postgres/pg_hba.conf` allows exactly that). A GUI client would need a
+published port, which this stack forbids on purpose.
+
+```sh
+cd /opt/polleninfo/deploy
+
+# As the app login (preferred): DML only, it cannot create, alter, drop or truncate a table.
+# The password comes from the secret file mounted in the container; it is never typed or shown.
+docker compose exec -u postgres postgres sh -c \
+  'PGPASSWORD=$(cat /run/secrets/db_app_password) psql -U polleninfo_app -d polleninfo'
+
+# As the superuser (peer authentication over the socket, no password) — for structural repairs only.
+docker compose exec -u postgres postgres psql -d polleninfo
+```
+
+To only look, start the session with `SET default_transaction_read_only = on;`. Useful queries:
+
+```sql
+\dt                                    -- the tables
+SELECT id, fcm_token IS NOT NULL AS deliverable, created_at, last_seen_at
+  FROM devices ORDER BY last_seen_at DESC;
+SELECT id, device_id, enabled, station_abbr, type, at_time, from_time, until_time, species, days
+  FROM alarms ORDER BY created_at;
+SELECT * FROM notification_log ORDER BY local_date DESC;
+SELECT * FROM scheduler_state;         -- the last minute the alarm scheduler finished
+```
+
+What it cannot tell you: which phone a device is (only the token's SHA-256 is stored, and devices
+are anonymous), anything from the diary (it never leaves the phone), or whether a push arrived —
+for what was sent and FCM's answer, see `docker compose logs server`.
+
+## Try the production stack locally
+
+The same `compose.yaml`, with `compose.local.yaml` on top: Caddy serves `localhost` with a
+certificate from its own local CA, and the server runs the image built from this checkout. It runs
+in production mode, so it needs a full set of secrets, written to the git-ignored
+`deploy/local-secrets/`. Without a real Firebase key, `--fake-fcm-key` writes a well-formed one with
+a throw-away RSA key: the server starts, and every push fails and is logged.
+
+```sh
+# Ports 80 and 443 must be free; the development database does not conflict with the stack, but
+# stop it to check that nothing answers on 5432.
+./gradlew :server:installDist
+docker build -t polleninfo-server:local server
+
+# The secrets, owned and moded as on the server. Run as root in a throw-away container, so no sudo
+# is needed on macOS (Docker Desktop shows bind-mounted files to every uid, so the ownership is only
+# enforced on Linux).
+docker run --rm -u 0 -v "$PWD/deploy:/deploy" -w /deploy --entrypoint bash postgres:18.6 \
+  ./install-secrets.sh --fake-fcm-key local-secrets
+
+export SERVER_TAG=local SECRETS_DIR=./local-secrets
+docker compose -f deploy/compose.yaml -f deploy/compose.local.yaml up -d --wait
+
+# Trust Caddy's local CA for curl (or pass -k).
+docker compose -f deploy/compose.yaml -f deploy/compose.local.yaml \
+  cp caddy:/data/caddy/pki/authorities/local/root.crt /tmp/polleninfo-local-ca.crt
+curl -i --cacert /tmp/polleninfo-local-ca.crt https://localhost/health   # OK, with the headers above
+curl -i http://localhost/health                                         # 301 to https://localhost/health
+```
+
+Things worth checking there:
+
+```sh
+c() { docker compose -f deploy/compose.yaml -f deploy/compose.local.yaml "$@"; }
+c ps                                          # ports on caddy only
+c logs -f server                              # the server's log
+c exec -u postgres postgres sh -c \
+  'PGPASSWORD=$(cat /run/secrets/db_app_password) psql -U polleninfo_app -d polleninfo'
+                                              # the app login: DML yes, DROP TABLE refused
+c down                                        # stop; add -v to drop the database and certificates
+```
+
+A browser does not trust Caddy's local CA unless it is imported; the HSTS header then pins
+`localhost` to HTTPS in that browser, so prefer `curl`.
 
 ## CI: `.github/workflows/server.yml`
 

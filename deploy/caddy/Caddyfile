@@ -1,0 +1,42 @@
+# The stack's front door: HTTPS with automatically obtained and renewed certificates, plain HTTP
+# redirected (the last block), and a reverse proxy to the server on the internal network.
+#
+# Caddy sets X-Forwarded-For / X-Forwarded-Proto itself; with no `trusted_proxies`, whatever a client
+# sent in those headers is discarded, so the server (TRUSTED_PROXY) sees the real client address.
+# There is no `log` directive, so no access log: the server's call log covers requests.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10s
+			write 30s
+			idle 2m
+		}
+	}
+}
+
+{$SITE_ADDRESS:api.polleninfo.ch} {
+	# The server refuses bodies over 16 KB too (MAX_BODY_BYTES); this stops them one hop earlier.
+	request_body {
+		max_size 16KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		# Deleting is deferred to the written response, so this also removes the `Via: 1.1 Caddy`
+		# the proxy adds — either would name the server software.
+		-Server
+		-Via
+	}
+
+	reverse_proxy server:8080
+}
+
+# Plain HTTP only redirects. Written out instead of left to Caddy's automatic redirect so the
+# redirect does not name the server software either; ACME's HTTP challenge is still answered first.
+http://{$SITE_ADDRESS:api.polleninfo.ch} {
+	header -Server
+	redir https://{host}{uri} permanent
+}

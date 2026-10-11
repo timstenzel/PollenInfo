@@ -22,6 +22,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.history.HistoryService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.log
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import java.time.Clock
@@ -37,13 +38,25 @@ fun main() {
         LoggerFactory.getLogger("ch.stenzel.tim.polleninfo.server.Application").error(e.message)
         exitProcess(1)
     }
+    // On SIGTERM (`docker compose stop`) Ktor's shutdown hook stops Netty — new requests are refused,
+    // ones in flight get the grace period — and then the application, whose alarm scheduler lets a
+    // running tick finish (TICK_STOP_TIMEOUT). compose.yaml's stop_grace_period covers the sum.
     embeddedServer(
         factory = Netty,
-        port = config.port,
-        host = "0.0.0.0",
+        configure = {
+            connector {
+                port = config.port
+                host = "0.0.0.0"
+            }
+            shutdownGracePeriod = SHUTDOWN_GRACE_PERIOD_MILLIS
+            shutdownTimeout = SHUTDOWN_TIMEOUT_MILLIS
+        },
         module = { module(config) },
     ).start(wait = true)
 }
+
+private const val SHUTDOWN_GRACE_PERIOD_MILLIS = 2_000L
+private const val SHUTDOWN_TIMEOUT_MILLIS = 5_000L
 
 /**
  * Builds every long-lived collaborator once. The [MeasurementService] is built here rather than

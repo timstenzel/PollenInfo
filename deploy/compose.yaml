@@ -1,0 +1,137 @@
+# The production stack: Caddy (HTTPS, the only published ports), the server and PostgreSQL.
+#
+#   On the server:  /opt/polleninfo/deploy/  with .env (SERVER_TAG) — see deploy/README.md
+#   Locally:        with compose.local.yaml  — see "Try the production stack locally"
+#
+# Secrets are files under SECRETS_DIR (default /opt/polleninfo/secrets), laid out and owned by
+# install-secrets.sh: non-Swarm compose bind-mounts a secret file as it is and ignores `uid` / `mode`,
+# so each file must already belong to the one uid that reads it, with mode 0400.
+name: polleninfo
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  caddy:
+    <<: *hardening
+    image: caddy:2.11.7
+    mem_limit: 128m
+    environment:
+      # The site Caddy serves and obtains a certificate for; compose.local.yaml sets localhost.
+      SITE_ADDRESS: ${SITE_ADDRESS:-api.polleninfo.ch}
+    ports:
+      # The only published ports of the stack. Nothing else may ever publish one.
+      - "80:80"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    depends_on:
+      - server
+
+  server:
+    <<: *hardening
+    image: ${SERVER_IMAGE:-ghcr.io/timstenzel/polleninfo-server}:${SERVER_TAG:?SERVER_TAG must name the image tag to run}
+    # The image's own non-root uid (10001, server/Dockerfile); the secret files below belong to it.
+    mem_limit: 700m
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      POLLENINFO_ENV: production
+      DB_URL: jdbc:postgresql://postgres:5432/polleninfo
+      DB_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_APP_PASSWORD_FILE: /run/secrets/db_app_password
+      FCM_CREDENTIALS: /run/secrets/fcm_credentials.json
+    secrets:
+      - source: server_db_owner_password
+        target: db_owner_password
+      - source: server_db_app_password
+        target: db_app_password
+      - source: fcm_credentials
+        target: fcm_credentials.json
+    networks:
+      - edge
+      - db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # SIGTERM first: Netty's shutdown (≤ 7 s), then the running alarm tick (≤ 45 s,
+    # TICK_STOP_TIMEOUT), then the application's own shutdown (≤ 5 s). Only after this is it killed.
+    stop_grace_period: 75s
+
+  postgres:
+    <<: *hardening
+    # Keep in step with TestPostgres.IMAGE and compose.dev.yaml (DeployFilesTest checks).
+    image: postgres:18.6
+    mem_limit: 512m
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=20
+      - -c
+      - password_encryption=scram-sha-256
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      DB_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+      DB_APP_PASSWORD_FILE: /run/secrets/db_app_password
+    secrets:
+      - source: postgres_superuser_password
+        target: postgres_superuser_password
+      - source: postgres_db_owner_password
+        target: db_owner_password
+      - source: postgres_db_app_password
+        target: db_app_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    # No published port: only the server, on the internal network `db`, can reach it.
+    networks:
+      - db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d polleninfo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+secrets:
+  postgres_superuser_password:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/postgres/postgres_superuser_password
+  postgres_db_owner_password:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/postgres/db_owner_password
+  postgres_db_app_password:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/postgres/db_app_password
+  server_db_owner_password:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/server/db_owner_password
+  server_db_app_password:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/server/db_app_password
+  fcm_credentials:
+    file: ${SECRETS_DIR:-/opt/polleninfo/secrets}/server/fcm_credentials.json
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  # Caddy and the server; has a route out (certificates, MeteoSwiss, FCM).
+  edge:
+  # The server and Postgres only, with no route out of the machine.
+  db:
+    internal: true

@@ -18,3 +18,9 @@ updates:
       - /.github/actions/setup-jvm
     schedule:
       interval: weekly
+
+  - package-ecosystem: docker-compose
+    # The Caddy and Postgres tags of the production and development stacks.
+    directory: /deploy
+    schedule:
+      interval: weekly

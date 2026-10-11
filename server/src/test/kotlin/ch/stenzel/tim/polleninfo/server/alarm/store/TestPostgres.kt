@@ -22,7 +22,7 @@ import org.testcontainers.utility.MountableFile
  */
 object TestPostgres {
 
-    /** Keep in step with `deploy/compose.dev.yaml` (and the production compose file). */
+    /** Keep in step with `deploy/compose.dev.yaml` and `deploy/compose.yaml` (`DeployFilesTest`). */
     const val IMAGE = "postgres:18.6"
 
     const val OWNER_PASSWORD = "test-owner-password"

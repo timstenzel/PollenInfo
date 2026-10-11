@@ -60,3 +60,11 @@ secrets.properties
 **/composeCompilerReports/
 **/composeMetrics/*.db
 *.db
+
+# Production stack: the real .env and secret files never enter the repository
+# (deploy/.env.example and deploy/secrets.example/ are the placeholders).
+deploy/.env
+deploy/local-secrets/
+fcm_credentials.json
+postgres_superuser_password
+!deploy/secrets.example/**

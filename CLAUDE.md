@@ -97,6 +97,7 @@ export `JAVA_HOME` for that one call rather than adding it back to the docs.
 | Android debug APK               | `./gradlew :androidApp:assembleDebug`       |
 | Android release APK (R8)        | `./gradlew :androidApp:assembleRelease`     |
 | Server container image          | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` (run it: `deploy/README.md`) |
+| Production stack on this machine | After the image: `deploy/README.md`, "Try the production stack locally" (HTTPS on `localhost`) |
 
 Notes:
 
@@ -1659,8 +1660,13 @@ checks they equal `ServerConfig.DEV_*_PASSWORD`.
 
 `alarm/scheduler/AlarmScheduler.tick()` runs once at start and then at the start of every minute
 (`launchAlarmScheduler` in `Application.module()`: a coroutine on the application scope that ticks,
-waits for the next whole minute, logs and survives a failing tick, and is cancelled on
-`ApplicationStopped`). The loop holds no logic; `tick()` is the tested surface.
+waits for the next whole minute, and logs and survives a failing tick). **Stopping lets a running
+tick finish**: on `ApplicationStopping` — before the application's coroutines are cancelled and the
+database pool closes — the loop leaves after its current tick and the stop waits for it, at most
+`TICK_STOP_TIMEOUT` (45 s) before cancelling it, so a deploy never cuts a minute's sends in half.
+`main()` gives Netty a 2-second grace period (5 s at most) first; `deploy/compose.yaml`'s
+`stop_grace_period` (75 s) must exceed the sum, which `DeployFilesTest` checks. The loop holds no
+logic; `tick()` is the tested surface.
 
 Each tick takes the current minute in `ALARM_ZONE` (`SWISS_ZONE`, `Europe/Zurich` — every alarm day and time is
 Swiss time, and `java.time` handles daylight saving), loads `AlarmStore.enabledWithDeliverableDevice()`
@@ -1917,6 +1923,28 @@ since a year with a silent hole where last year should be would read as a clean 
 `d_historical` is and is not read (a month starting on 1 January versus on 31 December), the
 overlap rule, stale serving per file and classification at a band edge; `HistoryWindowTest` pins the
 windows at 1 January and across a leap day.
+
+## Deployment
+
+The production stack is versioned in `deploy/` and run with Docker Compose; **`deploy/README.md`
+is the runbook** — the image, the stack, secrets, trying it locally, CI.
+
+- `deploy/compose.yaml` — `caddy` (HTTPS, the **only** service with published ports), `server`
+  (`ghcr.io/timstenzel/polleninfo-server:${SERVER_TAG}`, read-only root) and `postgres`
+  (`postgres:18.6`, no published port, on an `internal` network with the server only). Memory
+  limits, `no-new-privileges`, rotated `json-file` logs and `restart: unless-stopped` everywhere.
+  `deploy/compose.local.yaml` serves `localhost` with the locally built image.
+- `deploy/caddy/Caddyfile` — the proxy, HSTS and the other response headers, the 16 KB body limit,
+  timeouts, no access log, no `Server` / `Via` header.
+- `deploy/postgres/` — the role script shared with development and the tests, and the production
+  `pg_hba.conf` (SCRAM from the stack's networks only).
+- **Secrets are files, never variables and never committed**: `deploy/install-secrets.sh` lays them
+  out under `/opt/polleninfo/secrets` (`SECRETS_DIR`), each owned by the uid that reads it (999
+  Postgres, 10001 the server) with mode `0400`, since non-Swarm Compose ignores `uid` / `mode`.
+  `deploy/secrets.example/` and `deploy/.env.example` are the placeholders; `deploy/.env` and
+  `deploy/local-secrets/` are git-ignored.
+- The Postgres tag of both compose files equals `TestPostgres.IMAGE` (`DeployFilesTest`), and
+  Dependabot's `docker-compose` entry proposes new Caddy and Postgres tags.
 
 ## Testing
 
