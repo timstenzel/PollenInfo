@@ -9,7 +9,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.data.remote.StationMeasurement
 import ch.stenzel.tim.polleninfo.core.measurement.data.repository.StationMeasurementRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.measurement.domain.repository.StationMeasurementRepository
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
-import ch.stenzel.tim.polleninfo.core.network.apiBaseUrl
+import ch.stenzel.tim.polleninfo.core.network.API_BASE_URL
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreDeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreNotificationPermissionPreferences
@@ -43,6 +43,7 @@ import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeViewModel
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingViewModel
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.ChangeStationViewModel
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsViewModel
+import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -54,18 +55,18 @@ val dataModule = module {
     single { ExampleApiService(get()) }
     single<ExampleRepository> { ExampleRepositoryImpl(get()) }
 
-    // The backend address is handed to the service here rather than read inside it, so tests can
-    // construct one against any host.
-    single { StationApiService(get(), apiBaseUrl) }
+    // The backend address (from the entry point, see appModules) is handed to the service here
+    // rather than read inside it, so tests can construct one against any host.
+    single { StationApiService(get(), get(API_BASE_URL)) }
     single<StationRepository> { StationRepositoryImpl(get()) }
 
-    single { SpeciesApiService(get(), apiBaseUrl) }
+    single { SpeciesApiService(get(), get(API_BASE_URL)) }
     single<SpeciesRepository> { SpeciesRepositoryImpl(get()) }
 
-    single { StationMeasurementApiService(get(), apiBaseUrl) }
+    single { StationMeasurementApiService(get(), get(API_BASE_URL)) }
     single<StationMeasurementRepository> { StationMeasurementRepositoryImpl(get()) }
 
-    single { StationHistoryApiService(get(), apiBaseUrl) }
+    single { StationHistoryApiService(get(), get(API_BASE_URL)) }
     single<StationHistoryRepository> { StationHistoryRepositoryImpl(get()) }
 
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
@@ -76,7 +77,7 @@ val dataModule = module {
     single<DiaryRepository> { DataStoreDiaryRepository(get()) }
 
     // PushTokenProvider comes from platformModule.
-    single { AlarmApiService(get(), apiBaseUrl) }
+    single { AlarmApiService(get(), get(API_BASE_URL)) }
     single { AlarmRepositoryImpl(get(), get(), get()) }
     single<AlarmRepository> { get<AlarmRepositoryImpl>() }
     // The same instance, so a token update and a registration share its lock.
@@ -105,4 +106,16 @@ val presentationModule = module {
     viewModel { ChangeStationViewModel(get(), get(), get(), get()) }
 }
 
-val appModules = listOf(platformModule, networkModule, dataModule, domainModule, presentationModule)
+/**
+ * Every module the app runs with. [apiBaseUrl] is our backend's address without a trailing slash,
+ * passed in by the platform entry point — `PollenInfoApplication` from the build type's
+ * `BuildConfig`, `MainViewController` on iOS — and provided under [API_BASE_URL].
+ */
+fun appModules(apiBaseUrl: String): List<Module> = listOf(
+    module { single(API_BASE_URL) { apiBaseUrl } },
+    platformModule,
+    networkModule,
+    dataModule,
+    domainModule,
+    presentationModule,
+)

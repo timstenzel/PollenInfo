@@ -1,11 +1,15 @@
 package ch.stenzel.tim.polleninfo.core.network
 
+import org.koin.core.qualifier.named
+
 /**
- * Base address of **our own** backend (`:server`), without a trailing slash.
+ * The Koin qualifier of the base address of **our own** backend (`:server`), a `String` without a
+ * trailing slash.
  *
- * It differs per platform because a development server on the host machine is reachable under a
- * different name from each emulator/simulator, so there is one actual per platform rather than one
- * shared constant. Consumers never read this directly — Koin passes it to the API services that
- * need it, so a test can construct a service pointing at any host.
+ * The address comes from the platform entry point — `appModules(apiBaseUrl)` — rather than from a
+ * constant here: Android takes it from the build type's `BuildConfig.API_BASE_URL` (the deployed
+ * HTTPS backend for a release, the host machine's development server for a debug build), iOS from
+ * `MainViewController`. Consumers never read it themselves — Koin passes it to the API services
+ * that need it, so a test can construct a service pointing at any host.
  */
-expect val apiBaseUrl: String
+val API_BASE_URL = named("apiBaseUrl")

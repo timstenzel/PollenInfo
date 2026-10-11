@@ -14,7 +14,7 @@ import io.ktor.client.request.parameter
  * A real feature talks to our own backend instead: see
  * [StationApiService][ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService],
  * which takes its base URL as a constructor parameter and is handed
- * [apiBaseUrl][ch.stenzel.tim.polleninfo.core.network.apiBaseUrl] by Koin.
+ * the backend address ([API_BASE_URL][ch.stenzel.tim.polleninfo.core.network.API_BASE_URL]) by Koin.
  */
 private const val BASE_URL = "https://api.example.com/v1/pollen"
 

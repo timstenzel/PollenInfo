@@ -58,7 +58,7 @@ iOS has no push leg.
 
 | Module       | Type                        | Contains                                                    |
 | ------------ | --------------------------- | ----------------------------------------------------------- |
-| `:androidApp`| Android application         | The APK: `MainActivity`, `PollenInfoApplication`, the app manifest, launcher icons, `app_name`, locale config, debug cleartext manifest, Firebase config, R8 rules |
+| `:androidApp`| Android application         | The APK: `MainActivity`, `PollenInfoApplication`, the app manifest, launcher icons, `app_name`, locale config, debug cleartext manifest, `BuildConfig.API_BASE_URL` per build type, Firebase config, R8 rules |
 | `:composeApp`| KMP library (android, ios*) | The app's code: UI, ViewModels, repositories, REST client, platform actuals, push service, notification channels, all app tests |
 | `:server`    | Kotlin/JVM (Ktor + Netty)   | REST API for the apps, station/species/threshold domain, MeteoSwiss fetching, device and alarm store (PostgreSQL) |
 | `:theme`     | KMP library (android, ios*) | Shared Material 3 colors / typography / `PollenInfoTheme`    |
@@ -322,7 +322,7 @@ invented placeholders, **not** the real vocabulary — that lives in `:server` a
 `Error` state. Its tests all pass because they drive it through `MockEngine`.
 
 For a real feature that talks to our own backend, mirror one of the real slices instead — all
-are the same layering pointed at `:server` through `apiBaseUrl`. The first three no longer own a
+are the same layering pointed at `:server` through the `API_BASE_URL` address. The first three no longer own a
 data layer: the station list and the reading pipeline they consume live in `core/` (below), so
 those slices are mostly `presentation/`. `feature/alarms` is the full layering again, since nothing
 else reads alarms. `feature/diary` reads `core/history` and so has no `data/` either.
@@ -378,7 +378,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
-| `core/network` | `apiBaseUrl`, `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
+| `core/network` | `API_BASE_URL` (the Koin qualifier of the backend address), `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 | `core/stationpicker` | Choosing a station, shared by onboarding and the change-station screen: `FindNearestStationUseCase` (`domain/usecase`), and in `presentation/` the `StationPicker` state holder, `StationPickerState` (`Loading` / `Content(stations, selected, isLocating, locationError)` / `Error(AppError)`), `LocationError` and the `StationPickerContent` composable (see "Location") |
@@ -393,26 +393,31 @@ the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt`,
 
 ### Talking to our own backend
 
-`core/network/ApiConfig.kt` declares `expect val apiBaseUrl: String` — the base address of `:server`,
-without a trailing slash. There is one actual per platform because a development server on the host
-machine is reachable under a different name from each emulator:
+The base address of `:server`, without a trailing slash, comes from the **platform entry point**:
+`appModules(apiBaseUrl)` (`core/di/AppModule.kt`) provides it as a Koin single under the qualifier
+`API_BASE_URL` (`core/network/ApiConfig.kt`). There is no constant in `:composeApp`.
 
-| Platform | `apiBaseUrl`            | Why                                                    |
-| -------- | ----------------------- | ------------------------------------------------------ |
-| Android  | `http://10.0.2.2:8080`  | The emulator's alias for the host's loopback interface |
-| iOS      | `http://localhost:8080` | The simulator shares the host's network stack          |
+| Build | Address | Set in |
+| ----- | ------- | ------ |
+| Android release | `https://api.polleninfo.ch` — always | `:androidApp`'s `BuildConfig.API_BASE_URL` (release build type) |
+| Android debug | `http://10.0.2.2:8080` (the emulator's alias for the host's loopback), or the Gradle property `polleninfo.apiBaseUrl` | `BuildConfig.API_BASE_URL` (debug build type) |
+| iOS | `http://localhost:8080` (the simulator shares the host's network stack) | `MainViewController` |
 
-**API services never read `apiBaseUrl` themselves.** They take the base URL as a constructor
-parameter and Koin supplies it (`single { StationApiService(get(), apiBaseUrl) }`), so a test can
-construct one against whatever host its `MockEngine` answers for. Replace the actuals with an
-`https` address once the backend is deployed; there is deliberately no BuildConfig or Gradle
-flavour machinery for this yet.
+`PollenInfoApplication` passes `BuildConfig.API_BASE_URL`. To point a debug build elsewhere — the
+deployed backend, another machine — pass `-Ppolleninfo.apiBaseUrl=https://api.polleninfo.ch` to
+Gradle or set the property in `~/.gradle/gradle.properties` (never in the project's, so a checkout
+always builds against the local backend). A release build ignores the property.
 
-Because those addresses are plain HTTP, both platforms need a transport-security exception:
+**API services never pick the address themselves.** They take the base URL as a constructor
+parameter and Koin supplies it (`single { StationApiService(get(), get(API_BASE_URL)) }`), so a
+test can construct one against whatever host its `MockEngine` answers for.
+
+Because the development addresses are plain HTTP, both platforms need a transport-security
+exception in development (a release build talks HTTPS and has none):
 
 - **Android** — `androidApp/src/debug/AndroidManifest.xml` sets `android:usesCleartextTraffic="true"`
   on `<application>`. It lives in the **debug source set only**, so a release build can never ship
-  it (verify with `grep usesCleartextTraffic androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml`
+  it (verify with `grep -l 'usesCleartextTraffic\|ACCESS_LOCAL_NETWORK' androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml`
   — only the debug one matches).
 - **Android 17 (API 37)** — an app targeting 37 may not reach local-network addresses, and
   `10.0.2.2` is one, without the runtime permission `ACCESS_LOCAL_NETWORK`. Without it every
@@ -441,6 +446,11 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (a whole number) | `IosAppInfo` — Settings' version line; hidden if either is missing or the build number is not a whole number |
 
 The notification permission (`IosNotificationPermissionController`) needs no `Info.plist` key.
+
+**The backend address** is not an `Info.plist` key: `MainViewController` passes
+`http://localhost:8080` to `appModules(…)` (see "Talking to our own backend"). Whoever creates the
+wrapper should give a release build `https://api.polleninfo.ch` there — e.g. from a build setting —
+and keep `NSAllowsLocalNetworking` to debug builds.
 
 ### Error handling
 

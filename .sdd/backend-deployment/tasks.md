@@ -263,23 +263,23 @@ replacing the hard-coded per-platform constants.
 
 ### Implementation steps
 
-- [ ] Enable `BuildConfig` in `:androidApp` with `API_BASE_URL` per build type: release `https://api.polleninfo.ch`; debug from the Gradle property `polleninfo.apiBaseUrl` (command line or `~/.gradle/gradle.properties`) or `http://10.0.2.2:8080`.
-- [ ] Make `appModules` take the base address (or a Koin single holding it) and pass it from `PollenInfoApplication` and `MainViewController` (`http://localhost:8080`); delete the `apiBaseUrl` expect/actual pair.
-- [ ] Update `CLAUDE.md` ("Talking to our own backend", iOS wrapper configuration).
+- [x] Enable `BuildConfig` in `:androidApp` with `API_BASE_URL` per build type: release `https://api.polleninfo.ch`; debug from the Gradle property `polleninfo.apiBaseUrl` (command line or `~/.gradle/gradle.properties`) or `http://10.0.2.2:8080`.
+- [x] Make `appModules` take the base address (or a Koin single holding it) and pass it from `PollenInfoApplication` and `MainViewController` (`http://localhost:8080`); delete the `apiBaseUrl` expect/actual pair.
+- [x] Update `CLAUDE.md` ("Talking to our own backend", iOS wrapper configuration).
 
 ### Acceptance criteria
 
-- [ ] The generated release `BuildConfig` has `API_BASE_URL = "https://api.polleninfo.ch"`, and the merged release manifest has neither `usesCleartextTraffic` nor `ACCESS_LOCAL_NETWORK`.
-- [ ] A debug build without the property reaches the dev backend at `10.0.2.2:8080` (manual: Home loads).
-- [ ] `./gradlew :androidApp:assembleDebug -Ppolleninfo.apiBaseUrl=https://api.polleninfo.ch` produces a debug `BuildConfig` with that address.
-- [ ] `grep -rn "expect val apiBaseUrl\|actual val apiBaseUrl" composeApp/src` finds nothing.
+- [x] The generated release `BuildConfig` has `API_BASE_URL = "https://api.polleninfo.ch"`, and the merged release manifest has neither `usesCleartextTraffic` nor `ACCESS_LOCAL_NETWORK`.
+- [ ] ~~A debug build without the property reaches the dev backend at `10.0.2.2:8080` (manual: Home loads).~~ *(skipped: Docker is not installed on this machine, so the development database and `:server:run` cannot start; the debug `BuildConfig.API_BASE_URL` was verified to be `http://10.0.2.2:8080`)*
+- [x] `./gradlew :androidApp:assembleDebug -Ppolleninfo.apiBaseUrl=https://api.polleninfo.ch` produces a debug `BuildConfig` with that address.
+- [x] `grep -rn "expect val apiBaseUrl\|actual val apiBaseUrl" composeApp/src` finds nothing.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes.
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
-- [ ] `./gradlew :composeApp:checkTranslations` passes.
-- [ ] `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease` succeed with no new warning.
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes.
+- [x] `./gradlew :composeApp:checkTranslations` passes.
+- [x] `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease` succeed with no new warning.
 
 ## Task 09-vps-go-live
 

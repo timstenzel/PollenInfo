@@ -19,7 +19,8 @@ class PollenInfoApplication : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@PollenInfoApplication)
-            modules(appModules)
+            // The deployed backend for a release, the development server for a debug build.
+            modules(appModules(BuildConfig.API_BASE_URL))
         }
         createAlarmNotificationChannels(this)
     }

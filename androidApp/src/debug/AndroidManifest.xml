@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Debug-only overlay. The development backend runs as plain HTTP on the host machine
-  (see `apiBaseUrl`), which Android blocks by default since API 28. Keeping the exception in this
+  (`BuildConfig.API_BASE_URL`), which Android blocks by default since API 28. Keeping the exception in this
   source set means it is merged into debug builds only, so a release build can never ship it.
 
   The host alias 10.0.2.2 is a local-network address, which apps targeting API 37 may only reach

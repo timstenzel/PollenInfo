@@ -10,7 +10,7 @@ import io.ktor.client.request.get
  * Talks to our own backend, never to MeteoSwiss — all upstream contact, parsing and classification
  * stays on the server.
  *
- * [baseUrl] is injected rather than read from `apiBaseUrl` directly so a test can point this at
+ * [baseUrl] is injected rather than fixed here so a test can point this at
  * whatever host its [MockEngine][io.ktor.client.engine.mock.MockEngine] answers for. A non-2xx status
  * is an `HttpStatusException`, never read as a reading.
  */

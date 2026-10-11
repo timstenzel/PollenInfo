@@ -19,13 +19,25 @@ android {
         versionName = "1.0.0"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
+            // The development backend on the host machine (10.0.2.2 is the emulator's alias for its
+            // loopback), or any address passed as -Ppolleninfo.apiBaseUrl=… or set in
+            // ~/.gradle/gradle.properties — e.g. the deployed backend from a debug build.
+            val apiBaseUrl = providers.gradleProperty("polleninfo.apiBaseUrl")
+                .getOrElse("http://10.0.2.2:8080")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
         release {
+            // Always the deployed backend over HTTPS; release builds have no cleartext exception.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.polleninfo.ch\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

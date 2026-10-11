@@ -7,7 +7,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 
 /**
- * Talks to our own backend. [baseUrl] is injected rather than read from `apiBaseUrl` directly so a
+ * Talks to our own backend. [baseUrl] is injected rather than fixed here so a
  * test can point this at whatever host its [MockEngine][io.ktor.client.engine.mock.MockEngine]
  * answers for. A non-2xx status is an `HttpStatusException`, never read as a station list.
  */
