@@ -235,24 +235,24 @@ hints only. End to end: `CredentialStore` (Android Credential Manager, iOS no-op
 
 ### Implementation steps
 
-- [ ] Add `androidx.credentials` and its Play-services provider to the catalog and `androidMain`; define `CredentialStore` (`save(email, password)`, `offer(): SavedCredential?`) and bind it per platform — a Koin binding if an application context suffices, otherwise a `@Composable expect fun rememberCredentialStore()` handed to the ViewModel; every Credential Manager exception is swallowed and logged; iOS no-op actual; `FakeCredentialStore`.
-- [ ] `AccountViewModel`: `save` after a successful register or login, before `Done`, never blocking it; on first open in login mode `offer()`, and a returned credential fills the form and submits.
-- [ ] Content types: email/username, password, new password (register) on `AccountScreen` and password on the delete dialog.
-- [ ] Docs: CLAUDE.md — `core/` table (`core/credentials`), iOS wrapper configuration (password autofill, Associated Domains), Firebase (Credential Manager is the second Play-services dependency).
+- [x] Add `androidx.credentials` and its Play-services provider to the catalog and `androidMain`; define `CredentialStore` (`save(email, password)`, `offer(): SavedCredential?`) and bind it per platform — a Koin binding if an application context suffices, otherwise a `@Composable expect fun rememberCredentialStore()` handed to the ViewModel; every Credential Manager exception is swallowed and logged; iOS no-op actual; `FakeCredentialStore`.
+- [x] `AccountViewModel`: `save` after a successful register or login, before `Done`, never blocking it; on first open in login mode `offer()`, and a returned credential fills the form and submits.
+- [x] Content types: email/username, password, new password (register) on `AccountScreen` and password on the delete dialog.
+- [x] Docs: CLAUDE.md — `core/` table (`core/credentials`), iOS wrapper configuration (password autofill, Associated Domains), Firebase (Credential Manager is the second Play-services dependency).
 
 ### Acceptance criteria
 
-- [ ] `AccountViewModelTest`: `save` is called once with the submitted email and password after a successful register and after a successful login, and never after a failure; a throwing `save` still emits `Done`.
-- [ ] `AccountViewModelTest`: an offered credential fills the form and logs in; no offer leaves the form empty; register mode never calls `offer`.
-- [ ] The iOS sources compile with the no-op actual (QG-app).
-- [ ] Manual (device with Google Password Manager): registering shows the system save sheet and "Not now" leaves the user logged in; after logging out, opening the login form offers the saved login and choosing it logs in.
+- [x] `AccountViewModelTest`: `save` is called once with the submitted email and password after a successful register and after a successful login, and never after a failure; a throwing `save` still emits `Done`.
+- [x] `AccountViewModelTest`: an offered credential fills the form and logs in; no offer leaves the form empty; register mode never calls `offer`.
+- [x] The iOS sources compile with the no-op actual (QG-app).
+- [ ] ~~Manual (device with Google Password Manager): registering shows the system save sheet and "Not now" leaves the user logged in; after logging out, opening the login form offers the saved login and choosing it logs in.~~ *(skipped: no Google account is signed in on the emulators here, so there is no Google Password Manager to show a sheet, and signing one in needs the user's Google credentials. What was verified on the API 37 emulator against `:server:run`: opening the login form reached Credential Manager with an activity and got `NoCredentialException` — no sheet, the form stayed empty, nothing was submitted; registering called `createCredential`, which answered `CreateCredentialNoCreateOptionException`, swallowed, and the user landed in Settings "Logged in as pm-check@example.com"; logging out and in again (email in other capitals) did the same; the app's log lines named only the exception types, never the email or password. Then on the API 31 emulator (`Medium_Phone_Android_12`, signed in to Google): registering showed Google's "Save password?" sheet with the email and a masked password, and Cancel logged `CreateCredentialCancellationException` and left the user logged in with the Diary's chart. The same build without `credentials-play-services-auth` showed no sheet at all — `CreateCredentialProviderConfigurationException` on saving, `GetCredentialProviderConfigurationException` on opening the login form — so the provider is required below API 34. Saving was not confirmed, so as not to write a credential into the real Google account on the emulator; offering a saved login and picking it still needs a check by hand)*
 
 ### Quality gates
 
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
 
 ---
 

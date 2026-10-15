@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.account.presentation
 
+import ch.stenzel.tim.polleninfo.core.credentials.FakeCredentialStore
+import ch.stenzel.tim.polleninfo.core.credentials.SavedCredential
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
@@ -31,6 +33,7 @@ import kotlinx.io.IOException
 class AccountViewModelTest {
 
     private val sessions = FakeSessionRepository()
+    private val credentials = FakeCredentialStore()
 
     @BeforeTest
     fun setUp() {
@@ -42,7 +45,7 @@ class AccountViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(mode: AccountMode = AccountMode.REGISTER) = AccountViewModel(mode, sessions)
+    private fun viewModel(mode: AccountMode = AccountMode.REGISTER) = AccountViewModel(mode, sessions, credentials)
 
     private fun AccountViewModel.fillValidRegistration() {
         onEmailChanged("tim@example.com")
@@ -332,6 +335,168 @@ class AccountViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("tim@example.com" to "correct horse"), sessions.logins)
+        assertEquals(emptyList(), sessions.registrations)
+    }
+
+    // --- The password manager ---
+
+    @Test
+    fun `a successful registration offers the email and password for saving once before Done`() = runTest {
+        val viewModel = viewModel()
+        val events = events(viewModel)
+        viewModel.fillValidRegistration()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("tim@example.com" to "correct horse"), credentials.saved)
+        assertEquals(listOf<AccountEvent>(AccountEvent.Done), events)
+    }
+
+    @Test
+    fun `a successful login offers the email and password for saving once`() = runTest {
+        val viewModel = viewModel(AccountMode.LOGIN)
+        val events = events(viewModel)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("tim@example.com" to "correct horse"), credentials.saved)
+        assertEquals(listOf<AccountEvent>(AccountEvent.Done), events)
+    }
+
+    @Test
+    fun `nothing is offered for saving while the registration is in flight`() = runTest {
+        sessions.registerGate = CompletableDeferred()
+        val viewModel = viewModel()
+        viewModel.fillValidRegistration()
+
+        viewModel.submit()
+        runCurrent()
+
+        assertEquals(emptyList(), credentials.saved)
+        sessions.registerGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, credentials.saved.size)
+    }
+
+    @Test
+    fun `a failed registration is not offered for saving`() = runTest {
+        sessions.registerResult = Result.Failure(EmailTakenException())
+        val viewModel = viewModel()
+        viewModel.fillValidRegistration()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), credentials.saved)
+    }
+
+    @Test
+    fun `a failed login is not offered for saving`() = runTest {
+        sessions.loginResult = Result.Failure(InvalidCredentialsException())
+        val viewModel = viewModel(AccountMode.LOGIN)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), credentials.saved)
+    }
+
+    @Test
+    fun `a save that throws still sends Done`() = runTest {
+        credentials.saveFailure = IllegalStateException("no password manager")
+        val viewModel = viewModel()
+        val events = events(viewModel)
+        viewModel.fillValidRegistration()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf<AccountEvent>(AccountEvent.Done), events)
+    }
+
+    @Test
+    fun `an offered login fills the form and logs in with it`() = runTest {
+        credentials.offered = SavedCredential("tim@example.com", "correct horse")
+        val viewModel = viewModel(AccountMode.LOGIN)
+        val events = events(viewModel)
+
+        advanceUntilIdle()
+
+        assertEquals(1, credentials.offerCalls)
+        assertEquals("tim@example.com", viewModel.uiState.value.form.email)
+        assertEquals("correct horse", viewModel.uiState.value.form.password)
+        assertEquals(listOf("tim@example.com" to "correct horse"), sessions.logins)
+        assertEquals(listOf<AccountEvent>(AccountEvent.Done), events)
+    }
+
+    @Test
+    fun `logging in with the offered login does not offer it for saving again`() = runTest {
+        credentials.offered = SavedCredential("tim@example.com", "correct horse")
+        viewModel(AccountMode.LOGIN)
+
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), credentials.saved)
+    }
+
+    @Test
+    fun `an offered login the backend refuses shows the error and a corrected password is offered for saving`() = runTest {
+        credentials.offered = SavedCredential("tim@example.com", "old password")
+        sessions.loginResult = Result.Failure(InvalidCredentialsException())
+        val viewModel = viewModel(AccountMode.LOGIN)
+        advanceUntilIdle()
+        assertEquals(AppError.InvalidCredentials, viewModel.uiState.value.error)
+
+        sessions.loginResult = Result.Success(Unit)
+        viewModel.onPasswordChanged("correct horse")
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("tim@example.com" to "correct horse"), credentials.saved)
+    }
+
+    @Test
+    fun `no offered login leaves the login form empty and logs nothing in`() = runTest {
+        val viewModel = viewModel(AccountMode.LOGIN)
+        val events = events(viewModel)
+
+        advanceUntilIdle()
+
+        assertEquals(1, credentials.offerCalls)
+        assertEquals("", viewModel.uiState.value.form.email)
+        assertEquals("", viewModel.uiState.value.form.password)
+        assertFalse(viewModel.uiState.value.isSubmitting)
+        assertEquals(emptyList(), sessions.logins)
+        assertEquals(emptyList(), events)
+    }
+
+    @Test
+    fun `the registration form never asks for a saved login`() = runTest {
+        credentials.offered = SavedCredential("tim@example.com", "correct horse")
+        val viewModel = viewModel(AccountMode.REGISTER)
+        viewModel.onModeChanged(AccountMode.LOGIN)
+
+        advanceUntilIdle()
+
+        assertEquals(0, credentials.offerCalls)
+        assertEquals("", viewModel.uiState.value.form.email)
+        assertEquals(emptyList(), sessions.logins)
+    }
+
+    @Test
+    fun `an offered login is not used once the user has switched to registering`() = runTest {
+        credentials.offered = SavedCredential("tim@example.com", "correct horse")
+        val viewModel = viewModel(AccountMode.LOGIN)
+        viewModel.onModeChanged(AccountMode.REGISTER)
+
+        advanceUntilIdle()
+
+        assertEquals("", viewModel.uiState.value.form.email)
+        assertEquals(emptyList(), sessions.logins)
         assertEquals(emptyList(), sessions.registrations)
     }
 }

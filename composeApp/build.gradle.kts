@@ -99,6 +99,11 @@ kotlin {
             // per-app language setting on API 33+ and stored by AppCompat below. :androidApp's
             // MainActivity must be an AppCompatActivity for it to apply.
             implementation(libs.androidx.appcompat)
+            // Offering to save the login and offering it back (core/credentials). The Play services
+            // provider is what serves Google Password Manager on Android 13 and below, the second
+            // place the app depends on Google Play services.
+            implementation(libs.androidx.credentials)
+            implementation(libs.androidx.credentials.play.services.auth)
             // Push tokens and the messaging service for pollen alarms. This is the one place the app
             // needs Google Play services; location deliberately stays on the platform provider.
             // :androidApp applies the Google Services plugin that configures it.

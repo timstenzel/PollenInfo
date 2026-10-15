@@ -114,7 +114,7 @@ val presentationModule = module {
     viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
     viewModel { DiaryViewModel(get(), get(), get(), get(), get(), get()) }
-    viewModel { params -> AccountViewModel(params.get(), get()) }
+    viewModel { params -> AccountViewModel(params.get(), get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
     // AppInfo comes from platformModule.

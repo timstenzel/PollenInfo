@@ -382,7 +382,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
 | `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry`, `swissToday(clock)`; `DiaryRepository` (`record(feeling)`, `today()`, `entries(from, until)`) + `DiaryRepositoryImpl` over `DiaryApiService` (`POST /users/me/diary`, `GET /users/me/diary/today`, `GET /users/me/diary?from&until`), its DTOs and mapper — the account's answers, the only place they are kept; `FeelingPromptPreferences` + the logic-free `DataStoreFeelingPromptPreferences` — Home's dismissal, on the device (see "Diary answers") |
 | `core/ui/feeling` | `Feeling.label()` (+`labelResource()`) — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
-| `core/ui/password` | `PasswordField` — a password field with its own show/hide `IconButton` named for what it does and stating what the field does now (`account_password_shown` / `_hidden`); the account screen's fields and Settings' deletion dialog |
+| `core/ui/password` | `PasswordField` — a password field with its own show/hide `IconButton` named for what it does and stating what the field does now (`account_password_shown` / `_hidden`), and its autofill `contentType` (`Password` by default, `NewPassword` where one is chosen); the account screen's fields and Settings' deletion dialog |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
@@ -394,6 +394,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/notifications` | `NotificationPermissionState` and `rememberNotificationPermissionController()` (see "Alarms") |
 | `core/stationpicker` | Choosing a station, shared by onboarding and the change-station screen: `FindNearestStationUseCase` (`domain/usecase`), and in `presentation/` the `StationPicker` state holder, `StationPickerState` (`Loading` / `Content(stations, selected, isLocating, locationError)` / `Error(AppError)`), `LocationError` and the `StationPickerContent` composable (see "Location") |
 | `core/language` | `AppLanguage` (`SYSTEM`, `EN`, `DE`, `FR`, `IT`, each with its BCP 47 `tag`; the pure `fromTag`, primary subtag only, anything unsupported → `SYSTEM`) and `LanguageRepository` (`current`, `set`, `appliesImmediately`) — bound in `platformModule`: `AndroidLanguageRepository`, `IosLanguageRepository`; Android's `appLanguageContext()` sits in `androidMain` (see "Localization"). Consumers use `FakeLanguageRepository` |
+| `core/credentials` | `CredentialStore` (`save(email, password)`, `offer(): SavedCredential?` — offers the user may decline, so neither fails) and `SavedCredential` (its `toString` hides the password) — the phone's password manager, bound in `platformModule`: `AndroidCredentialStore` (Credential Manager, see "Accounts"), iOS `NoCredentialStore` (does nothing: iOS autofill works from the fields alone, see "iOS wrapper configuration"). Checked by hand; consumers use `FakeCredentialStore` |
 | `core/appinfo` | `AppVersion(name, code)` and `AppInfo` (`version: AppVersion?`, `null` when the platform reports no complete version) — bound in `platformModule`: `AndroidAppInfo` (`PackageManager`, `PackageInfoCompat.getLongVersionCode`), `IosAppInfo` (`CFBundleShortVersionString` / `CFBundleVersion`; a non-integer build number counts as missing). Checked by hand; consumers use `FakeAppInfo` |
 
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
@@ -404,6 +405,7 @@ diary with the backend's first-answer-is-final rule, answers on earlier days scr
 `stored` or `initialEntries`, `recordGate` / `todayGate` / `entriesGate`, scripted failures, and
 `entriesRequests` — every range asked for), `FakeFeelingPromptPreferences.kt`,
 `core/session/FakeSessionRepository.kt`,
+`core/credentials/FakeCredentialStore.kt` (`offered`, `offerCalls`, `saved`, a throwing `saveFailure`),
 `core/appinfo/FakeAppInfo.kt`.
 
 ### Talking to our own backend
@@ -461,6 +463,21 @@ The project has no `iosApp` Xcode project, so these keys cannot be set today. Th
 | `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (a whole number) | `IosAppInfo` — Settings' version line; hidden if either is missing or the build number is not a whole number |
 
 The notification permission (`IosNotificationPermissionController`) needs no `Info.plist` key.
+
+**Password autofill** needs no `Info.plist` key either, but an entitlement and a file on our domain.
+The account screen's fields carry Compose's autofill content types (email and user name, password,
+new password when registering — see "Accounts"), which iOS maps to its text content types, and
+`CredentialStore` is a no-op on iOS (`NoCredentialStore`): saving and offering the login is
+iOS's own autofill, not code. For iOS to save the login under PollenInfo's domain and offer it back
+(and in Safari), whoever creates the wrapper must add:
+
+- the **Associated Domains** entitlement `webcredentials:api.polleninfo.ch` (with `?mode=developer`
+  while testing against a development build), and
+- `https://api.polleninfo.ch/.well-known/apple-app-site-association` serving
+  `{"webcredentials":{"apps":["<TEAM_ID>.<bundle id>"]}}` as `application/json` — a Caddy route in
+  `deploy/caddy/Caddyfile`, since the backend has no such endpoint.
+
+Without them iOS still fills a password it has, but cannot tie it to the app.
 
 **The backend address** is not an `Info.plist` key: `MainViewController` passes
 `http://localhost:8080` to `appModules(…)` (see "Talking to our own backend"). Whoever creates the
@@ -655,7 +672,7 @@ looking for a position nobody is waiting for. The two location messages clear on
 error must not outlive its cause.
 
 Android uses `LocationManagerCompat.getCurrentLocation` on `NETWORK_PROVIDER` only. **No Play
-Services** (push is the one feature that needs them — see "Firebase"; location stays Play-free),
+Services** (only push and the password manager use them — see "Firebase"; location stays Play-free),
 and no GPS fallback: `ACCESS_COARSE_LOCATION` does not grant `GPS_PROVIDER`, and
 `FUSED_PROVIDER` needs API 31 against `minSdk` 26. The compat shim is what makes this work below API
 30, which is why `androidx.core:core-ktx` is an explicit `androidMain` dependency. There is
@@ -690,7 +707,7 @@ Bindings that can only be built with platform APIs go in **`core/di/PlatformModu
 (`expect val platformModule: Module`, with `.android.kt` / `.ios.kt` actuals), which is first in
 `appModules`. It provides the two `DataStore<Preferences>` (the unqualified one for the selections
 and the diary, the `DEVICE_DATA_STORE` one for the device token alone), the `CoarseLocationProvider`, the
-`PushTokenProvider`, `AppInfo` and the `LanguageRepository`. The DataStore factory needs a file path and an IO dispatcher, neither of which
+`PushTokenProvider`, `AppInfo`, the `LanguageRepository` and the `CredentialStore`. The DataStore factory needs a file path and an IO dispatcher, neither of which
 exists in `commonMain`; the two providers are different platform classes on each side. Each actual builds the store itself —
 Android from the `androidContext()` Koin installs plus `preferencesDataStoreFile`, iOS from the
 Documents directory plus an okio `Path`. Note the dispatcher differs by necessity: `Dispatchers.IO`
@@ -778,11 +795,34 @@ confirmation has text; `isEmailPlausible` is the backend's light check (≤ 254 
 exactly one `@` with text on each side); `canSubmit` is, for registering, a plausible email, a
 password of `MIN_PASSWORD_LENGTH` (8) to `MAX_PASSWORD_LENGTH` (128), the same confirmation and the
 consent — for logging in, a plausible email and any password. `AccountViewModel(initialMode,
-sessionRepository)` holds `AccountUiState(form, isSubmitting, error: AppError?)`: field changes are
+sessionRepository, credentialStore)` holds `AccountUiState(form, isSubmitting, error: AppError?)`: field changes are
 ignored while submitting, every edit or submit clears `error`, a success sends `AccountEvent.Done`
 once on a buffered `Channel` and leaves `isSubmitting` set, a failure is `toSessionAppError()` shown
 in the `REGISTER` context ("An account with this email address already exists. Log in instead.") or
 the `LOGIN` one. `submit()` calls `login` or `register` by the form's mode at the tap.
+
+**The password manager.** After every successful registration or login, and before `Done`, the
+ViewModel offers the submitted email and password to `core/credentials/CredentialStore.save` —
+except a login made with the very credential the password manager just handed over. `Done` follows
+whatever the user answers, even if the store throws, so declining ("Not now") leaves them logged in.
+Opened in `LOGIN` mode (never in `REGISTER`), the ViewModel first asks `offer()`; a login the user
+picks fills the form and is submitted at once, unless they have switched to registering or a submit
+runs. A refused one shows the usual error, and a corrected password is then offered for saving. The
+fields tell password managers what they hold with Compose's `semantics { contentType = … }`: the
+email is `EmailAddress + Username`, the password `Password` when logging in and `NewPassword` (both
+fields) when registering — where managers suggest a strong one — and Settings' deletion field
+`Password`.
+
+`AndroidCredentialStore` is Credential Manager (`androidx.credentials` plus
+`credentials-play-services-auth`, which serves Google Password Manager on Android 13 and below):
+`CreatePasswordRequest(email, password)` and `GetCredentialRequest(GetPasswordOption)` with
+`preferImmediatelyAvailableCredentials`, so a phone with nothing saved shows no sheet at all. Its
+sheets need an activity, which no Koin single holding the application has, so — rather than a
+`@Composable` store handed to a ViewModel that outlives its activity — the store is a single bound
+with `createdAtStart` that follows the app's current `ComponentActivity` through
+`ActivityLifecycleCallbacks` (held weakly; the Play services provider's own hidden activity is not a
+`ComponentActivity` and is ignored). Every exception — cancelled, no provider, nothing saved, no
+activity — is swallowed and logged by its type alone, never with the email or password.
 
 `SessionRepository.register(email, password)` posts `POST /users` with `consent: true` (the form
 cannot be sent without it), stores the issued token with the email trimmed and lowercased — the
@@ -1262,8 +1302,11 @@ hand.
 
 #### Firebase
 
-Push is FCM, and **FCM is the one place the app depends on Google Play services** — push on devices
-without them is out of scope, and location deliberately stays on the platform provider.
+Push is FCM, and **FCM is the main place the app depends on Google Play services** — push on devices
+without them is out of scope, and location deliberately stays on the platform provider. The second is
+the password manager: `credentials-play-services-auth` is Credential Manager's provider for Google
+Password Manager on Android 13 and below (see "Accounts"). Without Play services nothing is offered
+or saved and nothing else changes.
 
 - `androidApp/google-services.json` is **committed**: it identifies the Firebase project and is not a
   secret. It holds two Android clients, `ch.stenzel.tim.polleninfo` and
@@ -1546,7 +1589,7 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
   failures in `AlarmFailures.kt`, the account failures in `SessionFailures.kt`,
   `InvalidAlarmException`'s fallback in `AlarmApiService`, the
   activity `error(...)` in `NotificationPermissionController.android.kt`, the iOS Documents
-  `requireNotNull`), log lines (`PollenFirebaseMessagingService`) and the lake names in
+  `requireNotNull`), log lines (`PollenFirebaseMessagingService`, `AndroidCredentialStore`) and the lake names in
   `SwissLakes.kt` (data labels). Screens never show an exception's `message`; they show
   `AppError.message()`. Single quoted words outside the grep are ids (species, severity wire names,
   `AppleLanguages`, Info.plist keys) or the language names in their own language

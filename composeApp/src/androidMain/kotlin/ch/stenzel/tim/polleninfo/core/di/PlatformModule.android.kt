@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.di
 
+import android.app.Application
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -7,6 +8,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import ch.stenzel.tim.polleninfo.core.appinfo.AndroidAppInfo
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
+import ch.stenzel.tim.polleninfo.core.credentials.AndroidCredentialStore
+import ch.stenzel.tim.polleninfo.core.credentials.CredentialStore
 import ch.stenzel.tim.polleninfo.core.language.AndroidLanguageRepository
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.location.AndroidCoarseLocationProvider
@@ -27,6 +30,8 @@ actual val platformModule: Module = module {
     single<PushTokenProvider> { FirebasePushTokenProvider() }
     single<AppInfo> { AndroidAppInfo(get()) }
     single<LanguageRepository> { AndroidLanguageRepository() }
+    // At start, so it follows the activity from the first one on (see AndroidCredentialStore).
+    single<CredentialStore>(createdAtStart = true) { AndroidCredentialStore(get<Context>() as Application) }
 }
 
 /**

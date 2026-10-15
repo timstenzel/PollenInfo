@@ -11,6 +11,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
@@ -28,6 +30,10 @@ import org.jetbrains.compose.resources.stringResource
  * password") and states what the field does now ("Password hidden"), so a screen reader user knows
  * whether the field's text will be read out. Shared by the account screen and Settings' account
  * deletion.
+ *
+ * [contentType] tells password managers what the field holds: [ContentType.Password] to fill in a
+ * saved password, [ContentType.NewPassword] where one is chosen, which is where they suggest a
+ * strong one.
  */
 @Composable
 fun PasswordField(
@@ -42,6 +48,7 @@ fun PasswordField(
     isError: Boolean = false,
     supportingText: String? = null,
     imeAction: ImeAction = ImeAction.Done,
+    contentType: ContentType = ContentType.Password,
 ) {
     val state = stringResource(if (visible) Res.string.account_password_shown else Res.string.account_password_hidden)
     OutlinedTextField(
@@ -66,6 +73,6 @@ fun PasswordField(
             }
         },
         supportingText = supportingText?.let { text -> { Text(text) } },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { this.contentType = contentType },
     )
 }

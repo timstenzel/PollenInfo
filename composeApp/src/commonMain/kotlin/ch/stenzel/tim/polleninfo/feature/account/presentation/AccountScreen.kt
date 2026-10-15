@@ -35,8 +35,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -158,7 +160,8 @@ private fun AccountForm(uiState: AccountUiState, viewModel: AccountViewModel) {
             imeAction = ImeAction.Next,
             autoCorrectEnabled = false,
         ),
-        modifier = Modifier.fillMaxWidth(),
+        // The login's user name is the email: password managers save and fill it as both.
+        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.EmailAddress + ContentType.Username },
     )
     Spacer(Modifier.height(16.dp))
     PasswordField(
@@ -178,6 +181,7 @@ private fun AccountForm(uiState: AccountUiState, viewModel: AccountViewModel) {
             else -> stringResource(Res.string.account_password_hint, MIN_PASSWORD_LENGTH)
         },
         imeAction = if (registering) ImeAction.Next else ImeAction.Done,
+        contentType = if (registering) ContentType.NewPassword else ContentType.Password,
     )
     if (registering) RegisterFields(uiState, viewModel)
     Spacer(Modifier.height(24.dp))
@@ -225,6 +229,7 @@ private fun RegisterFields(uiState: AccountUiState, viewModel: AccountViewModel)
         isError = form.passwordsMismatch,
         supportingText = if (form.passwordsMismatch) stringResource(Res.string.account_passwords_mismatch) else null,
         imeAction = ImeAction.Done,
+        contentType = ContentType.NewPassword,
     )
     Spacer(Modifier.height(8.dp))
     Text(
