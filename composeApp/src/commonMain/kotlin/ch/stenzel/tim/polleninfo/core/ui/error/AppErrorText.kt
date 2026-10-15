@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_login
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
@@ -12,6 +13,7 @@ import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
 import ch.stenzel.tim.polleninfo.resources.error_email_taken
 import ch.stenzel.tim.polleninfo.resources.error_invalid_alarm
+import ch.stenzel.tim.polleninfo.resources.error_invalid_credentials
 import ch.stenzel.tim.polleninfo.resources.error_network
 import ch.stenzel.tim.polleninfo.resources.error_no_readings
 import ch.stenzel.tim.polleninfo.resources.error_no_station_selected
@@ -19,6 +21,7 @@ import ch.stenzel.tim.polleninfo.resources.error_no_stations
 import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_push_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
+import ch.stenzel.tim.polleninfo.resources.error_signed_out
 import ch.stenzel.tim.polleninfo.resources.error_unknown
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -32,6 +35,7 @@ enum class ErrorContext {
     PAUSE_ALARM,
     RESUME_ALARM,
     REGISTER,
+    LOGIN,
 }
 
 /** The contexts that act on one alarm, where the only thing that can be missing is that alarm. */
@@ -59,6 +63,8 @@ fun AppError.text(context: ErrorContext): ErrorText {
         AppError.AlarmLimitReached -> Res.string.error_alarm_limit_reached
         AppError.InvalidAlarm -> Res.string.error_invalid_alarm
         AppError.EmailTaken -> Res.string.error_email_taken
+        AppError.InvalidCredentials -> Res.string.error_invalid_credentials
+        AppError.SignedOut -> Res.string.error_signed_out
         AppError.Unknown -> Res.string.error_unknown
     }
     val action = when (context) {
@@ -68,6 +74,7 @@ fun AppError.text(context: ErrorContext): ErrorText {
         ErrorContext.PAUSE_ALARM -> Res.string.error_action_pause_alarm
         ErrorContext.RESUME_ALARM -> Res.string.error_action_resume_alarm
         ErrorContext.REGISTER -> Res.string.error_action_register
+        ErrorContext.LOGIN -> Res.string.error_action_login
     }
     return ErrorText(action, reason)
 }

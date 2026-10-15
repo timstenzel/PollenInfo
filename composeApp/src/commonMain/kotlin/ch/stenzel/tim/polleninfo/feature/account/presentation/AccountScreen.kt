@@ -83,10 +83,9 @@ import org.koin.core.parameter.parametersOf
  * bottom bar is hidden. Back — the arrow or the gesture — leaves without logging in; a success
  * leaves logged in ([onDone] for both).
  *
- * Registration asks for the email, the password twice (each field with its own show/hide button),
- * the consent to storing the diary, and says plainly that a forgotten password cannot be recovered.
- * The login form arrives with the next step; until then the login mode shows its heading and the
- * switch to registration only.
+ * Logging in asks for the email and the password. Registration asks for the email, the password
+ * twice (each field with its own show/hide button), the consent to storing the diary, and says
+ * plainly that a forgotten password cannot be recovered.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,10 +128,7 @@ fun AccountScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
-            when (mode) {
-                AccountMode.REGISTER -> RegisterForm(uiState, viewModel)
-                AccountMode.LOGIN -> Unit
-            }
+            AccountForm(uiState, viewModel)
             Spacer(Modifier.height(8.dp))
             TextButton(
                 onClick = {
@@ -152,9 +148,10 @@ fun AccountScreen(
 }
 
 @Composable
-private fun RegisterForm(uiState: AccountUiState, viewModel: AccountViewModel) {
+private fun AccountForm(uiState: AccountUiState, viewModel: AccountViewModel) {
     val form = uiState.form
     val enabled = !uiState.isSubmitting
+    val registering = form.mode == AccountMode.REGISTER
 
     OutlinedTextField(
         value = form.email,
@@ -179,14 +176,48 @@ private fun RegisterForm(uiState: AccountUiState, viewModel: AccountViewModel) {
         showLabel = Res.string.account_show_password,
         hideLabel = Res.string.account_hide_password,
         enabled = enabled,
-        isError = form.passwordTooLong,
-        supportingText = if (form.passwordTooLong) {
-            stringResource(Res.string.account_password_too_long, MAX_PASSWORD_LENGTH)
-        } else {
-            stringResource(Res.string.account_password_hint, MIN_PASSWORD_LENGTH)
+        // The limits are the registration's; a login takes whatever password the account has.
+        isError = registering && form.passwordTooLong,
+        supportingText = when {
+            !registering -> null
+            form.passwordTooLong -> stringResource(Res.string.account_password_too_long, MAX_PASSWORD_LENGTH)
+            else -> stringResource(Res.string.account_password_hint, MIN_PASSWORD_LENGTH)
         },
-        imeAction = ImeAction.Next,
+        imeAction = if (registering) ImeAction.Next else ImeAction.Done,
     )
+    if (registering) RegisterFields(uiState, viewModel)
+    Spacer(Modifier.height(24.dp))
+    Button(
+        onClick = viewModel::submit,
+        enabled = uiState.canSubmit,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (uiState.isSubmitting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = LocalContentColor.current,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(stringResource(form.mode.titleResource()))
+    }
+    uiState.error?.let { error ->
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = error.message(if (registering) ErrorContext.REGISTER else ErrorContext.LOGIN),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
+}
+
+/** What only registration asks for: the password again, the warning and the consent. */
+@Composable
+private fun RegisterFields(uiState: AccountUiState, viewModel: AccountViewModel) {
+    val form = uiState.form
+    val enabled = !uiState.isSubmitting
     Spacer(Modifier.height(8.dp))
     PasswordField(
         value = form.confirmation,
@@ -224,31 +255,6 @@ private fun RegisterForm(uiState: AccountUiState, viewModel: AccountViewModel) {
         Checkbox(checked = form.consent, onCheckedChange = null, enabled = enabled)
         Spacer(Modifier.width(12.dp))
         Text(text = stringResource(Res.string.account_consent), style = MaterialTheme.typography.bodyMedium)
-    }
-    Spacer(Modifier.height(24.dp))
-    Button(
-        onClick = viewModel::submit,
-        enabled = uiState.canSubmit,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        if (uiState.isSubmitting) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = LocalContentColor.current,
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(stringResource(Res.string.account_title_register))
-    }
-    uiState.error?.let { error ->
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = error.message(ErrorContext.REGISTER),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        )
     }
 }
 

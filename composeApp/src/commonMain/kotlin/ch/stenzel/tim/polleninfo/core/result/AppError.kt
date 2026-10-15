@@ -43,6 +43,12 @@ sealed interface AppError {
     /** An account with this email address exists already. */
     data object EmailTaken : AppError
 
+    /** The email or the password of a login is wrong; deliberately not which. */
+    data object InvalidCredentials : AppError
+
+    /** The backend no longer knows this phone's session, so the user has to log in again. */
+    data object SignedOut : AppError
+
     data object Unknown : AppError
 }
 

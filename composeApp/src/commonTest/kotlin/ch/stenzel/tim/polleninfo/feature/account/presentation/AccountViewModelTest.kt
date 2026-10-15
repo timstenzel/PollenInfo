@@ -4,6 +4,7 @@ import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
 import ch.stenzel.tim.polleninfo.core.session.domain.model.EmailTakenException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.InvalidCredentialsException
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -235,5 +236,102 @@ class AccountViewModelTest {
         assertEquals(AccountMode.LOGIN, form.mode)
         assertEquals("tim@example.com", form.email)
         assertEquals("", form.password)
+    }
+
+    // --- Logging in ---
+
+    private fun AccountViewModel.fillLogin() {
+        onEmailChanged("tim@example.com")
+        onPasswordChanged("correct horse")
+    }
+
+    @Test
+    fun `submitting the login form logs in with the email and password and never registers`() = runTest {
+        val viewModel = viewModel(AccountMode.LOGIN)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("tim@example.com" to "correct horse"), sessions.logins)
+        assertEquals(emptyList(), sessions.registrations)
+    }
+
+    @Test
+    fun `isSubmitting holds while the login is in flight`() = runTest {
+        sessions.loginGate = CompletableDeferred()
+        val viewModel = viewModel(AccountMode.LOGIN)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isSubmitting)
+        viewModel.onPasswordChanged("other")
+        assertEquals("correct horse", viewModel.uiState.value.form.password)
+        sessions.loginGate?.complete(Unit)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `a successful login sends Done exactly once`() = runTest {
+        val viewModel = viewModel(AccountMode.LOGIN)
+        val events = events(viewModel)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf<AccountEvent>(AccountEvent.Done), events)
+        assertEquals(1, sessions.logins.size)
+        assertEquals("tim@example.com", sessions.current?.email)
+    }
+
+    @Test
+    fun `wrong credentials show InvalidCredentials keep the form and send nothing`() = runTest {
+        sessions.loginResult = Result.Failure(InvalidCredentialsException())
+        val viewModel = viewModel(AccountMode.LOGIN)
+        val events = events(viewModel)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(AppError.InvalidCredentials, state.error)
+        assertFalse(state.isSubmitting)
+        assertEquals("tim@example.com", state.form.email)
+        assertEquals(emptyList(), events)
+
+        viewModel.onPasswordChanged("correct horse!")
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `no connection on login shows Network`() = runTest {
+        sessions.loginResult = Result.Failure(IOException("offline"))
+        val viewModel = viewModel(AccountMode.LOGIN)
+        viewModel.fillLogin()
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(AppError.Network, viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `a login switched to from registration logs in`() = runTest {
+        val viewModel = viewModel(AccountMode.REGISTER)
+        viewModel.fillValidRegistration()
+        viewModel.onModeChanged(AccountMode.LOGIN)
+        viewModel.onPasswordChanged("correct horse")
+
+        viewModel.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("tim@example.com" to "correct horse"), sessions.logins)
+        assertEquals(emptyList(), sessions.registrations)
     }
 }

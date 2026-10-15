@@ -3,7 +3,9 @@ package ch.stenzel.tim.polleninfo.server.account.store
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
 import ch.stenzel.tim.polleninfo.server.account.domain.UserId
 import ch.stenzel.tim.polleninfo.server.account.domain.hash
+import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
@@ -12,6 +14,9 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.time.toJavaDuration
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -119,4 +124,86 @@ class ExposedAccountStoresTest {
     fun `a session cannot be created for a user that does not exist`() = runTest {
         assertFailsWith<ExposedSQLException> { sessions.create(UserId(UUID.randomUUID()), now) }
     }
+
+    @Test
+    fun `credentials are found by the normalised email and are null for an unknown one`() = runTest {
+        val id = registered()
+
+        val stored = assertNotNull(users.credentials("tim@example.com"))
+        assertEquals(id, stored.userId)
+        assertEquals("hash-of-tim@example.com", stored.passwordHash)
+        assertNull(users.credentials("anna@example.com"))
+    }
+
+    @Test
+    fun `a session authenticates as its user and an unknown token as nobody`() = runTest {
+        val id = registered()
+        val token = sessions.create(id, now)
+
+        assertEquals(id, sessions.authenticate(token, now))
+        assertNull(sessions.authenticate(newSessionToken(), now))
+    }
+
+    @Test
+    fun `a session unused for exactly 90 days is accepted and refused 1 ms later`() = runTest {
+        val id = registered()
+        val kept = sessions.create(id, now)
+        val expired = sessions.create(id, now)
+
+        assertEquals(id, sessions.authenticate(kept, now.plus(SESSION_EXPIRY.toJavaDuration())))
+        assertNull(sessions.authenticate(expired, now.plus(SESSION_EXPIRY.toJavaDuration()).plusMillis(1)))
+    }
+
+    @Test
+    fun `an expired session stays refused even though it is still stored`() = runTest {
+        val token = sessions.create(registered(), now)
+        val later = now.plus(SESSION_EXPIRY.toJavaDuration()).plusSeconds(1)
+
+        assertNull(sessions.authenticate(token, later))
+        assertNull(sessions.authenticate(token, later))
+        assertEquals(1L, transaction(database) { SessionsTable.selectAll().count() })
+    }
+
+    @Test
+    fun `last_used_at is written at most once per day of use`() = runTest {
+        val token = sessions.create(registered(), now)
+
+        sessions.authenticate(token, now.plus(Duration.ofHours(23)))
+        assertEquals(now, lastUsedAt())
+
+        val nextDay = now.plus(Duration.ofDays(1))
+        sessions.authenticate(token, nextDay)
+        assertEquals(nextDay, lastUsedAt())
+
+        sessions.authenticate(token, nextDay.plus(Duration.ofHours(12)))
+        assertEquals(nextDay, lastUsedAt())
+    }
+
+    @Test
+    fun `regular use keeps a session valid well past 90 days after its creation`() = runTest {
+        val id = registered()
+        val token = sessions.create(id, now)
+
+        sessions.authenticate(token, now.plus(Duration.ofDays(60)))
+
+        assertEquals(id, sessions.authenticate(token, now.plus(Duration.ofDays(120))))
+    }
+
+    @Test
+    fun `deleting a session ends only that one`() = runTest {
+        val id = registered()
+        val ended = sessions.create(id, now)
+        val other = sessions.create(id, now)
+
+        sessions.delete(ended)
+
+        assertNull(sessions.authenticate(ended, now))
+        assertEquals(id, sessions.authenticate(other, now))
+        // An unknown token is nothing to delete.
+        sessions.delete(newSessionToken())
+        assertEquals(1L, transaction(database) { SessionsTable.selectAll().count() })
+    }
+
+    private fun lastUsedAt(): Instant =
+        transaction(database) { SessionsTable.selectAll().single()[SessionsTable.lastUsedAt].toInstant() }
 }

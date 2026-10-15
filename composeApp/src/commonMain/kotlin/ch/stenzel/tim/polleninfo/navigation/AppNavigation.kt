@@ -132,7 +132,10 @@ private fun AppNavHost(
         }
 
         composable<Screen.Settings> {
-            SettingsScreen(onChangeStation = { navController.navigate(Screen.ChangeStation) })
+            SettingsScreen(
+                onChangeStation = { navController.navigate(Screen.ChangeStation) },
+                onLogIn = { navController.navigate(Screen.Account(AccountMode.LOGIN)) },
+            )
         }
 
         composable<Screen.ChangeStation> {

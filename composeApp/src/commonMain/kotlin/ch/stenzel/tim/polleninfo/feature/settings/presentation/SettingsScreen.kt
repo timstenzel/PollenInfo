@@ -17,6 +17,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
@@ -47,6 +49,14 @@ import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.common_cancel
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_in
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_in_action
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_out
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_out_action
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_out_text
+import ch.stenzel.tim.polleninfo.resources.settings_account_log_out_title
+import ch.stenzel.tim.polleninfo.resources.settings_account_logged_in_as
+import ch.stenzel.tim.polleninfo.resources.settings_account_not_logged_in
 import ch.stenzel.tim.polleninfo.resources.settings_data_source_attribution
 import ch.stenzel.tim.polleninfo.resources.settings_data_source_disclaimer
 import ch.stenzel.tim.polleninfo.resources.settings_developed_by
@@ -56,6 +66,7 @@ import ch.stenzel.tim.polleninfo.resources.settings_language_restart_note
 import ch.stenzel.tim.polleninfo.resources.settings_language_system
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_link_action
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_url
+import ch.stenzel.tim.polleninfo.resources.settings_section_account
 import ch.stenzel.tim.polleninfo.resources.settings_section_data_source
 import ch.stenzel.tim.polleninfo.resources.settings_section_impressum
 import ch.stenzel.tim.polleninfo.resources.settings_section_language
@@ -74,14 +85,16 @@ private const val DEVELOPER_EMAIL = "developer.mobile.t3s@gmail.com"
 private const val CONTACT_URI = "mailto:$DEVELOPER_EMAIL?subject=PollenInfo"
 
 /**
- * The Settings tab: one scrolling screen of sections — Default station, Language, Impressum, Data
- * source — and the version line at the bottom. Tapping the default station calls [onChangeStation].
+ * The Settings tab: one scrolling screen of sections — Default station, Account, Language,
+ * Impressum, Data source — and the version line at the bottom. Tapping the default station calls
+ * [onChangeStation], "Log in" (while nobody is logged in) [onLogIn].
  *
  * The scroll state is saveable, so it survives a tab switch through `navigateToTab`'s saved state.
  */
 @Composable
 fun SettingsScreen(
     onChangeStation: () -> Unit,
+    onLogIn: () -> Unit,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -97,8 +110,14 @@ fun SettingsScreen(
     SettingsContent(
         uiState = uiState,
         onChangeStation = onChangeStation,
+        onLogIn = onLogIn,
+        onLogOut = viewModel::onLogoutClicked,
         onLanguageRowClicked = viewModel::onLanguageRowClicked,
     )
+
+    if (uiState.showLogoutDialog) {
+        LogoutDialog(onConfirm = viewModel::onLogoutConfirmed, onDismiss = viewModel::onLogoutDismissed)
+    }
 
     if (uiState.showLanguageDialog) {
         LanguageDialog(
@@ -114,6 +133,8 @@ fun SettingsScreen(
 private fun SettingsContent(
     uiState: SettingsUiState,
     onChangeStation: () -> Unit,
+    onLogIn: () -> Unit,
+    onLogOut: () -> Unit,
     onLanguageRowClicked: () -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) }) { padding ->
@@ -125,6 +146,8 @@ private fun SettingsContent(
                 .padding(vertical = 8.dp),
         ) {
             StationSection(uiState.stationName, onChangeStation)
+            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            AccountSection(uiState.accountChecked, uiState.accountEmail, onLogIn, onLogOut)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             LanguageSection(uiState.language, uiState.languageAppliesOnRestart, onLanguageRowClicked)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
@@ -145,6 +168,49 @@ private fun StationSection(stationName: String?, onChangeStation: () -> Unit) {
         text = stationName ?: stringResource(Res.string.settings_station_not_set),
         onClickLabel = stringResource(Res.string.settings_station_action),
         onClick = onChangeStation,
+    )
+}
+
+/**
+ * Which account this phone is logged in to, with "Log out" — or "Not logged in" with "Log in". The
+ * rows wait for the stored login to be read, so the wrong one never flashes up.
+ */
+@Composable
+private fun AccountSection(checked: Boolean, email: String?, onLogIn: () -> Unit, onLogOut: () -> Unit) {
+    SectionTitle(stringResource(Res.string.settings_section_account))
+    if (!checked) return
+    if (email != null) {
+        BodyText(stringResource(Res.string.settings_account_logged_in_as, email))
+        ActionRow(
+            text = stringResource(Res.string.settings_account_log_out),
+            icon = Icons.AutoMirrored.Filled.Logout,
+            onClickLabel = stringResource(Res.string.settings_account_log_out_action),
+            onClick = onLogOut,
+        )
+    } else {
+        BodyText(stringResource(Res.string.settings_account_not_logged_in))
+        ActionRow(
+            text = stringResource(Res.string.settings_account_log_in),
+            icon = Icons.AutoMirrored.Filled.Login,
+            onClickLabel = stringResource(Res.string.settings_account_log_in_action),
+            onClick = onLogIn,
+        )
+    }
+}
+
+/** Asks before logging out, and says the diary stays in the account. */
+@Composable
+private fun LogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.settings_account_log_out_title)) },
+        text = { Text(stringResource(Res.string.settings_account_log_out_text)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(Res.string.settings_account_log_out)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
     )
 }
 
@@ -237,6 +303,36 @@ private fun ValueRow(text: String, onClickLabel: String, onClick: () -> Unit) {
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * A full-width row ≥ 48 dp that does something, in the primary colour, with its icon in front. The
+ * icon is decorative; [onClickLabel] tells a screen reader what a double tap does.
+ */
+@Composable
+private fun ActionRow(text: String, icon: ImageVector, onClickLabel: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
         )
     }
 }

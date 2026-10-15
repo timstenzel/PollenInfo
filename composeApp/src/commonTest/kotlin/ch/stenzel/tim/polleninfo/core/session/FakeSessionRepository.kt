@@ -12,8 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
 val testSession = Session(token = "session-token-1", email = "tim@example.com")
 
 /**
- * In-memory [SessionRepository]: a settable [current] session, a [registerGate] to hold a
- * registration in flight and a scripted [registerResult]. A successful registration logs in.
+ * In-memory [SessionRepository]: a settable [current] session, gates to hold a registration or a
+ * login in flight and scripted results. A successful registration or login logs in; [logout] logs
+ * out and counts the calls.
  */
 class FakeSessionRepository(initial: Session? = null) : SessionRepository {
 
@@ -39,6 +40,29 @@ class FakeSessionRepository(initial: Session? = null) : SessionRepository {
         return registerResult.also {
             if (it is Result.Success) _session.value = Session(token = "registered-token", email = email)
         }
+    }
+
+    var loginResult: Result<Unit> = Result.Success(Unit)
+    var loginGate: CompletableDeferred<Unit>? = null
+
+    /** Every login asked for, as email and password. */
+    val logins = mutableListOf<Pair<String, String>>()
+
+    override suspend fun login(email: String, password: String): Result<Unit> {
+        logins += email to password
+        loginGate?.await()
+        return loginResult.also {
+            if (it is Result.Success) _session.value = Session(token = "login-token", email = email)
+        }
+    }
+
+    var logoutCount = 0
+        private set
+
+    override suspend fun logout(): Result<Unit> {
+        logoutCount++
+        _session.value = null
+        return Result.Success(Unit)
     }
 
     override suspend fun clear() {

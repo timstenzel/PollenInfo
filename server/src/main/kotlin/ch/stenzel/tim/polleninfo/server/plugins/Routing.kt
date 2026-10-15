@@ -60,8 +60,9 @@ fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) 
 }
 
 /**
- * The account routes over stores the caller has built — there are no defaults. [clock] stamps
- * accounts and sessions. [configureSecurity] must be installed first.
+ * The account routes with the account authentication they need, over stores the caller has built —
+ * there are no defaults. [clock] stamps accounts and sessions and decides when a session has
+ * expired. [configureSecurity] must be installed first.
  */
 fun Application.configureAccountRouting(
     users: UserStore,
@@ -69,6 +70,7 @@ fun Application.configureAccountRouting(
     hasher: PasswordHasher,
     clock: Clock,
 ) {
+    configureUserAuthentication(sessions, clock)
     routing {
         accountRoutes(users, sessions, hasher, clock)
     }

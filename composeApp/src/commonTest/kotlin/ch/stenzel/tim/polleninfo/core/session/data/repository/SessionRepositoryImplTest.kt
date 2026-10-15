@@ -6,6 +6,8 @@ import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.data.local.SessionStorage
 import ch.stenzel.tim.polleninfo.core.session.data.remote.AccountApiService
 import ch.stenzel.tim.polleninfo.core.session.domain.model.EmailTakenException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.InvalidCredentialsException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.Session
 import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
 import io.ktor.client.engine.mock.MockEngine
@@ -14,12 +16,14 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -125,6 +129,110 @@ class SessionRepositoryImplTest {
 
         assertEquals(AppError.ServerUnavailable, assertIs<Result.Failure>(result).exception.toSessionAppError())
         assertFalse(storage.everStored)
+    }
+
+    // --- Login ---
+
+    @Test
+    fun `login posts the trimmed email and the password as typed`() = runTest {
+        val repository = repository(issuesToken)
+
+        repository.login(" Tim@Example.com ", "  correct horse")
+
+        val request = recorded.single()
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("http://backend.test:8080/users/session", request.url.toString())
+        val body = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+        assertEquals(JsonPrimitive("Tim@Example.com"), body["email"])
+        assertEquals(JsonPrimitive("  correct horse"), body["password"])
+        assertNull(body["consent"])
+    }
+
+    @Test
+    fun `login stores the issued token with the email as the backend keeps it`() = runTest {
+        val repository = repository(issuesToken)
+
+        val result = repository.login("Tim@Example.com", "correct horse")
+
+        assertIs<Result.Success<Unit>>(result)
+        assertEquals(Session(token = "session-token-1", email = "tim@example.com"), repository.session.first())
+    }
+
+    @Test
+    fun `a 401 on login is InvalidCredentials and stores nothing`() = runTest {
+        val repository = repository {
+            respond("""{"error":"Email or password is incorrect"}""", HttpStatusCode.Unauthorized, jsonHeaders)
+        }
+
+        val result = repository.login("tim@example.com", "wrong horse")
+
+        val failure = assertIs<Result.Failure>(result)
+        assertIs<InvalidCredentialsException>(failure.exception)
+        assertEquals(AppError.InvalidCredentials, failure.exception.toSessionAppError())
+        assertFalse(storage.everStored)
+    }
+
+    @Test
+    fun `a transport failure on login is Network`() = runTest {
+        val repository = repository { throw IOException("no route to host") }
+
+        val result = repository.login("tim@example.com", "correct horse")
+
+        assertEquals(AppError.Network, assertIs<Result.Failure>(result).exception.toSessionAppError())
+        assertNull(repository.session.first())
+    }
+
+    // --- Logout ---
+
+    @Test
+    fun `logout sends a DELETE with the bearer token and clears the session on 204`() = runTest {
+        storage.store(Session(token = "session-token-1", email = "tim@example.com"))
+        val repository = repository { respond("", HttpStatusCode.NoContent) }
+
+        val result = repository.logout()
+
+        assertIs<Result.Success<Unit>>(result)
+        val request = recorded.single()
+        assertEquals(HttpMethod.Delete, request.method)
+        assertEquals("http://backend.test:8080/users/me/session", request.url.toString())
+        assertEquals("Bearer session-token-1", request.headers[HttpHeaders.Authorization])
+        assertNull(repository.session.first())
+    }
+
+    @Test
+    fun `logout clears the session even when the request fails`() = runTest {
+        val failures = listOf<suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData>(
+            { throw IOException("offline") },
+            { respondError(HttpStatusCode.BadGateway) },
+            { respond("", HttpStatusCode.Unauthorized) },
+        )
+        failures.forEach { failure ->
+            storage.store(Session(token = "session-token-1", email = "tim@example.com"))
+            val repository = repository(failure)
+
+            assertIs<Result.Success<Unit>>(repository.logout())
+            assertNull(repository.session.first())
+        }
+    }
+
+    @Test
+    fun `logout without a session sends nothing`() = runTest {
+        val repository = repository(issuesToken)
+
+        assertIs<Result.Success<Unit>>(repository.logout())
+        assertEquals(emptyList(), recorded)
+    }
+
+    @Test
+    fun `a 401 on an authenticated call is SignedOut`() = runTest {
+        val api = AccountApiService(
+            createHttpClient(MockEngine { respond("", HttpStatusCode.Unauthorized) }),
+            "http://backend.test:8080",
+        )
+
+        val failure = assertFailsWith<SignedOutException> { api.logout("session-token-1") }
+
+        assertEquals(AppError.SignedOut, failure.toSessionAppError())
     }
 
     @Test

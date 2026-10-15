@@ -9,6 +9,8 @@ import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
+import ch.stenzel.tim.polleninfo.core.session.testSession
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
@@ -50,7 +52,103 @@ class SettingsViewModelTest {
         stationRepository: StationRepository = FakeStationRepository(),
         appInfo: AppInfo = FakeAppInfo(AppVersion(name = "1.0.0-debug", code = 1)),
         languageRepository: LanguageRepository = FakeLanguageRepository(),
-    ) = SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo)
+    ) = SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo, sessions)
+
+    private val sessions = FakeSessionRepository()
+
+    // --- Account ---
+
+    @Test
+    fun `the account rows wait until the stored login has been read`() = runTest {
+        val viewModel = viewModel()
+
+        assertFalse(viewModel.uiState.value.accountChecked)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.accountChecked)
+    }
+
+    @Test
+    fun `signed out shows no account`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.accountEmail)
+    }
+
+    @Test
+    fun `signed in shows the email of the account`() = runTest {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals("tim@example.com", viewModel.uiState.value.accountEmail)
+    }
+
+    @Test
+    fun `logging in elsewhere shows the account at once`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        sessions.current = testSession.copy(email = "anna@example.com")
+        advanceUntilIdle()
+
+        assertEquals("anna@example.com", viewModel.uiState.value.accountEmail)
+    }
+
+    @Test
+    fun `log out asks first and dismissing keeps the session`() = runTest {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onLogoutClicked()
+        assertTrue(viewModel.uiState.value.showLogoutDialog)
+        viewModel.onLogoutDismissed()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showLogoutDialog)
+        assertEquals(0, sessions.logoutCount)
+        assertEquals("tim@example.com", viewModel.uiState.value.accountEmail)
+    }
+
+    @Test
+    fun `confirming logs out and shows the signed-out rows`() = runTest {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onLogoutClicked()
+        viewModel.onLogoutConfirmed()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showLogoutDialog)
+        assertEquals(1, sessions.logoutCount)
+        assertNull(state.accountEmail)
+    }
+
+    @Test
+    fun `log out does nothing while signed out`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onLogoutClicked()
+
+        assertFalse(viewModel.uiState.value.showLogoutDialog)
+    }
+
+    @Test
+    fun `the logout dialog closes when the session ends elsewhere`() = runTest {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onLogoutClicked()
+
+        sessions.current = null
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showLogoutDialog)
+    }
 
     @Test
     fun `shows the version the platform reports`() {
@@ -127,6 +225,7 @@ class SettingsViewModelTest {
             FakeStationRepository(),
             FakeLanguageRepository(),
             FakeAppInfo(version = null),
+            sessions,
         )
         advanceUntilIdle()
 

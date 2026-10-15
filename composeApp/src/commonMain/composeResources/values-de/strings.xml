@@ -86,6 +86,15 @@
 
     <string name="settings_section_station">Standardstation</string>
     <string name="settings_station_action">Standardstation ändern</string>
+    <string name="settings_section_account">Konto</string>
+    <string name="settings_account_logged_in_as">Angemeldet als %1$s</string>
+    <string name="settings_account_not_logged_in">Nicht angemeldet</string>
+    <string name="settings_account_log_in">Anmelden</string>
+    <string name="settings_account_log_in_action">Bei deinem Konto anmelden</string>
+    <string name="settings_account_log_out">Abmelden</string>
+    <string name="settings_account_log_out_action">Von deinem Konto abmelden</string>
+    <string name="settings_account_log_out_title">Abmelden?</string>
+    <string name="settings_account_log_out_text">Dein Tagebuch bleibt in deinem Konto. Melde dich wieder an, um es zu sehen.</string>
     <string name="settings_station_not_set">Nicht festgelegt</string>
     <string name="change_station_title">Standardstation</string>
     <string name="change_station_intro">Auf der Startseite siehst du die Pollenwerte dieser Station. Deine Alarme und das Tagebuch behalten ihre eigenen Stationen.</string>
@@ -260,6 +269,9 @@
     <!-- Accounts: the account screen, the Diary gate -->
     <string name="error_email_taken">Es gibt bereits ein Konto mit dieser E-Mail-Adresse. Melde dich stattdessen an.</string>
     <string name="error_action_register">Das Konto konnte nicht erstellt werden.</string>
+    <string name="error_invalid_credentials">Die E-Mail-Adresse oder das Passwort ist falsch.</string>
+    <string name="error_signed_out">Du wurdest abgemeldet. Bitte melde dich erneut an.</string>
+    <string name="error_action_login">Die Anmeldung ist fehlgeschlagen.</string>
     <string name="account_title_login">Anmelden</string>
     <string name="account_title_register">Konto erstellen</string>
     <string name="account_email_label">E-Mail-Adresse</string>

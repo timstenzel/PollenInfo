@@ -89,6 +89,15 @@
 
     <string name="settings_section_station">Station par défaut</string>
     <string name="settings_station_action">Modifier la station par défaut</string>
+    <string name="settings_section_account">Compte</string>
+    <string name="settings_account_logged_in_as">Connecté en tant que %1$s</string>
+    <string name="settings_account_not_logged_in">Non connecté</string>
+    <string name="settings_account_log_in">Se connecter</string>
+    <string name="settings_account_log_in_action">Vous connecter à votre compte</string>
+    <string name="settings_account_log_out">Se déconnecter</string>
+    <string name="settings_account_log_out_action">Vous déconnecter de votre compte</string>
+    <string name="settings_account_log_out_title">Se déconnecter ?</string>
+    <string name="settings_account_log_out_text">Votre journal reste dans votre compte. Reconnectez-vous pour le consulter.</string>
     <string name="settings_station_not_set">Non définie</string>
     <string name="change_station_title">Station par défaut</string>
     <string name="change_station_intro">L’accueil affiche les niveaux de pollen de cette station. Vos alarmes et le journal conservent leurs propres stations.</string>
@@ -263,6 +272,9 @@
     <!-- Accounts: the account screen, the Diary gate -->
     <string name="error_email_taken">Un compte existe déjà avec cette adresse e-mail. Connectez-vous plutôt.</string>
     <string name="error_action_register">Impossible de créer le compte.</string>
+    <string name="error_invalid_credentials">L’adresse e-mail ou le mot de passe est incorrect.</string>
+    <string name="error_signed_out">Vous avez été déconnecté. Veuillez vous reconnecter.</string>
+    <string name="error_action_login">Impossible de se connecter.</string>
     <string name="account_title_login">Se connecter</string>
     <string name="account_title_register">Créer un compte</string>
     <string name="account_email_label">Adresse e-mail</string>

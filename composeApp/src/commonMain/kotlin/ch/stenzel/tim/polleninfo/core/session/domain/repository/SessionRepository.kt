@@ -19,6 +19,19 @@ interface SessionRepository {
      */
     suspend fun register(email: String, password: String): Result<Unit>
 
-    /** Forgets the stored session on this phone, without asking the backend. */
+    /** Logs in to an existing account; a wrong email or password is `InvalidCredentialsException`. */
+    suspend fun login(email: String, password: String): Result<Unit>
+
+    /**
+     * Ends this phone's session on the backend and forgets it here. It is forgotten even when the
+     * request fails — the user asked to be logged out of this phone, and a session the backend still
+     * holds expires on its own — so this fails only if the phone cannot clear its own storage.
+     */
+    suspend fun logout(): Result<Unit>
+
+    /**
+     * Forgets the stored session on this phone, without asking the backend — what any repository
+     * does when the backend answers `401` to the session (`SignedOutException`).
+     */
     suspend fun clear()
 }

@@ -154,6 +154,49 @@ class DiaryViewModelTest {
     }
 
     @Test
+    fun `the session ending while the diary is shown returns to SignedOut and drops the content`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+
+        sessionRepository.current = null
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.SignedOut, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `the session ending during a load returns to SignedOut and the load never lands`() = runTest {
+        historyRepository.gate = CompletableDeferred()
+        val viewModel = viewModel()
+        runCurrent()
+
+        sessionRepository.current = null
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.SignedOut, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `signing in again after logging out reloads from Loading`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        sessionRepository.current = null
+        advanceUntilIdle()
+
+        historyRepository.gate = CompletableDeferred()
+        sessionRepository.current = testSession
+        runCurrent()
+
+        assertIs<DiaryUiState.Loading>(viewModel.uiState.value)
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals(2, historyRepository.requested.size)
+    }
+
+    @Test
     fun `another session of the same login state does not reload`() = runTest {
         val viewModel = viewModel()
         advanceUntilIdle()

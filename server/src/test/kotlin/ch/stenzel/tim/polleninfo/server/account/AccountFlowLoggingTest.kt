@@ -13,6 +13,8 @@ import ch.stenzel.tim.polleninfo.server.plugins.configureAccountRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
 import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
+import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -81,13 +83,31 @@ class AccountFlowLoggingTest {
             setBody("""{"email":"$email","password":"$password","consent":true}""")
         }
         assertEquals(HttpStatusCode.Conflict, taken.status)
+        // A failed and a successful login, then logging both sessions out.
+        val refused = client.post("/users/session") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"email":"$email","password":"wrong-$password"}""")
+        }
+        assertEquals(HttpStatusCode.Unauthorized, refused.status)
+        val loggedIn = client.post("/users/session") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"email":"$email","password":"$password"}""")
+        }
+        assertEquals(HttpStatusCode.Created, loggedIn.status)
+        val loginToken = Json.decodeFromString<SessionDto>(loggedIn.bodyAsText()).sessionToken
+        listOf(token, loginToken).forEach {
+            assertEquals(HttpStatusCode.NoContent, client.delete("/users/me/session") { bearerAuth(it) }.status)
+        }
+        // A logged-out token is refused, on the error path once more.
+        assertEquals(HttpStatusCode.Unauthorized, client.delete("/users/me/session") { bearerAuth(token) }.status)
 
         val logged = appender.list.map { event ->
             event.formattedMessage + event.throwableProxy?.let(ThrowableProxyUtil::asString).orEmpty()
         }
         // Call logging wrote a line per request, so the capture itself works.
         assertTrue(logged.any { "POST /users" in it }, "captured: $logged")
-        listOf(token, email, password, "logged.flow").forEach { secret ->
+        assertTrue(logged.any { "POST /users/session" in it } && logged.any { "DELETE /users/me/session" in it })
+        listOf(token, loginToken, email, password, "logged.flow").forEach { secret ->
             assertTrue(logged.none { secret in it }, "a log line contains $secret: $logged")
         }
     }

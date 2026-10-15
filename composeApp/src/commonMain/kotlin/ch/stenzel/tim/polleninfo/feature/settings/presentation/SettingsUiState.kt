@@ -16,9 +16,17 @@ import ch.stenzel.tim.polleninfo.core.language.AppLanguage
  * [language] is the app language as the platform reports it; [showLanguageDialog] whether its choice
  * dialog is open. [languageAppliesOnRestart] is set once the language has been changed on a platform
  * that only applies it at the next launch (iOS), and shows a note saying so.
+ *
+ * [accountEmail] is the address of the account this phone is logged in to, `null` while nobody is;
+ * the account rows appear only once [accountChecked] — the stored login has been read — so "Not
+ * logged in" never flashes up for a logged-in user. [showLogoutDialog] is whether the logout
+ * confirmation is open.
  */
 data class SettingsUiState(
     val stationName: String? = null,
+    val accountEmail: String? = null,
+    val accountChecked: Boolean = false,
+    val showLogoutDialog: Boolean = false,
     val language: AppLanguage = AppLanguage.SYSTEM,
     val showLanguageDialog: Boolean = false,
     val languageAppliesOnRestart: Boolean = false,

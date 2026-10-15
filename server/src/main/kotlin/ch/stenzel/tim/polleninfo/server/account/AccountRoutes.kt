@@ -4,18 +4,26 @@ import ch.stenzel.tim.polleninfo.server.account.domain.AccountValidation
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountValidationResult
 import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
 import ch.stenzel.tim.polleninfo.server.account.model.ErrorDto
+import ch.stenzel.tim.polleninfo.server.account.model.LoginDto
 import ch.stenzel.tim.polleninfo.server.account.model.RegisterDto
 import ch.stenzel.tim.polleninfo.server.account.model.SessionDto
 import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
 import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.UserStore
 import ch.stenzel.tim.polleninfo.server.plugins.ACCOUNT_LIMIT
+import ch.stenzel.tim.polleninfo.server.plugins.USER_AUTH
+import ch.stenzel.tim.polleninfo.server.plugins.USER_LIMIT
+import ch.stenzel.tim.polleninfo.server.plugins.UserPrincipal
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.auth.authenticate
+import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import java.time.Clock
@@ -23,12 +31,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Personal accounts. Registering returns a session token — the key to everything under
- * `/users/me`, sent as `Authorization: Bearer …`. The email and the token travel only in bodies and
- * headers, never in a path or query, so neither reaches the call log.
+ * Personal accounts. Registering and logging in return a session token — the key to everything
+ * under `/users/me`, sent as `Authorization: Bearer …`. The email and the token travel only in
+ * bodies and headers, never in a path or query, so neither reaches the call log.
  *
- * Registration is rate-limited per client address under [ACCOUNT_LIMIT], the bucket the login
- * shares.
+ * Registration and login share one rate-limit bucket per client address, [ACCOUNT_LIMIT]; the
+ * `/users/me` routes are limited per account under [USER_LIMIT], inside authentication, so an
+ * unknown or expired token is a `401` before its body is read and never gets a bucket.
  */
 fun Route.accountRoutes(users: UserStore, sessions: SessionStore, hasher: PasswordHasher, clock: Clock) {
     route("/users") {
@@ -62,6 +71,48 @@ fun Route.accountRoutes(users: UserStore, sessions: SessionStore, hasher: Passwo
                     )
                 }
             }
+
+            post("/session") {
+                val body = try {
+                    call.receive<LoginDto>()
+                } catch (e: BadRequestException) {
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorDto("Expected {\"email\": \"…\", \"password\": \"…\"}"),
+                    )
+                }
+                // An unknown email does the work of a verify too and gets the very same answer as a
+                // wrong password, so the login never tells whether an address has an account.
+                val userId = withContext(Dispatchers.Default) {
+                    val stored = AccountValidation.normalizeEmail(body.email)?.let { users.credentials(it) }
+                    if (stored == null) {
+                        hasher.verifyDummy(body.password)
+                        null
+                    } else {
+                        stored.userId.takeIf { hasher.verify(body.password, stored.passwordHash) }
+                    }
+                } ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorDto(INVALID_CREDENTIALS))
+                val token = sessions.create(userId, clock.instant())
+                call.respond(HttpStatusCode.Created, SessionDto(token.value))
+            }
+        }
+
+        authenticate(USER_AUTH) {
+            rateLimit(USER_LIMIT) {
+                route("/me") {
+                    delete("/session") {
+                        // Only this phone's session; the account's other phones stay logged in.
+                        sessions.delete(call.userPrincipal().token)
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+                }
+            }
         }
     }
 }
+
+/** The one answer to a login that fails, whichever of the two was wrong. */
+private const val INVALID_CREDENTIALS = "Email or password is incorrect"
+
+/** The authenticated account; only called inside [authenticate], where a principal always exists. */
+private fun ApplicationCall.userPrincipal(): UserPrincipal = checkNotNull(principal<UserPrincipal>())

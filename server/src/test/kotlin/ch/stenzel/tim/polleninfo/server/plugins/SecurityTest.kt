@@ -4,12 +4,14 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
+import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.SessionToken
 import ch.stenzel.tim.polleninfo.server.account.domain.UserId
 import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
 import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
 import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.StoredCredentials
 import ch.stenzel.tim.polleninfo.server.account.store.UserStore
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
@@ -29,6 +31,7 @@ import ch.stenzel.tim.polleninfo.server.pollen.measurement.MeasurementService
 import ch.stenzel.tim.polleninfo.server.pollen.upstream.FakePollenService
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.options
@@ -73,6 +76,8 @@ class SecurityTest {
     private val devices = RecordingDeviceStore()
     private val alarms = RecordingAlarmStore()
     private val users = RecordingUserStore()
+    private val sessions = InMemorySessionStore()
+    private val hasher = cheapHasher()
     private val pollenService = FakePollenService()
 
     private val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
@@ -107,8 +112,8 @@ class SecurityTest {
             configureAlarmRouting(devices = devices, alarms = alarms)
             configureAccountRouting(
                 users = users,
-                sessions = InMemorySessionStore(),
-                hasher = cheapHasher(),
+                sessions = sessions,
+                hasher = hasher,
                 clock = Clock.systemUTC(),
             )
         }
@@ -119,6 +124,13 @@ class SecurityTest {
         from?.let { header(HttpHeaders.XForwardedFor, it) }
         contentType(ContentType.Application.Json)
         setBody("""{"email":"user${users.registered.size}-${UUID.randomUUID()}@example.com","password":"correct horse","consent":true}""")
+    }
+
+    /** A login with the right password for an account that exists, so only the limiter can refuse it. */
+    private suspend fun ApplicationTestBuilder.login(from: String? = null) = client.post("/users/session") {
+        from?.let { header(HttpHeaders.XForwardedFor, it) }
+        contentType(ContentType.Application.Json)
+        setBody("""{"email":"${users.existing(hasher)}","password":"correct horse"}""")
     }
 
     private suspend fun ApplicationTestBuilder.register(from: String? = null) = client.post("/devices") {
@@ -200,6 +212,59 @@ class SecurityTest {
         assertEquals(HttpStatusCode.Created, registerUser().status)
         assertTooManyRequests(register())
         assertTooManyRequests(registerUser())
+    }
+
+    @Test
+    fun `logins and registrations share the account bucket`() = testApplication {
+        installApp(RateLimits(accountPerHour = 3))
+
+        assertEquals(HttpStatusCode.Created, registerUser().status)
+        assertEquals(HttpStatusCode.Created, login().status)
+        assertEquals(HttpStatusCode.Created, login().status)
+        assertTooManyRequests(login())
+        assertTooManyRequests(registerUser())
+    }
+
+    @Test
+    fun `failed logins draw on the account bucket too`() = testApplication {
+        installApp(RateLimits(accountPerHour = 2))
+
+        repeat(2) {
+            val response = client.post("/users/session") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"email":"nobody@example.com","password":"guess-$it"}""")
+            }
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+        }
+        assertTooManyRequests(login())
+    }
+
+    // --- User limiter ---
+
+    @Test
+    fun `the default user limit lets 60 calls a minute through per account and answers the 61st with 429`() =
+        testApplication {
+            installApp()
+            val first = sessions.known()
+            val second = sessions.known()
+
+            repeat(60) {
+                val response = client.delete("/users/me/session") { bearerAuth(first) }
+                assertEquals(HttpStatusCode.NoContent, response.status, "call ${it + 1}")
+            }
+            assertTooManyRequests(client.delete("/users/me/session") { bearerAuth(first) })
+
+            assertEquals(HttpStatusCode.NoContent, client.delete("/users/me/session") { bearerAuth(second) }.status)
+        }
+
+    @Test
+    fun `unknown session tokens are refused with 401 and use no user bucket`() = testApplication {
+        installApp(RateLimits(userPerMinute = 1))
+
+        repeat(3) {
+            val response = client.delete("/users/me/session") { bearerAuth(newSessionToken().value) }
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+        }
     }
 
     // --- Device limiter ---
@@ -479,17 +544,50 @@ private class RecordingAlarmStore : AlarmStore {
 /** Accounts in memory; records every registration so a test can see whether a handler ran. */
 private class RecordingUserStore : UserStore {
     val registered = mutableListOf<String>()
+    private val accounts = mutableMapOf<String, StoredCredentials>()
+
+    /** The email of an account whose password is "correct horse", created on first use. */
+    fun existing(hasher: PasswordHasher): String {
+        accounts.getOrPut(EXISTING) { StoredCredentials(UserId(UUID.randomUUID()), hasher.hash("correct horse")) }
+        return EXISTING
+    }
 
     override suspend fun register(spec: AccountSpec, passwordHash: String, now: Instant): RegisterResult {
         if (spec.email in registered) return RegisterResult.EmailTaken
         registered += spec.email
-        return RegisterResult.Registered(UserId(UUID.randomUUID()))
+        val id = UserId(UUID.randomUUID())
+        accounts[spec.email] = StoredCredentials(id, passwordHash)
+        return RegisterResult.Registered(id)
+    }
+
+    override suspend fun credentials(email: String): StoredCredentials? = accounts[email]
+
+    private companion object {
+        const val EXISTING = "existing@example.com"
     }
 }
 
+/**
+ * Sessions in memory. Deleting one is only recorded, so a test can call the logout route as often
+ * as it needs to reach a limit with one token.
+ */
 private class InMemorySessionStore : SessionStore {
     private val sessions = mutableMapOf<String, UserId>()
+    val deleted = mutableListOf<SessionToken>()
+
+    /** A session that exists, by its bearer token. */
+    fun known(): String {
+        val token = newSessionToken()
+        sessions[token.value] = UserId(UUID.randomUUID())
+        return token.value
+    }
 
     override suspend fun create(userId: UserId, now: Instant): SessionToken =
         newSessionToken().also { sessions[it.value] = userId }
+
+    override suspend fun authenticate(token: SessionToken, now: Instant): UserId? = sessions[token.value]
+
+    override suspend fun delete(token: SessionToken) {
+        deleted += token
+    }
 }

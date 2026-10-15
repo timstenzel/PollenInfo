@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Creating an account (and, from the next step on, logging in). Opens in [initialMode]; the user can
- * switch between the two forms, keeping the email typed.
+ * Logging in or creating an account. Opens in [initialMode]; the user can switch between the two
+ * forms, keeping the email typed.
  *
  * Field changes are ignored while a submit runs, so what is sent is the form as it was when tapped.
  * Every edit clears the last error. A success sends [AccountEvent.Done] once — the session itself
@@ -56,12 +56,14 @@ class AccountViewModel(
         val state = _uiState.value
         if (!state.canSubmit) return
         val form = state.form
-        // Logging in arrives with the next step; until then the login form has no button.
-        if (form.mode != AccountMode.REGISTER) return
 
         _uiState.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
-            when (val result = sessionRepository.register(form.email, form.password)) {
+            val result = when (form.mode) {
+                AccountMode.LOGIN -> sessionRepository.login(form.email, form.password)
+                AccountMode.REGISTER -> sessionRepository.register(form.email, form.password)
+            }
+            when (result) {
                 is Result.Success -> _events.send(AccountEvent.Done)
                 is Result.Failure -> _uiState.update {
                     it.copy(isSubmitting = false, error = result.exception.toSessionAppError())

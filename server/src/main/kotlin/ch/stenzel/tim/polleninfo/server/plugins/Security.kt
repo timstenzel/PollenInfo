@@ -30,8 +30,11 @@ val REGISTER_LIMIT = RateLimitName("register")
 /** Everything under `/devices/me`, per authenticated device. */
 val DEVICE_LIMIT = RateLimitName("device")
 
-/** `POST /users` (and, later, the login), per client address — one bucket for both. */
+/** `POST /users` and `POST /users/session`, per client address — one bucket for both. */
 val ACCOUNT_LIMIT = RateLimitName("account")
+
+/** Everything under `/users/me`, per authenticated account. */
+val USER_LIMIT = RateLimitName("user")
 
 /** Everything under `/pollen`, per client address. */
 val POLLEN_LIMIT = RateLimitName("pollen")
@@ -71,6 +74,11 @@ fun Application.configureSecurity(rateLimits: RateLimits = RateLimits(), trusted
         register(ACCOUNT_LIMIT) {
             rateLimiter(limit = rateLimits.accountPerHour, refillPeriod = 1.hours)
             requestKey { call -> call.clientAddress() }
+        }
+        // As the device limiter: inside `authenticate`, so only a valid session gets a bucket.
+        register(USER_LIMIT) {
+            rateLimiter(limit = rateLimits.userPerMinute, refillPeriod = 1.minutes)
+            requestKey { call -> call.principal<UserPrincipal>()?.userId ?: call.clientAddress() }
         }
         register(POLLEN_LIMIT) {
             rateLimiter(limit = rateLimits.pollenPerMinute, refillPeriod = 1.minutes)

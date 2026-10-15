@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.core.ui.error
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_login
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
@@ -10,9 +11,11 @@ import ch.stenzel.tim.polleninfo.resources.error_action_save_alarm
 import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
 import ch.stenzel.tim.polleninfo.resources.error_email_taken
+import ch.stenzel.tim.polleninfo.resources.error_invalid_credentials
 import ch.stenzel.tim.polleninfo.resources.error_network
 import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
+import ch.stenzel.tim.polleninfo.resources.error_signed_out
 import ch.stenzel.tim.polleninfo.resources.error_unknown
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,6 +34,8 @@ class AppErrorTextTest {
         AppError.AlarmLimitReached,
         AppError.InvalidAlarm,
         AppError.EmailTaken,
+        AppError.InvalidCredentials,
+        AppError.SignedOut,
         AppError.Unknown,
     )
 
@@ -94,5 +99,23 @@ class AppErrorTextTest {
     @Test
     fun `NotFound during registration is not about an alarm`() {
         assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.REGISTER).reason)
+    }
+
+    @Test
+    fun `a failed login says so before the reason`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_login, Res.string.error_invalid_credentials),
+            AppError.InvalidCredentials.text(ErrorContext.LOGIN),
+        )
+        assertEquals(
+            ErrorText(Res.string.error_action_login, Res.string.error_network),
+            AppError.Network.text(ErrorContext.LOGIN),
+        )
+        assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.LOGIN).reason)
+    }
+
+    @Test
+    fun `an ended session asks to log in again`() {
+        assertEquals(ErrorText(null, Res.string.error_signed_out), AppError.SignedOut.text(ErrorContext.LOAD))
     }
 }

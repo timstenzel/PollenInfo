@@ -172,10 +172,16 @@ class ServerConfigTest {
     }
 
     @Test
-    fun `the rate limits default to five device and ten account registrations an hour and 60 device and 120 pollen calls a minute`() {
+    fun `the rate limits default to five device and ten account registrations an hour and 60 device and account and 120 pollen calls a minute`() {
         listOf(load(emptyMap()), load(production)).forEach { config ->
             assertEquals(
-                RateLimits(registerPerHour = 5, devicePerMinute = 60, pollenPerMinute = 120, accountPerHour = 10),
+                RateLimits(
+                    registerPerHour = 5,
+                    devicePerMinute = 60,
+                    pollenPerMinute = 120,
+                    accountPerHour = 10,
+                    userPerMinute = 60,
+                ),
                 config.rateLimits,
             )
         }
@@ -189,14 +195,22 @@ class ServerConfigTest {
                 "RATE_LIMIT_DEVICE_PER_MINUTE" to "1",
                 "RATE_LIMIT_POLLEN_PER_MINUTE" to "300",
                 "RATE_LIMIT_ACCOUNT_PER_HOUR" to "25",
+                "RATE_LIMIT_USER_PER_MINUTE" to "90",
             ),
         )
 
         assertEquals(
-            RateLimits(registerPerHour = 10, devicePerMinute = 1, pollenPerMinute = 300, accountPerHour = 25),
+            RateLimits(
+                registerPerHour = 10,
+                devicePerMinute = 1,
+                pollenPerMinute = 300,
+                accountPerHour = 25,
+                userPerMinute = 90,
+            ),
             config.rateLimits,
         )
         assertEquals(RateLimits(accountPerHour = 1), load(mapOf("RATE_LIMIT_ACCOUNT_PER_HOUR" to "1")).rateLimits)
+        assertEquals(RateLimits(userPerMinute = 1), load(mapOf("RATE_LIMIT_USER_PER_MINUTE" to "1")).rateLimits)
     }
 
     @Test
@@ -208,6 +222,7 @@ class ServerConfigTest {
                     "RATE_LIMIT_DEVICE_PER_MINUTE" to "0",
                     "RATE_LIMIT_POLLEN_PER_MINUTE" to "-1",
                     "RATE_LIMIT_ACCOUNT_PER_HOUR" to "1.5",
+                    "RATE_LIMIT_USER_PER_MINUTE" to "sixty",
                 ),
             )
         }
@@ -218,6 +233,7 @@ class ServerConfigTest {
                 "RATE_LIMIT_DEVICE_PER_MINUTE must be a whole number above 0, not '0'",
                 "RATE_LIMIT_POLLEN_PER_MINUTE must be a whole number above 0, not '-1'",
                 "RATE_LIMIT_ACCOUNT_PER_HOUR must be a whole number above 0, not '1.5'",
+                "RATE_LIMIT_USER_PER_MINUTE must be a whole number above 0, not 'sixty'",
             ),
             error.problems,
         )

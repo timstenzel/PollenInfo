@@ -81,33 +81,33 @@ email and wrong password, `DELETE /users/me/session`, the per-user rate limit, t
 
 ### Implementation steps
 
-- [ ] Server: `SessionStore.authenticate` (unknown or unused for more than 90 days → `null`; `last_used_at` refreshed at most once per day) and `SessionStore.delete`.
-- [ ] Server: restructure authentication so one `Authentication` install registers both the `device` provider (unchanged) and the new `user` provider (`UserPrincipal(userId, token)`; shape check before lookup; unparseable header, other scheme, unknown or expired token → the same `401` with `WWW-Authenticate: Bearer`, before the body is read). Route tests installing only one side keep working.
-- [ ] Server: `UserStore.credentials(email)`; `POST /users/session` (`201 {sessionToken}`; `401 {error}` identical for unknown email and wrong password, `verifyDummy` for an unknown email; `400` malformed) under `ACCOUNT_LIMIT`; `DELETE /users/me/session` (`204`, only the calling session); a per-user limiter around `/users/me/…` inside `authenticate("user")`, keyed on `UserPrincipal` (`RATE_LIMIT_USER_PER_MINUTE`, default 60).
-- [ ] App: `SessionRepository.login` (`401` → `InvalidCredentialsException`) and `logout` (request, then clear locally even if it fails); `SignedOutException` for a `401` on any authenticated call, which calls `clear()`; `AppError.InvalidCredentials`, `AppError.SignedOut`, `ErrorContext.LOGIN` with texts.
-- [ ] App: `Screen.Account` login mode — email and password with eye button, `canSubmit`, progress, error, success → `Done`.
-- [ ] App: `SettingsViewModel` takes `SessionRepository`; Account section under "Default station": signed in "Logged in as {email}" + "Log out" (confirm dialog saying the diary stays in the account), signed out "Not logged in" + "Log in" → `Screen.Account(LOGIN)`.
-- [ ] App: the Diary switches to `SignedOut` and drops held content when the session becomes `null`.
-- [ ] Extend `AccountFlowLoggingTest` with login and logout; strings in four languages.
-- [ ] Docs: CLAUDE.md — REST API, Devices-and-alarms/authentication paragraph (two providers), Abuse protection, Configuration, Error handling (new `AppError`s), Settings.
+- [x] Server: `SessionStore.authenticate` (unknown or unused for more than 90 days → `null`; `last_used_at` refreshed at most once per day) and `SessionStore.delete`.
+- [x] Server: restructure authentication so one `Authentication` install registers both the `device` provider (unchanged) and the new `user` provider (`UserPrincipal(userId, token)`; shape check before lookup; unparseable header, other scheme, unknown or expired token → the same `401` with `WWW-Authenticate: Bearer`, before the body is read). Route tests installing only one side keep working.
+- [x] Server: `UserStore.credentials(email)`; `POST /users/session` (`201 {sessionToken}`; `401 {error}` identical for unknown email and wrong password, `verifyDummy` for an unknown email; `400` malformed) under `ACCOUNT_LIMIT`; `DELETE /users/me/session` (`204`, only the calling session); a per-user limiter around `/users/me/…` inside `authenticate("user")`, keyed on `UserPrincipal` (`RATE_LIMIT_USER_PER_MINUTE`, default 60).
+- [x] App: `SessionRepository.login` (`401` → `InvalidCredentialsException`) and `logout` (request, then clear locally even if it fails); `SignedOutException` for a `401` on any authenticated call, which calls `clear()`; `AppError.InvalidCredentials`, `AppError.SignedOut`, `ErrorContext.LOGIN` with texts.
+- [x] App: `Screen.Account` login mode — email and password with eye button, `canSubmit`, progress, error, success → `Done`.
+- [x] App: `SettingsViewModel` takes `SessionRepository`; Account section under "Default station": signed in "Logged in as {email}" + "Log out" (confirm dialog saying the diary stays in the account), signed out "Not logged in" + "Log in" → `Screen.Account(LOGIN)`.
+- [x] App: the Diary switches to `SignedOut` and drops held content when the session becomes `null`.
+- [x] Extend `AccountFlowLoggingTest` with login and logout; strings in four languages.
+- [x] Docs: CLAUDE.md — REST API, Devices-and-alarms/authentication paragraph (two providers), Abuse protection, Configuration, Error handling (new `AppError`s), Settings.
 
 ### Acceptance criteria
 
-- [ ] `ExposedAccountStoresTest`: `authenticate` accepts a session unused exactly 90 days and refuses it 1 ms later; `last_used_at` changes at most once per day of use.
-- [ ] `AccountRoutesTest`: right credentials (email in any capitals) → `201` and a token accepted by `DELETE /users/me/session`; wrong password and unknown email return identical `401` bodies; after logout that token is `401` while a second session of the same user still works; a missing, malformed or unknown token is `401` with `WWW-Authenticate: Bearer`; every existing `AlarmRoutesTest` case still passes.
-- [ ] `SecurityTest`: login shares the `ACCOUNT_LIMIT` bucket with registration; the per-user limit returns `429` after 60 calls a minute for one user and not for another; `ServerConfigTest` covers `RATE_LIMIT_USER_PER_MINUTE`.
-- [ ] App tests: `SessionRepositoryImplTest` — `login` stores token and email and maps `401` to `InvalidCredentials`; `logout` sends the bearer `DELETE` and clears the session for `204` and for a failure; `AccountViewModelTest` — login submit, error and `Done` once; `SettingsViewModelTest` — account row signed in and out, the logout dialog, confirming logs out; `AppErrorTextTest` — `InvalidCredentials`, `SignedOut`, `LOGIN`.
-- [ ] `DiaryViewModelTest`: the session going to `null` while `Content` is shown → `SignedOut`; signing in again reloads.
-- [ ] Manual: log in from the Diary gate and from Settings; log out in Settings → the Diary shows the gate; the confirmation and the Account rows read correctly with TalkBack.
+- [x] `ExposedAccountStoresTest`: `authenticate` accepts a session unused exactly 90 days and refuses it 1 ms later; `last_used_at` changes at most once per day of use.
+- [x] `AccountRoutesTest`: right credentials (email in any capitals) → `201` and a token accepted by `DELETE /users/me/session`; wrong password and unknown email return identical `401` bodies; after logout that token is `401` while a second session of the same user still works; a missing, malformed or unknown token is `401` with `WWW-Authenticate: Bearer`; every existing `AlarmRoutesTest` case still passes.
+- [x] `SecurityTest`: login shares the `ACCOUNT_LIMIT` bucket with registration; the per-user limit returns `429` after 60 calls a minute for one user and not for another; `ServerConfigTest` covers `RATE_LIMIT_USER_PER_MINUTE`.
+- [x] App tests: `SessionRepositoryImplTest` — `login` stores token and email and maps `401` to `InvalidCredentials`; `logout` sends the bearer `DELETE` and clears the session for `204` and for a failure; `AccountViewModelTest` — login submit, error and `Done` once; `SettingsViewModelTest` — account row signed in and out, the logout dialog, confirming logs out; `AppErrorTextTest` — `InvalidCredentials`, `SignedOut`, `LOGIN`.
+- [x] `DiaryViewModelTest`: the session going to `null` while `Content` is shown → `SignedOut`; signing in again reloads.
+- [ ] ~~Manual: log in from the Diary gate and from Settings; log out in Settings → the Diary shows the gate; the confirmation and the Account rows read correctly with TalkBack.~~ *(skipped: TalkBack could not be driven here. Everything else verified on the API 37 emulator against `:server:run` — Settings signed out shows "Not logged in" + "Log in"; login from Settings with a wrong password shows "Couldn’t log in. The email address or password is incorrect.", the right one with the email in other capitals returns to Settings showing "Logged in as manual@example.com"; the Diary then loads; "Log out" opens the confirmation with "Your diary stays in your account…", confirming sends `DELETE /users/me/session` (204) and the Diary shows the gate; logging in from the gate returns to the loaded Diary; the server log holds neither the email nor the password. The accessibility tree shows the row texts and dialog, but the spoken output needs a TalkBack check by hand)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs
 
 ---
 

@@ -7,6 +7,7 @@ import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,12 +28,16 @@ import kotlinx.coroutines.launch
  *
  * The language is the platform's setting, read through [LanguageRepository]. It can also change
  * outside the app (Android's per-app language screen), so [onResume] reads it again.
+ *
+ * The account is **observed** too, from the login stored on the phone — no request: logging in or
+ * out anywhere in the app shows here at once. Logging out asks for confirmation first.
  */
 class SettingsViewModel(
     selectedStationRepository: SelectedStationRepository,
     private val stationRepository: StationRepository,
     private val languageRepository: LanguageRepository,
     appInfo: AppInfo,
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -53,6 +58,36 @@ class SettingsViewModel(
                 selected?.let { stored -> stations?.firstOrNull { it.abbr == stored.abbr }?.name ?: stored.name }
             }.collect { name -> _uiState.update { it.copy(stationName = name) } }
         }
+        viewModelScope.launch {
+            sessionRepository.session.collect { session ->
+                _uiState.update {
+                    it.copy(
+                        accountEmail = session?.email,
+                        accountChecked = true,
+                        // Logged out elsewhere: there is nothing left to confirm.
+                        showLogoutDialog = it.showLogoutDialog && session != null,
+                    )
+                }
+            }
+        }
+    }
+
+    fun onLogoutClicked() {
+        if (_uiState.value.accountEmail == null) return
+        _uiState.update { it.copy(showLogoutDialog = true) }
+    }
+
+    fun onLogoutDismissed() {
+        _uiState.update { it.copy(showLogoutDialog = false) }
+    }
+
+    /**
+     * Closes the dialog and logs out. The session flow then shows the signed-out rows; logging out
+     * only fails if the phone cannot clear its own storage, and the account row then simply stays.
+     */
+    fun onLogoutConfirmed() {
+        _uiState.update { it.copy(showLogoutDialog = false) }
+        viewModelScope.launch { sessionRepository.logout() }
     }
 
     fun onLanguageRowClicked() {

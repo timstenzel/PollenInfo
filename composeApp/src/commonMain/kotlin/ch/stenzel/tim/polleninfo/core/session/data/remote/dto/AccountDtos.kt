@@ -8,7 +8,13 @@ class RegisterRequestDto(val email: String, val password: String, val consent: B
     override fun toString(): String = "RegisterRequestDto(…)"
 }
 
-/** Response of `POST /users`: the session token for every later account call. */
+/** Body of `POST /users/session`. Not a data class, for the same reason. */
+@Serializable
+class LoginRequestDto(val email: String, val password: String) {
+    override fun toString(): String = "LoginRequestDto(…)"
+}
+
+/** Response of `POST /users` and `POST /users/session`: the session token for every later account call. */
 @Serializable
 class SessionResponseDto(val sessionToken: String) {
     override fun toString(): String = "SessionResponseDto(…)"

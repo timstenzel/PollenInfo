@@ -4,30 +4,43 @@ import ch.stenzel.tim.polleninfo.server.account.domain.SESSION_TOKEN_LENGTH
 import ch.stenzel.tim.polleninfo.server.account.domain.SessionToken
 import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.hash
+import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
 import ch.stenzel.tim.polleninfo.server.account.model.SessionDto
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
 import ch.stenzel.tim.polleninfo.server.account.store.SessionsTable
 import ch.stenzel.tim.polleninfo.server.account.store.UsersTable
+import ch.stenzel.tim.polleninfo.server.alarm.domain.newDeviceToken
+import ch.stenzel.tim.polleninfo.server.alarm.model.RegisterDeviceResponse
+import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedAlarmStore
+import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedDeviceStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import ch.stenzel.tim.polleninfo.server.config.RateLimits
 import ch.stenzel.tim.polleninfo.server.plugins.configureAccountRouting
+import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import ch.stenzel.tim.polleninfo.server.pollen.measurement.MutableClock
+import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
+import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
@@ -171,5 +184,151 @@ class AccountRoutesTest {
         assertNotNull(first)
         assertFalse(first == second)
         assertEquals(2L, transaction(database) { SessionsTable.selectAll().count() })
+    }
+
+    // --- Login ---
+
+    private suspend fun ApplicationTestBuilder.login(body: String): HttpResponse = client.post("/users/session") {
+        contentType(ContentType.Application.Json)
+        setBody(body)
+    }
+
+    private fun credentials(email: String = "tim@example.com", password: String = "correct horse") =
+        """{"email":"$email","password":"$password"}"""
+
+    private suspend fun ApplicationTestBuilder.logout(token: String?): HttpResponse =
+        client.delete("/users/me/session") { token?.let { bearerAuth(it) } }
+
+    private suspend fun HttpResponse.sessionToken(): String =
+        Json.decodeFromString<SessionDto>(bodyAsText()).sessionToken
+
+    @Test
+    fun `the right credentials in any capitals are 201 with a new session token`() = testApplication {
+        installApp()
+        val registered = register(registration()).sessionToken()
+
+        val response = login(credentials(email = "  TIM@Example.com "))
+
+        assertEquals(HttpStatusCode.Created, response.status)
+        val token = response.sessionToken()
+        assertEquals(SESSION_TOKEN_LENGTH, token.length)
+        assertNotEquals(registered, token)
+        assertEquals(HttpStatusCode.NoContent, logout(token).status)
+    }
+
+    @Test
+    fun `a wrong password and an unknown email get identical 401 answers`() = testApplication {
+        installApp()
+        register(registration())
+
+        val wrongPassword = login(credentials(password = "wrong horse"))
+        val unknownEmail = login(credentials(email = "anna@example.com"))
+        val notAnEmail = login(credentials(email = "anna"))
+
+        val responses = listOf(wrongPassword, unknownEmail, notAnEmail)
+        responses.forEach { assertEquals(HttpStatusCode.Unauthorized, it.status) }
+        assertEquals("Email or password is incorrect", wrongPassword.errorText())
+        assertEquals(1, responses.map { it.bodyAsText() }.distinct().size)
+        assertEquals(1L, transaction(database) { SessionsTable.selectAll().count() })
+    }
+
+    @Test
+    fun `the password of a login is not trimmed`() = testApplication {
+        installApp()
+        register(registration())
+
+        assertEquals(HttpStatusCode.Unauthorized, login(credentials(password = " correct horse ")).status)
+    }
+
+    @Test
+    fun `a malformed login is 400 with an error`() = testApplication {
+        installApp()
+        listOf(
+            """{"email":"tim@example.com"}""",
+            """{"password":"correct horse"}""",
+            "email=tim@example.com",
+        ).forEach { body ->
+            val response = login(body)
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(response.errorText().isNotBlank(), body)
+        }
+    }
+
+    // --- Logout and the user provider ---
+
+    @Test
+    fun `after logout that token is 401 while another session of the same user still works`() = testApplication {
+        installApp()
+        val first = register(registration()).sessionToken()
+        val second = login(credentials()).sessionToken()
+
+        assertEquals(HttpStatusCode.NoContent, logout(first).status)
+
+        assertEquals(HttpStatusCode.Unauthorized, logout(first).status)
+        assertEquals(HttpStatusCode.NoContent, logout(second).status)
+    }
+
+    @Test
+    fun `a missing malformed or unknown token is 401 with WWW-Authenticate Bearer`() = testApplication {
+        installApp()
+        val cases = mapOf(
+            "missing" to client.delete("/users/me/session"),
+            "not the issued shape" to logout("too-short"),
+            "unknown" to logout(newSessionToken().value),
+            "another scheme" to client.delete("/users/me/session") {
+                header(HttpHeaders.Authorization, "Basic dGltOnNlY3JldA==")
+            },
+            "unparseable header" to client.delete("/users/me/session") {
+                header(HttpHeaders.Authorization, "Bearer a b")
+            },
+        )
+
+        cases.forEach { (case, response) ->
+            assertEquals(HttpStatusCode.Unauthorized, response.status, case)
+            assertTrue(
+                response.headers[HttpHeaders.WWWAuthenticate].orEmpty().startsWith("Bearer"),
+                "$case: ${response.headers[HttpHeaders.WWWAuthenticate]}",
+            )
+        }
+    }
+
+    @Test
+    fun `a device token is not a session token`() = testApplication {
+        installApp()
+
+        assertEquals(HttpStatusCode.Unauthorized, logout(newDeviceToken().value).status)
+    }
+
+    @Test
+    fun `a session unused for more than 90 days is 401 and one unused for exactly 90 days is not`() = testApplication {
+        installApp()
+        val kept = register(registration(email = "tim@example.com")).sessionToken()
+        val expired = register(registration(email = "anna@example.com")).sessionToken()
+
+        clock.now = clock.now.plus(Duration.ofDays(90))
+        assertEquals(HttpStatusCode.NoContent, logout(kept).status)
+
+        clock.now = clock.now.plusMillis(1)
+        assertEquals(HttpStatusCode.Unauthorized, logout(expired).status)
+    }
+
+    @Test
+    fun `the device and the account routes can be installed together`() = testApplication {
+        application {
+            configureSerialization()
+            configureSecurity(RateLimits(accountPerHour = 1_000))
+            configureAlarmRouting(devices = ExposedDeviceStore(database), alarms = ExposedAlarmStore(database))
+            configureAccountRouting(users = users, sessions = sessions, hasher = hasher, clock = clock)
+        }
+        val session = register(registration()).sessionToken()
+        val device = client.post("/devices") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"fcmToken":"token-1"}""")
+        }.let { Json.decodeFromString<RegisterDeviceResponse>(it.bodyAsText()).deviceToken }
+
+        assertEquals(HttpStatusCode.OK, client.get("/devices/me/alarms") { bearerAuth(device) }.status)
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/devices/me/alarms") { bearerAuth(session) }.status)
+        assertEquals(HttpStatusCode.Unauthorized, logout(device).status)
+        assertEquals(HttpStatusCode.NoContent, logout(session).status)
     }
 }

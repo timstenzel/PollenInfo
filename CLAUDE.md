@@ -381,7 +381,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
-| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`; `409` → `EmailTakenException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
+| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `login`, `logout`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`, `POST /users/session`, `DELETE /users/me/session`; `409` → `EmailTakenException`, `401` on login → `InvalidCredentialsException`, `401` with a session → `SignedOutException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `API_BASE_URL` (the Koin qualifier of the backend address), `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
@@ -472,8 +472,8 @@ that omits it binds to the stdlib type and fails to compile against `Success` / 
 **UI states carry an `AppError`, never a message string.** `core/result/AppError.kt` is a sealed
 interface of what went wrong *for the user*: `Network`, `ServerUnavailable`, `NotFound` (mapped from
 exceptions), `NoStationSelected`, `NoReadings`, `NoStations` (conditions a ViewModel finds itself),
-`PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures), `EmailTaken` (account
-failures) and `Unknown`. A ViewModel
+`PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures), `EmailTaken`,
+`InvalidCredentials`, `SignedOut` (account failures) and `Unknown`. A ViewModel
 turns a `Failure` into one with `exception.toAppError()`: any `kotlinx.io.IOException` — every
 engine's transport failures and Ktor's `HttpRequestTimeoutException` — is `Network`, an
 `HttpStatusException` 5xx `ServerUnavailable` and 404 `NotFound`, anything else (a payload that does
@@ -482,19 +482,24 @@ not parse, another status) `Unknown`. `feature/alarms` has its own `toAlarmAppEr
 only escapes after the repository's one re-registration, is `Unknown` — and delegates the rest; the
 alarm exceptions stay in the feature because `core/` may not import one. The account failures live
 in `core/session` (`domain/model/SessionFailures.kt`), whose `toSessionAppError()` maps
-`EmailTakenException` to `EmailTaken` and delegates the rest the same way.
+`EmailTakenException` to `EmailTaken`, `InvalidCredentialsException` (a wrong email or password —
+the backend never says which) to `InvalidCredentials` and `SignedOutException` (the backend no longer
+knows the session: expired or ended elsewhere) to `SignedOut`, and delegates the rest the same way.
 
 **Every API service checks the status before `body()`** through `core/network`'s
 `HttpResponse.checkSuccess()`, which throws `HttpStatusException(status)` on a non-2xx — so an error
 body is never read as the expected payload and the mapping can tell a 502 from a 404.
 (`AlarmApiService` first turns its own statuses — 400, 401, 409, and 404 on a single alarm — into
-the alarm exceptions; `AccountApiService` turns a `409` on registration into `EmailTakenException`.)
+the alarm exceptions; `AccountApiService` turns a `409` on registration into `EmailTakenException`,
+a `401` on login into `InvalidCredentialsException` and a `401` on a call sent with the session token
+into `SignedOutException`.)
 
 **Screens turn an `AppError` into text** with `core/ui/error/AppErrorText.kt`:
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
 snackbar shown from an event. `ErrorContext` is `LOAD` (the reason sentence alone, under the
 screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM` /
-`REGISTER`, which put "Couldn't save the alarm.", "Couldn't create the account." etc. before the
+`REGISTER` / `LOGIN`, which put "Couldn't save the alarm.", "Couldn't create the account.",
+"Couldn't log in." etc. before the
 reason; `NotFound` reads "This alarm no longer exists." in the four alarm contexts. The choice is the pure `AppError.text(context)` → `ErrorText(action,
 reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
 in all four languages. No exception text — host names, status codes, library messages — reaches a
@@ -719,10 +724,11 @@ See "Accounts".
 
 #### Accounts
 
-`feature/account` creates an account (logging in arrives with the next step: until then the login
-mode of `Screen.Account` shows its title and the switch to "Create account" only). `AccountScreen`
-under a `TopAppBar` titled "Create account" / "Log in" with a back arrow: the email field, the
-password and "Repeat password" fields — **each with its own eye `IconButton`**, named for what it
+`feature/account` logs in and creates an account. `AccountScreen` under a `TopAppBar` titled
+"Log in" / "Create account" with a back arrow. **Logging in** is the email field, the password field
+with its eye `IconButton`, "Log in" with a progress indicator, the error (`LOGIN` context: "Couldn't
+log in. The email address or password is incorrect.") and the switch to "Create account".
+**Registering** is the email field, the password and "Repeat password" fields — **each with its own eye `IconButton`**, named for what it
 does ("Show password" / "Hide repeated password") and stating what the field does now
 (`stateDescription` "Password shown" / "Password hidden") — the hint "At least 8 characters" (an
 error "At most 128 characters" above that) and "The passwords don't match." under the confirmation,
@@ -740,13 +746,22 @@ consent — for logging in, a plausible email and any password. `AccountViewMode
 sessionRepository)` holds `AccountUiState(form, isSubmitting, error: AppError?)`: field changes are
 ignored while submitting, every edit or submit clears `error`, a success sends `AccountEvent.Done`
 once on a buffered `Channel` and leaves `isSubmitting` set, a failure is `toSessionAppError()` shown
-in the `REGISTER` context ("An account with this email address already exists. Log in instead.").
+in the `REGISTER` context ("An account with this email address already exists. Log in instead.") or
+the `LOGIN` one. `submit()` calls `login` or `register` by the form's mode at the tap.
 
 `SessionRepository.register(email, password)` posts `POST /users` with `consent: true` (the form
 cannot be sent without it), stores the issued token with the email trimmed and lowercased — the
-backend's spelling — and so logs in; the Diary, observing the session, loads as soon as the account
-screen has popped. `AccountViewModelTest` and `SessionRepositoryImplTest` (`MockEngine`) pin it;
-the composable is checked by hand.
+backend's spelling — and so logs in; `login(email, password)` does the same through
+`POST /users/session`. The Diary, observing the session, loads as soon as the account screen has
+popped. `logout()` sends `DELETE /users/me/session` with the bearer token and then clears the stored
+session **whatever the answer** — the user asked to be logged out of this phone, and a session the
+backend still holds expires unused — so it fails only if the phone cannot clear its own storage.
+`clear()` forgets the session without a request; it is what a repository calls when the backend
+answers `401` to the session (`SignedOutException`), which signs the app out on the next
+authenticated call after the session expired or was ended elsewhere. The session going to `null` —
+logout or `clear()` — returns the Diary to its gate and drops what it showed.
+`AccountViewModelTest` and `SessionRepositoryImplTest` (`MockEngine`) pin it; the composable is
+checked by hand.
 
 #### All stations
 
@@ -1288,6 +1303,16 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
   soon as it is saved, and takes the name from `StationRepository` (fetched once); until the list
   arrives, or if it fails, the name stored with the selection stands in — never an error for the
   screen. "Not set" only while nothing is stored (unreachable past the startup gate).
+- **Account** (`settings_section_account`) — logged in: "Logged in as {email}"
+  (`settings_account_logged_in_as`) and a "Log out" row (`onClickLabel` "Log out of your account"),
+  which asks first in an `AlertDialog` — "Log out?", "Your diary stays in your account. Log in again
+  to see it.", Log out / Cancel — and confirming calls `SessionRepository.logout()`. Logged out: "Not
+  logged in" and a "Log in" row (`onClickLabel` "Log in to your account") that opens
+  `Screen.Account(LOGIN)`. Both are full-width rows ≥ 48 dp in the primary colour with a decorative
+  icon in front. `SettingsViewModel` **observes** `SessionRepository.session` — the email comes from
+  the stored login, no request — so logging in or out anywhere shows here at once; the rows appear
+  only once the stored login has been read (`accountChecked`), and the dialog closes by itself if the
+  session ends while it is open.
 - **Language** (`settings_section_language`) — the current choice in the same kind of row
   (`onClickLabel` "Change the language"), which opens an `AlertDialog` of radio rows (a
   `selectableGroup`, Cancel to close): System default (`settings_language_system`, translated),
@@ -1316,8 +1341,9 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
 
 Both links go through `LocalUriHandler`; a device with nothing to open them with swallows the tap
 rather than crash. Each row's icon is decorative and its `onClickLabel` says what a double tap does.
-`SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo)` holds
-no text — only the station name, the language (`language`, `showLanguageDialog`,
+`SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo,
+sessionRepository)` holds no text — only the station name, the account (`accountEmail`,
+`accountChecked`, `showLogoutDialog`), the language (`language`, `showLanguageDialog`,
 `languageAppliesOnRestart` once a change was made where it does not apply immediately) and the
 version pass through it (`SettingsViewModelTest`); the composable is checked by hand.
 
@@ -1504,7 +1530,7 @@ server/src/main/kotlin/.../server/
 ├── config/             ServerConfig (+ DatabaseConfig, ConfigException)
 ├── plugins/            configureSerialization / configureLogging / configureSecurity /
 │                       configureRouting / configureAlarmRouting (+ configureDeviceAuthentication) /
-│                       configureAccountRouting
+│                       configureAccountRouting (+ configureUserAuthentication)
 ├── pollen/
 │   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds, SWISS_ZONE
 │   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
@@ -1561,8 +1587,11 @@ independently of the domain.
 | PUT    | `/devices/me/alarms/{alarmId}`          | (auth) Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown alarm, another device's alarm or an id that is not a UUID |
 | DELETE | `/devices/me/alarms/{alarmId}`          | (auth) `204`; `404` as for `PUT` |
 | POST   | `/users`                                | `{ "email", "password", "consent": true }` → `201 { "sessionToken": "…" }`; `400 {error}` invalid, no consent or malformed; `409 {error}` email taken (in any capitals) |
+| POST   | `/users/session`                        | `{ "email", "password" }` → `201 { "sessionToken": "…" }` (a new session; the email in any capitals); `401 {error}` identical for a wrong password and an unknown email; `400 {error}` malformed |
+| DELETE | `/users/me/session`                     | (user auth) `204`; ends the calling session only — the account's other phones stay logged in |
 
-(auth) = `Authorization: Bearer <deviceToken>`; a missing, malformed or unknown token is `401` with
+(auth) = `Authorization: Bearer <deviceToken>`, (user auth) = `Authorization: Bearer
+<sessionToken>`; a missing, malformed, unknown (or, for a session, expired) token is `401` with
 `WWW-Authenticate: Bearer`, checked before the body is read (so an invalid body without a token is
 a `401`, not a `400`).
 
@@ -1580,13 +1609,15 @@ Every route can also answer:
 installed **before** the routes, since `rateLimit(...)` looks its limiter up when a route is built
 (route tests call `configureSecurity()` with the defaults, or small limits of their own).
 
-- **Four limiters** (`ktor-server-rate-limit`, token buckets refilled per period), each wrapping
+- **Five limiters** (`ktor-server-rate-limit`, token buckets refilled per period), each wrapping
   its routes: `REGISTER_LIMIT` around `POST /devices`, per client address (5 an hour);
-  `ACCOUNT_LIMIT` around `POST /users` (and the login, once it exists — one bucket for both), per
+  `ACCOUNT_LIMIT` around `POST /users` and `POST /users/session` — one bucket for both, so guessing
+  passwords and probing for taken emails draw on the same allowance, failed logins included — per
   client address (10 an hour);
   `DEVICE_LIMIT` around `/devices/me/…`, **inside** `authenticate("device")` and keyed on the
   `DevicePrincipal`, so random unknown tokens are a `401` and never get a bucket of their own (60 a
-  minute per device); `POLLEN_LIMIT` around `/pollen/…`, per client address (120 a minute — eight
+  minute per device); `USER_LIMIT` around `/users/me/…` the same way, inside `authenticate("user")`
+  and keyed on the `UserPrincipal`'s user (60 a minute per account); `POLLEN_LIMIT` around `/pollen/…`, per client address (120 a minute — eight
   full All stations refreshes of fifteen readings). The numbers are `RateLimits` in `ServerConfig`
   (see "Configuration"). A limited call is `429` with `Retry-After`, its body `{error}` from
   `StatusPages`.
@@ -1616,8 +1647,13 @@ hides it too. The server stores only its SHA-256 (`devices.token_hash`, unique) 
 right for 256 random bits, and the lookup by hash happens in the database — and identifies the
 device by an internal UUID, `DeviceId`, which is never sent to the app.
 
-`plugins/Authentication.kt` installs the bearer provider `device` (`configureAlarmRouting` installs
-it with the routes): the token must have the issued shape (`DeviceToken.parseOrNull`, else no
+`plugins/Authentication.kt` holds **two bearer providers**, each added with Ktor's
+`Application.authentication { }` — which installs the `Authentication` plugin the first time and
+extends it after that, since it can be installed only once — so each set of routes brings its own:
+`configureAlarmRouting` adds `device` (`configureDeviceAuthentication`), `configureAccountRouting`
+adds `user` (`configureUserAuthentication`, see "Accounts (server)"), in either order, and a route
+test installing just one works. Both read the header leniently (an unparseable one is no token) and
+refuse a token without the issued shape before any lookup. The `device` provider: the token must have the issued shape (`DeviceToken.parseOrNull`, else no
 lookup) and `DeviceStore.authenticate` must know it, giving a `DevicePrincipal(deviceId)`; anything
 else — no header, another scheme, a header Ktor cannot parse, an unknown token — is the same `401`,
 which is how the app learns to register again. `authenticate` also refreshes `last_seen_at`, at most
@@ -1695,7 +1731,20 @@ value. `AccountSpec` and `RegisterDto` print neither field.
   one verify. Hashing runs on `Dispatchers.Default`. Tests pass cheap parameters (`cheapHasher()`).
 - **Sessions** are `SessionToken`s, the device token's shape (256 random bits, base64url, 43
   characters, `parseOrNull`, `toString` hidden); `sessions` stores only the SHA-256, one row per
-  logged-in phone.
+  logged-in phone, so one account can be logged in on several phones at once.
+- **Logging in** (`POST /users/session`) normalises the email the same way, looks it up
+  (`UserStore.credentials`) and verifies the password; an email with no account — or one that cannot
+  be an address — runs `verifyDummy` instead, and every failure is the same `401 {"error":"Email or
+  password is incorrect"}`, so the login never reveals whether an address has an account. Success
+  creates a new session (`201 {sessionToken}`); the password is not length-checked or trimmed there.
+- **The `user` bearer provider** resolves a session token through `SessionStore.authenticate(token,
+  now)` to `UserPrincipal(userId, token)` — the token is kept so that logging out
+  (`DELETE /users/me/session`, `SessionStore.delete`) ends exactly the calling session. A session
+  last used more than `SESSION_EXPIRY` (90 days, `account/store`) before `now` is refused even
+  while still stored — exactly 90 days is still valid; `authenticate` refreshes `last_used_at` at
+  most once per `LAST_USED_RESOLUTION` (1 day), so regular use keeps a session alive. A missing,
+  malformed, unknown or expired token is the same `401` with `WWW-Authenticate: Bearer`, which is
+  how the app learns it has been logged out. The provider's clock is `configureAccountRouting`'s.
 - **Email taken** is `UserStore.register`'s `EmailTaken` — the unique index decides, not a lookup
   first, so two concurrent registrations of one email cannot both succeed — and a `409`. That
   registration reveals whether an address has an account is an accepted limitation without email
@@ -1704,7 +1753,9 @@ value. `AccountSpec` and `RegisterDto` print neither field.
   logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow and
   finds neither, nor the password.
 
-`AccountRoutesTest` and `ExposedAccountStoresTest` run on the test database; `AccountValidationTest`,
+`AccountRoutesTest` (registration, login, logout, the `user` provider's `401`s and expiry, the device
+and account routes installed together) and `ExposedAccountStoresTest` (incl. expiry at exactly 90
+days and the daily `last_used_at` refresh) run on the test database; `AccountValidationTest`,
 `PasswordHasherTest` and `SessionTokenTest` need none.
 
 #### Persistence
@@ -1772,6 +1823,7 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
 | `RATE_LIMIT_DEVICE_PER_MINUTE` | `60` | optional; a whole number above 0 |
 | `RATE_LIMIT_POLLEN_PER_MINUTE` | `120` | optional; a whole number above 0 |
 | `RATE_LIMIT_ACCOUNT_PER_HOUR` | `10` | optional; a whole number above 0 — registrations and logins together, per client address |
+| `RATE_LIMIT_USER_PER_MINUTE` | `60` | optional; a whole number above 0 — calls under `/users/me`, per account |
 | `TRUSTED_PROXY` | `false` | `true` by default; `true` or `false` |
 
 Passwords are only ever read from files (trimmed), never from variables, and `DatabaseConfig`'s

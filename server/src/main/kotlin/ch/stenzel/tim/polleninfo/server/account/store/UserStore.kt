@@ -7,9 +7,11 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /** The accounts. */
@@ -20,6 +22,14 @@ interface UserStore {
      * unless an account with that email exists. The password in [spec] is never stored.
      */
     suspend fun register(spec: AccountSpec, passwordHash: String, now: Instant): RegisterResult
+
+    /** The account of [email] — already normalised — with its password hash, or `null` if there is none. */
+    suspend fun credentials(email: String): StoredCredentials?
+}
+
+/** What a login is checked against. Never prints the hash. */
+class StoredCredentials(val userId: UserId, val passwordHash: String) {
+    override fun toString(): String = "StoredCredentials(userId=$userId)"
 }
 
 sealed interface RegisterResult {
@@ -53,6 +63,15 @@ class ExposedUserStore(private val database: Database) : UserStore {
                 if (e.sqlState == UNIQUE_VIOLATION) RegisterResult.EmailTaken else throw e
             }
         }
+
+    override suspend fun credentials(email: String): StoredCredentials? = withContext(Dispatchers.IO) {
+        transaction(database) {
+            UsersTable.select(UsersTable.id, UsersTable.passwordHash)
+                .where { UsersTable.email eq email }
+                .singleOrNull()
+                ?.let { StoredCredentials(UserId(it[UsersTable.id]), it[UsersTable.passwordHash]) }
+        }
+    }
 
     private companion object {
         const val UNIQUE_VIOLATION = "23505"

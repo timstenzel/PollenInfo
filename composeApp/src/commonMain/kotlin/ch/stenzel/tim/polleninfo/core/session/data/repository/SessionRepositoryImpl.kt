@@ -7,6 +7,7 @@ import ch.stenzel.tim.polleninfo.core.session.data.remote.AccountApiService
 import ch.stenzel.tim.polleninfo.core.session.domain.model.Session
 import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 class SessionRepositoryImpl(
     private val api: AccountApiService,
@@ -18,6 +19,19 @@ class SessionRepositoryImpl(
     override suspend fun register(email: String, password: String): Result<Unit> = safeCall {
         val response = api.register(email.trim(), password)
         storage.store(Session(token = response.sessionToken, email = normalizeEmail(email)))
+    }
+
+    override suspend fun login(email: String, password: String): Result<Unit> = safeCall {
+        val response = api.login(email.trim(), password)
+        storage.store(Session(token = response.sessionToken, email = normalizeEmail(email)))
+    }
+
+    override suspend fun logout(): Result<Unit> {
+        val session = storage.session.first() ?: return Result.Success(Unit)
+        // Its outcome does not matter: a 401 means the backend has ended the session already, and
+        // after any other failure it expires there unused.
+        safeCall { api.logout(session.token) }
+        return safeCall { storage.clear() }
     }
 
     override suspend fun clear() {
