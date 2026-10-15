@@ -13,8 +13,8 @@ val testSession = Session(token = "session-token-1", email = "tim@example.com")
 
 /**
  * In-memory [SessionRepository]: a settable [current] session, gates to hold a registration or a
- * login in flight and scripted results. A successful registration or login logs in; [logout] logs
- * out and counts the calls.
+ * login or a deletion in flight and scripted results. A successful registration or login logs in;
+ * [logout] logs out and counts the calls; a successful [deleteAccount] logs out.
  */
 class FakeSessionRepository(initial: Session? = null) : SessionRepository {
 
@@ -63,6 +63,21 @@ class FakeSessionRepository(initial: Session? = null) : SessionRepository {
         logoutCount++
         _session.value = null
         return Result.Success(Unit)
+    }
+
+    var deleteResult: Result<Unit> = Result.Success(Unit)
+    var deleteGate: CompletableDeferred<Unit>? = null
+
+    /** Every password a deletion was asked with. */
+    val deletions = mutableListOf<String>()
+
+    /** Deletes the account; success logs out, a failure keeps the session. */
+    override suspend fun deleteAccount(password: String): Result<Unit> {
+        deletions += password
+        deleteGate?.await()
+        return deleteResult.also {
+            if (it is Result.Success) _session.value = null
+        }
     }
 
     override suspend fun clear() {

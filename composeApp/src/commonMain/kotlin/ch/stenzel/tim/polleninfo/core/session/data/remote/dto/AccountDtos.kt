@@ -14,6 +14,12 @@ class LoginRequestDto(val email: String, val password: String) {
     override fun toString(): String = "LoginRequestDto(…)"
 }
 
+/** Body of `DELETE /users/me`: the password, asked again. Not a data class, so it is never printed. */
+@Serializable
+class DeleteAccountRequestDto(val password: String) {
+    override fun toString(): String = "DeleteAccountRequestDto(…)"
+}
+
 /** Response of `POST /users` and `POST /users/session`: the session token for every later account call. */
 @Serializable
 class SessionResponseDto(val sessionToken: String) {

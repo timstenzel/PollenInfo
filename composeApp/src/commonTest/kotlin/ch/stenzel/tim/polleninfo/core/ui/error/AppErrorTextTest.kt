@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.core.ui.error
 
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.error_action_delete_account
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_login
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
@@ -18,6 +19,7 @@ import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_signed_out
 import ch.stenzel.tim.polleninfo.resources.error_unknown
+import ch.stenzel.tim.polleninfo.resources.error_wrong_password
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -132,5 +134,28 @@ class AppErrorTextTest {
         )
         // Not about an alarm: nothing on Home's prompt is one.
         assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.SAVE_FEELING).reason)
+    }
+
+    @Test
+    fun `a failed account deletion says so before the reason`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_delete_account, Res.string.error_network),
+            AppError.Network.text(ErrorContext.DELETE_ACCOUNT),
+        )
+        assertEquals(
+            ErrorText(Res.string.error_action_delete_account, Res.string.error_server_unavailable),
+            AppError.ServerUnavailable.text(ErrorContext.DELETE_ACCOUNT),
+        )
+        assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.DELETE_ACCOUNT).reason)
+    }
+
+    @Test
+    fun `a wrong password on deletion names the password alone`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_delete_account, Res.string.error_wrong_password),
+            AppError.InvalidCredentials.text(ErrorContext.DELETE_ACCOUNT),
+        )
+        // Logging in still names both, since the backend never says which was wrong.
+        assertEquals(Res.string.error_invalid_credentials, AppError.InvalidCredentials.text(ErrorContext.LOGIN).reason)
     }
 }

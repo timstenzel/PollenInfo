@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 
 import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
+import ch.stenzel.tim.polleninfo.core.result.AppError
 
 /**
  * What the Settings screen shows beyond its fixed text. There is no `Loading` or `Error`: the one
@@ -21,14 +22,27 @@ import ch.stenzel.tim.polleninfo.core.language.AppLanguage
  * the account rows appear only once [accountChecked] — the stored login has been read — so "Not
  * logged in" never flashes up for a logged-in user. [showLogoutDialog] is whether the logout
  * confirmation is open.
+ *
+ * [showDeleteDialog] is whether the account-deletion dialog is open, with the password typed into it
+ * ([deletePassword], shown in clear text while [deletePasswordVisible]); [isDeleting] while the
+ * deletion runs, and [deleteError] why the last attempt failed — a wrong password among them — until
+ * the next edit or attempt.
  */
 data class SettingsUiState(
     val stationName: String? = null,
     val accountEmail: String? = null,
     val accountChecked: Boolean = false,
     val showLogoutDialog: Boolean = false,
+    val showDeleteDialog: Boolean = false,
+    val deletePassword: String = "",
+    val deletePasswordVisible: Boolean = false,
+    val isDeleting: Boolean = false,
+    val deleteError: AppError? = null,
     val language: AppLanguage = AppLanguage.SYSTEM,
     val showLanguageDialog: Boolean = false,
     val languageAppliesOnRestart: Boolean = false,
     val version: AppVersion?,
-)
+) {
+    /** A password has been typed and no deletion is running. */
+    val canConfirmDelete: Boolean get() = deletePassword.isNotEmpty() && !isDeleting
+}

@@ -97,6 +97,11 @@
     <string name="settings_account_log_out_action">Vous déconnecter de votre compte</string>
     <string name="settings_account_log_out_title">Se déconnecter ?</string>
     <string name="settings_account_log_out_text">Votre journal reste dans votre compte. Reconnectez-vous pour le consulter.</string>
+    <string name="settings_account_delete">Supprimer le compte</string>
+    <string name="settings_account_delete_action">Supprimer votre compte et votre journal</string>
+    <string name="settings_account_delete_title">Supprimer le compte ?</string>
+    <string name="settings_account_delete_text">Votre compte et toutes les réponses de votre journal seront supprimés définitivement. Cette action est irréversible. Saisissez votre mot de passe pour confirmer.</string>
+    <string name="settings_account_deletion_note">Vous pouvez aussi demander la suppression de votre compte par e-mail à %1$s.</string>
     <string name="settings_station_not_set">Non définie</string>
     <string name="change_station_title">Station par défaut</string>
     <string name="change_station_intro">L’accueil affiche les niveaux de pollen de cette station. Vos alarmes et le journal conservent leurs propres stations.</string>
@@ -275,6 +280,8 @@
     <string name="error_signed_out">Vous avez été déconnecté. Veuillez vous reconnecter.</string>
     <string name="error_action_login">Impossible de se connecter.</string>
     <string name="error_action_save_feeling">Votre réponse n’a pas pu être enregistrée.</string>
+    <string name="error_action_delete_account">Impossible de supprimer le compte.</string>
+    <string name="error_wrong_password">Le mot de passe est incorrect.</string>
     <string name="account_title_login">Se connecter</string>
     <string name="account_title_register">Créer un compte</string>
     <string name="account_email_label">Adresse e-mail</string>

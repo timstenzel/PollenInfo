@@ -94,6 +94,11 @@
     <string name="settings_account_log_out_action">Esca dal suo account</string>
     <string name="settings_account_log_out_title">Uscire?</string>
     <string name="settings_account_log_out_text">Il suo diario resta nel suo account. Acceda di nuovo per vederlo.</string>
+    <string name="settings_account_delete">Elimina account</string>
+    <string name="settings_account_delete_action">Elimini il suo account e il suo diario</string>
+    <string name="settings_account_delete_title">Eliminare l’account?</string>
+    <string name="settings_account_delete_text">Il suo account e tutte le risposte del suo diario verranno eliminati definitivamente. L’operazione non può essere annullata. Inserisca la password per confermare.</string>
+    <string name="settings_account_deletion_note">Può anche chiedere l’eliminazione del suo account scrivendo a %1$s.</string>
     <string name="settings_station_not_set">Non impostata</string>
     <string name="change_station_title">Stazione predefinita</string>
     <string name="change_station_intro">La pagina iniziale mostra i livelli di pollini di questa stazione. I Suoi allarmi e il diario mantengono le proprie stazioni.</string>
@@ -272,6 +277,8 @@
     <string name="error_signed_out">È stato disconnesso. Acceda di nuovo.</string>
     <string name="error_action_login">Impossibile accedere.</string>
     <string name="error_action_save_feeling">Non è stato possibile salvare la Sua risposta.</string>
+    <string name="error_action_delete_account">Impossibile eliminare l’account.</string>
+    <string name="error_wrong_password">La password non è corretta.</string>
     <string name="account_title_login">Accedi</string>
     <string name="account_title_register">Crea account</string>
     <string name="account_email_label">Indirizzo e-mail</string>

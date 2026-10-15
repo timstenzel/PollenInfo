@@ -30,6 +30,13 @@ interface SessionRepository {
     suspend fun logout(): Result<Unit>
 
     /**
+     * Deletes the account with every answer on the backend, once [password] confirms it, and then
+     * logs out. A wrong password is `InvalidCredentialsException` and keeps the session; a backend
+     * that no longer knows the session is `SignedOutException`, and the session is forgotten.
+     */
+    suspend fun deleteAccount(password: String): Result<Unit>
+
+    /**
      * Forgets the stored session on this phone, without asking the backend — what any repository
      * does when the backend answers `401` to the session (`SignedOutException`).
      */

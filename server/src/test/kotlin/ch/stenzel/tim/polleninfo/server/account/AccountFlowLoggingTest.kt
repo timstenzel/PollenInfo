@@ -124,6 +124,21 @@ class AccountFlowLoggingTest {
         }
         // A logged-out token is refused, on the error path once more.
         assertEquals(HttpStatusCode.Unauthorized, client.delete("/users/me/session") { bearerAuth(token) }.status)
+        // Deleting the account: refused with a wrong password, then done with the right one.
+        val lastSession = client.post("/users/session") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"email":"$email","password":"$password"}""")
+        }.let { Json.decodeFromString<SessionDto>(it.bodyAsText()).sessionToken }
+        listOf("wrong-$password" to HttpStatusCode.Forbidden, password to HttpStatusCode.NoContent)
+            .forEach { (given, expected) ->
+                val deleted = client.delete("/users/me") {
+                    bearerAuth(lastSession)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"password":"$given"}""")
+                }
+                assertEquals(expected, deleted.status)
+            }
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/users/me/diary/today") { bearerAuth(lastSession) }.status)
 
         val logged = appender.list.map { event ->
             event.formattedMessage + event.throwableProxy?.let(ThrowableProxyUtil::asString).orEmpty()
@@ -133,7 +148,8 @@ class AccountFlowLoggingTest {
         assertTrue(logged.any { "POST /users/session" in it } && logged.any { "DELETE /users/me/session" in it })
         assertTrue(logged.any { "POST /users/me/diary" in it } && logged.any { "GET /users/me/diary/today" in it })
         assertTrue(logged.any { "GET /users/me/diary in" in it })
-        listOf(token, loginToken, email, password, "logged.flow").forEach { secret ->
+        assertTrue(logged.any { "DELETE /users/me in" in it }, "captured: $logged")
+        listOf(token, loginToken, lastSession, email, password, "logged.flow").forEach { secret ->
             assertTrue(logged.none { secret in it }, "a log line contains $secret: $logged")
         }
     }

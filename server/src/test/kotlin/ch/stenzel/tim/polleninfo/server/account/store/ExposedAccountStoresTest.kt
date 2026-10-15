@@ -140,6 +140,60 @@ class ExposedAccountStoresTest {
     }
 
     @Test
+    fun `the password hash is found by the user and is null for an unknown one`() = runTest {
+        val id = registered()
+
+        assertEquals("hash-of-tim@example.com", users.passwordHash(id))
+        assertNull(users.passwordHash(UserId(UUID.randomUUID())))
+    }
+
+    @Test
+    fun `deleting a user removes its sessions and answers and leaves another user's untouched`() = runTest {
+        val tim = registered("tim@example.com")
+        val anna = registered("anna@example.com")
+        val timSessions = listOf(sessions.create(tim, now), sessions.create(tim, now))
+        val annaSession = sessions.create(anna, now)
+        diary.record(tim, day, DiaryFeeling.BAD, now)
+        diary.record(tim, day.plusDays(1), DiaryFeeling.GOOD, now)
+        diary.record(anna, day, DiaryFeeling.VERY_GOOD, now)
+
+        assertEquals(true, users.delete(tim))
+
+        assertNull(users.credentials("tim@example.com"))
+        assertNull(users.passwordHash(tim))
+        timSessions.forEach { assertNull(sessions.authenticate(it, now)) }
+        assertEquals(emptyList(), diary.entries(tim, day, day.plusDays(1)))
+        val (sessionUsers, answerUsers) = transaction(database) {
+            SessionsTable.selectAll().map { it[SessionsTable.userId] } to
+                DiaryEntriesTable.selectAll().map { it[DiaryEntriesTable.userId] }
+        }
+        assertEquals(listOf(anna.value), sessionUsers)
+        assertEquals(listOf(anna.value), answerUsers)
+        assertEquals(anna, sessions.authenticate(annaSession, now))
+        assertEquals(DiaryEntry(day, DiaryFeeling.VERY_GOOD), diary.entry(anna, day))
+        assertNotNull(users.credentials("anna@example.com"))
+    }
+
+    @Test
+    fun `deleting an unknown user deletes nothing`() = runTest {
+        registered()
+
+        assertEquals(false, users.delete(UserId(UUID.randomUUID())))
+        assertEquals(1L, transaction(database) { UsersTable.selectAll().count() })
+    }
+
+    @Test
+    fun `a deleted user's email can be registered again as a new user`() = runTest {
+        val old = registered()
+        users.delete(old)
+
+        val new = registered()
+
+        assertNotEquals(old, new)
+        assertEquals(new, users.credentials("tim@example.com")?.userId)
+    }
+
+    @Test
     fun `a session authenticates as its user and an unknown token as nobody`() = runTest {
         val id = registered()
         val token = sessions.create(id, now)

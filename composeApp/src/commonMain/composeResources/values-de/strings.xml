@@ -94,6 +94,11 @@
     <string name="settings_account_log_out_action">Von deinem Konto abmelden</string>
     <string name="settings_account_log_out_title">Abmelden?</string>
     <string name="settings_account_log_out_text">Dein Tagebuch bleibt in deinem Konto. Melde dich wieder an, um es zu sehen.</string>
+    <string name="settings_account_delete">Konto löschen</string>
+    <string name="settings_account_delete_action">Dein Konto und dein Tagebuch löschen</string>
+    <string name="settings_account_delete_title">Konto löschen?</string>
+    <string name="settings_account_delete_text">Dein Konto und alle Antworten in deinem Tagebuch werden endgültig gelöscht. Das lässt sich nicht rückgängig machen. Gib zur Bestätigung dein Passwort ein.</string>
+    <string name="settings_account_deletion_note">Du kannst die Löschung deines Kontos auch per E-Mail an %1$s verlangen.</string>
     <string name="settings_station_not_set">Nicht festgelegt</string>
     <string name="change_station_title">Standardstation</string>
     <string name="change_station_intro">Auf der Startseite siehst du die Pollenwerte dieser Station. Deine Alarme und das Tagebuch behalten ihre eigenen Stationen.</string>
@@ -272,6 +277,8 @@
     <string name="error_signed_out">Du wurdest abgemeldet. Bitte melde dich erneut an.</string>
     <string name="error_action_login">Die Anmeldung ist fehlgeschlagen.</string>
     <string name="error_action_save_feeling">Deine Antwort konnte nicht gespeichert werden.</string>
+    <string name="error_action_delete_account">Das Konto konnte nicht gelöscht werden.</string>
+    <string name="error_wrong_password">Das Passwort ist falsch.</string>
     <string name="account_title_login">Anmelden</string>
     <string name="account_title_register">Konto erstellen</string>
     <string name="account_email_label">E-Mail-Adresse</string>

@@ -568,6 +568,11 @@ private class RecordingUserStore : UserStore {
 
     override suspend fun credentials(email: String): StoredCredentials? = accounts[email]
 
+    override suspend fun passwordHash(userId: UserId): String? =
+        accounts.values.firstOrNull { it.userId == userId }?.passwordHash
+
+    override suspend fun delete(userId: UserId): Boolean = accounts.values.removeIf { it.userId == userId }
+
     private companion object {
         const val EXISTING = "existing@example.com"
     }

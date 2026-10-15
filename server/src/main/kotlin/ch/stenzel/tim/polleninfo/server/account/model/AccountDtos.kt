@@ -21,6 +21,14 @@ class LoginDto(val email: String, val password: String) {
     override fun toString(): String = "LoginDto(…)"
 }
 
+/** Body of `DELETE /users/me`: the account's password, asked again before everything is deleted. */
+@Serializable
+class DeleteAccountDto(val password: String) {
+
+    /** Never prints the password. */
+    override fun toString(): String = "DeleteAccountDto(…)"
+}
+
 /**
  * Response of `POST /users` and `POST /users/session`: the session token the app sends as `Authorization: Bearer …` with
  * every later account call. Returned this once; the server keeps only its hash.
@@ -39,6 +47,6 @@ data class DiaryAnswerDto(val feeling: String)
 @Serializable
 data class DiaryEntryDto(val date: String, val feeling: String)
 
-/** The `{error}` body of the account routes' `400`, `401` and `409`. */
+/** The `{error}` body of the account routes' `400`, `401`, `403` and `409`. */
 @Serializable
 data class ErrorDto(val error: String)

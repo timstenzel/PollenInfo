@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -25,6 +26,15 @@ interface UserStore {
 
     /** The account of [email] — already normalised — with its password hash, or `null` if there is none. */
     suspend fun credentials(email: String): StoredCredentials?
+
+    /** The password hash of [userId]'s account, or `null` if there is no such account. */
+    suspend fun passwordHash(userId: UserId): String?
+
+    /**
+     * Deletes [userId]'s account with its sessions and diary answers; `false` if there was no such
+     * account.
+     */
+    suspend fun delete(userId: UserId): Boolean
 }
 
 /** What a login is checked against. Never prints the hash. */
@@ -71,6 +81,20 @@ class ExposedUserStore(private val database: Database) : UserStore {
                 .singleOrNull()
                 ?.let { StoredCredentials(UserId(it[UsersTable.id]), it[UsersTable.passwordHash]) }
         }
+    }
+
+    override suspend fun passwordHash(userId: UserId): String? = withContext(Dispatchers.IO) {
+        transaction(database) {
+            UsersTable.select(UsersTable.passwordHash)
+                .where { UsersTable.id eq userId.value }
+                .singleOrNull()
+                ?.get(UsersTable.passwordHash)
+        }
+    }
+
+    override suspend fun delete(userId: UserId): Boolean = withContext(Dispatchers.IO) {
+        // Sessions and diary answers go with the account through ON DELETE CASCADE.
+        transaction(database) { UsersTable.deleteWhere { UsersTable.id eq userId.value } > 0 }
     }
 
     private companion object {

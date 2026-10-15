@@ -8,8 +8,11 @@ import ch.stenzel.tim.polleninfo.core.language.FakeLanguageRepository
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
+import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
+import ch.stenzel.tim.polleninfo.core.session.domain.model.InvalidCredentialsException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
 import ch.stenzel.tim.polleninfo.core.session.testSession
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
@@ -18,10 +21,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.io.IOException
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -148,6 +153,170 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.showLogoutDialog)
+    }
+
+    // --- Deleting the account ---
+
+    private fun TestScope.signedInWithDeleteDialog(): SettingsViewModel {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onDeleteAccountClicked()
+        return viewModel
+    }
+
+    @Test
+    fun `delete account opens an empty dialog that cannot be confirmed yet`() = runTest {
+        val viewModel = signedInWithDeleteDialog()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.showDeleteDialog)
+        assertEquals("", state.deletePassword)
+        assertFalse(state.canConfirmDelete)
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+        assertEquals(emptyList(), sessions.deletions)
+    }
+
+    @Test
+    fun `delete account does nothing while signed out`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onDeleteAccountClicked()
+
+        assertFalse(viewModel.uiState.value.showDeleteDialog)
+    }
+
+    @Test
+    fun `the password visibility toggles`() = runTest {
+        val viewModel = signedInWithDeleteDialog()
+
+        viewModel.onDeletePasswordVisibilityToggled()
+        assertTrue(viewModel.uiState.value.deletePasswordVisible)
+        viewModel.onDeletePasswordVisibilityToggled()
+        assertFalse(viewModel.uiState.value.deletePasswordVisible)
+    }
+
+    @Test
+    fun `dismissing closes the dialog forgets the password and deletes nothing`() = runTest {
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        viewModel.onDeleteDismissed()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showDeleteDialog)
+        assertEquals("", viewModel.uiState.value.deletePassword)
+        assertEquals(emptyList(), sessions.deletions)
+        assertEquals(testSession.email, viewModel.uiState.value.accountEmail)
+        // Opening it again starts empty.
+        viewModel.onDeleteAccountClicked()
+        assertEquals("", viewModel.uiState.value.deletePassword)
+    }
+
+    @Test
+    fun `isDeleting is set while the deletion runs and edits and dismissing are ignored`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        sessions.deleteGate = gate
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isDeleting)
+        assertFalse(state.canConfirmDelete)
+        viewModel.onDeletePasswordChanged("other")
+        viewModel.onDeleteDismissed()
+        viewModel.onDeleteConfirmed()
+        assertEquals("correct horse", viewModel.uiState.value.deletePassword)
+        assertTrue(viewModel.uiState.value.showDeleteDialog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("correct horse"), sessions.deletions)
+    }
+
+    @Test
+    fun `a successful deletion closes the dialog and shows the signed-out rows`() = runTest {
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("correct horse"), sessions.deletions)
+        assertFalse(state.showDeleteDialog)
+        assertFalse(state.isDeleting)
+        assertEquals("", state.deletePassword)
+        assertNull(state.accountEmail)
+        assertTrue(state.accountChecked)
+    }
+
+    @Test
+    fun `a wrong password keeps the dialog with its error until the next edit`() = runTest {
+        sessions.deleteResult = Result.Failure(InvalidCredentialsException())
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("wrong horse")
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        var state = viewModel.uiState.value
+        assertTrue(state.showDeleteDialog)
+        assertFalse(state.isDeleting)
+        assertEquals(AppError.InvalidCredentials, state.deleteError)
+        assertEquals("wrong horse", state.deletePassword)
+        assertEquals(testSession.email, state.accountEmail)
+
+        viewModel.onDeletePasswordChanged("correct horse")
+        state = viewModel.uiState.value
+        assertNull(state.deleteError)
+        assertTrue(state.canConfirmDelete)
+    }
+
+    @Test
+    fun `a transport failure keeps the dialog with Network`() = runTest {
+        sessions.deleteResult = Result.Failure(IOException("offline"))
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        assertEquals(AppError.Network, viewModel.uiState.value.deleteError)
+        assertTrue(viewModel.uiState.value.showDeleteDialog)
+    }
+
+    @Test
+    fun `a session the backend no longer knows closes the dialog`() = runTest {
+        sessions.deleteResult = Result.Failure(SignedOutException())
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        viewModel.onDeleteConfirmed()
+        sessions.current = null
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showDeleteDialog)
+        assertNull(state.deleteError)
+        assertNull(state.accountEmail)
+    }
+
+    @Test
+    fun `the delete dialog closes when the session ends elsewhere`() = runTest {
+        val viewModel = signedInWithDeleteDialog()
+        viewModel.onDeletePasswordChanged("correct horse")
+
+        sessions.current = null
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showDeleteDialog)
+        assertEquals("", viewModel.uiState.value.deletePassword)
     }
 
     @Test

@@ -201,28 +201,28 @@ requested by email. End to end: `DELETE /users/me` (`403` for a wrong password),
 
 ### Implementation steps
 
-- [ ] Server: `UserStore.delete` (cascades to sessions and diary entries); `DELETE /users/me` with `{password}` under the `user` provider — `204`, `403 {error}` wrong password, `400` malformed.
-- [ ] App: `SessionRepository.deleteAccount(password)` (`403` → `InvalidCredentialsException`, session kept; `204` clears it); `ErrorContext.DELETE_ACCOUNT`.
-- [ ] App: Settings "Delete account" row and dialog (warning, password field with eye button, confirm with progress, `deleteError`); `settings_account_deletion_note` with the contact address in the Impressum.
-- [ ] Extend `AccountFlowLoggingTest` with the deletion; strings in four languages.
-- [ ] Docs: CLAUDE.md — REST API, Persistence (cascade), Settings.
+- [x] Server: `UserStore.delete` (cascades to sessions and diary entries); `DELETE /users/me` with `{password}` under the `user` provider — `204`, `403 {error}` wrong password, `400` malformed.
+- [x] App: `SessionRepository.deleteAccount(password)` (`403` → `InvalidCredentialsException`, session kept; `204` clears it); `ErrorContext.DELETE_ACCOUNT`.
+- [x] App: Settings "Delete account" row and dialog (warning, password field with eye button, confirm with progress, `deleteError`); `settings_account_deletion_note` with the contact address in the Impressum.
+- [x] Extend `AccountFlowLoggingTest` with the deletion; strings in four languages.
+- [x] Docs: CLAUDE.md — REST API, Persistence (cascade), Settings.
 
 ### Acceptance criteria
 
-- [ ] `AccountRoutesTest`: a wrong password is `403` and the account keeps working; the right one is `204`, after which every session of that user is `401`, login fails, and registering the same email creates a new account whose `/today` is `204`.
-- [ ] `ExposedAccountStoresTest`: deleting a user removes its sessions and diary entries and leaves another user's untouched.
-- [ ] `SessionRepositoryImplTest`: `403` → `InvalidCredentials` with the session kept; `204` clears the session; `AppErrorTextTest` covers `DELETE_ACCOUNT`.
-- [ ] `SettingsViewModelTest`: a wrong password keeps the dialog with its error; `isDeleting` under a gate; success closes the dialog and shows the signed-out row.
-- [ ] Manual: delete in Settings → the Diary shows the gate; TalkBack reads the warning, the password field and its eye button; the Impressum note is present.
+- [x] `AccountRoutesTest`: a wrong password is `403` and the account keeps working; the right one is `204`, after which every session of that user is `401`, login fails, and registering the same email creates a new account whose `/today` is `204`.
+- [x] `ExposedAccountStoresTest`: deleting a user removes its sessions and diary entries and leaves another user's untouched.
+- [x] `SessionRepositoryImplTest`: `403` → `InvalidCredentials` with the session kept; `204` clears the session; `AppErrorTextTest` covers `DELETE_ACCOUNT`.
+- [x] `SettingsViewModelTest`: a wrong password keeps the dialog with its error; `isDeleting` under a gate; success closes the dialog and shows the signed-out row.
+- [ ] ~~Manual: delete in Settings → the Diary shows the gate; TalkBack reads the warning, the password field and its eye button; the Impressum note is present.~~ *(skipped: TalkBack could not be driven here. Everything else verified on the API 37 emulator against `:server:run` on a reset database — the Impressum shows "You can also ask for your account to be deleted by writing to developer.mobile.t3s@gmail.com."; logged in, Settings shows "Delete account" under "Log out"; the dialog shows "Delete account?", the warning, the password field and "Show password" ("Hide password" once toggled), and the confirm button is disabled until a password is typed; a wrong password gave `403` and kept the dialog with "Couldn’t delete the account. The password is incorrect."; the right one gave `204`, Settings showed "Not logged in", the Diary showed the gate, `users`, `sessions` and `diary_entries` went from 1/3/1 rows to 0/0/0, a second session of the account was `401` and the login `401`; the server log held neither the email nor either password. The accessibility tree shows the dialog texts and the eye button's name, but the spoken output needs a TalkBack check by hand)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs
 
 ---
 

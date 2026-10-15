@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.core.ui.error
 import androidx.compose.runtime.Composable
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.error_action_delete_account
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_login
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
@@ -24,6 +25,7 @@ import ch.stenzel.tim.polleninfo.resources.error_push_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_signed_out
 import ch.stenzel.tim.polleninfo.resources.error_unknown
+import ch.stenzel.tim.polleninfo.resources.error_wrong_password
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
@@ -38,6 +40,7 @@ enum class ErrorContext {
     REGISTER,
     LOGIN,
     SAVE_FEELING,
+    DELETE_ACCOUNT,
 }
 
 /** The contexts that act on one alarm, where the only thing that can be missing is that alarm. */
@@ -65,7 +68,9 @@ fun AppError.text(context: ErrorContext): ErrorText {
         AppError.AlarmLimitReached -> Res.string.error_alarm_limit_reached
         AppError.InvalidAlarm -> Res.string.error_invalid_alarm
         AppError.EmailTaken -> Res.string.error_email_taken
-        AppError.InvalidCredentials -> Res.string.error_invalid_credentials
+        // Deleting asks for the password alone; the email is not in question there.
+        AppError.InvalidCredentials ->
+            if (context == ErrorContext.DELETE_ACCOUNT) Res.string.error_wrong_password else Res.string.error_invalid_credentials
         AppError.SignedOut -> Res.string.error_signed_out
         AppError.Unknown -> Res.string.error_unknown
     }
@@ -78,6 +83,7 @@ fun AppError.text(context: ErrorContext): ErrorText {
         ErrorContext.REGISTER -> Res.string.error_action_register
         ErrorContext.LOGIN -> Res.string.error_action_login
         ErrorContext.SAVE_FEELING -> Res.string.error_action_save_feeling
+        ErrorContext.DELETE_ACCOUNT -> Res.string.error_action_delete_account
     }
     return ErrorText(action, reason)
 }

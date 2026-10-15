@@ -382,11 +382,12 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
 | `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry`, `swissToday(clock)`; `DiaryRepository` (`record(feeling)`, `today()`, `entries(from, until)`) + `DiaryRepositoryImpl` over `DiaryApiService` (`POST /users/me/diary`, `GET /users/me/diary/today`, `GET /users/me/diary?from&until`), its DTOs and mapper — the account's answers, the only place they are kept; `FeelingPromptPreferences` + the logic-free `DataStoreFeelingPromptPreferences` — Home's dismissal, on the device (see "Diary answers") |
 | `core/ui/feeling` | `Feeling.label()` (+`labelResource()`) — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
+| `core/ui/password` | `PasswordField` — a password field with its own show/hide `IconButton` named for what it does and stating what the field does now (`account_password_shown` / `_hidden`); the account screen's fields and Settings' deletion dialog |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
-| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `login`, `logout`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`, `POST /users/session`, `DELETE /users/me/session`; `409` → `EmailTakenException`, `401` on login → `InvalidCredentialsException`, `401` with a session → `SignedOutException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
+| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `login`, `logout`, `deleteAccount`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`, `POST /users/session`, `DELETE /users/me/session`, `DELETE /users/me`; `409` → `EmailTakenException`, `401` on login and `403` on deletion → `InvalidCredentialsException`, `401` with a session → `SignedOutException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `API_BASE_URL` (the Koin qualifier of the backend address), `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
@@ -507,9 +508,11 @@ into `SignedOutException`.)
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
 snackbar shown from an event. `ErrorContext` is `LOAD` (the reason sentence alone, under the
 screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM` /
-`REGISTER` / `LOGIN` / `SAVE_FEELING`, which put "Couldn't save the alarm.", "Couldn't create the
-account.", "Couldn't log in.", "Your answer couldn't be saved." etc. before the
-reason; `NotFound` reads "This alarm no longer exists." in the four alarm contexts. The choice is the pure `AppError.text(context)` → `ErrorText(action,
+`REGISTER` / `LOGIN` / `SAVE_FEELING` / `DELETE_ACCOUNT`, which put "Couldn't save the alarm.",
+"Couldn't create the account.", "Couldn't log in.", "Your answer couldn't be saved.", "Couldn't
+delete the account." etc. before the reason; `NotFound` reads "This alarm no longer exists." in the
+four alarm contexts, and `InvalidCredentials` "The password is incorrect." in `DELETE_ACCOUNT`, which
+asks for the password alone. The choice is the pure `AppError.text(context)` → `ErrorText(action,
 reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
 in all four languages. No exception text — host names, status codes, library messages — reaches a
 screen; `feature/example` is the one exception: its `Error` carries the exception's own text (the
@@ -790,8 +793,12 @@ session **whatever the answer** — the user asked to be logged out of this phon
 backend still holds expires unused — so it fails only if the phone cannot clear its own storage.
 `clear()` forgets the session without a request; it is what a repository calls when the backend
 answers `401` to the session (`SignedOutException`), which signs the app out on the next
-authenticated call after the session expired or was ended elsewhere. The session going to `null` —
-logout or `clear()` — returns the Diary to its gate and drops what it showed.
+authenticated call after the session expired or was ended elsewhere. `deleteAccount(password)`
+sends `DELETE /users/me` with the bearer token and the password and clears the session on `204`; a
+`403` (a wrong password) is `InvalidCredentialsException` and keeps it, as does any other failure,
+and a `401` is `SignedOutException` and clears it — each clear only if the refused session is still
+the stored one. The session going to `null` — logout, deletion or `clear()` — returns the Diary to
+its gate and drops what it showed.
 `AccountViewModelTest` and `SessionRepositoryImplTest` (`MockEngine`) pin it; the composable is
 checked by hand.
 
@@ -1347,11 +1354,21 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
   which asks first in an `AlertDialog` — "Log out?", "Your diary stays in your account. Log in again
   to see it.", Log out / Cancel — and confirming calls `SessionRepository.logout()`. Logged out: "Not
   logged in" and a "Log in" row (`onClickLabel` "Log in to your account") that opens
-  `Screen.Account(LOGIN)`. Both are full-width rows ≥ 48 dp in the primary colour with a decorative
-  icon in front. `SettingsViewModel` **observes** `SessionRepository.session` — the email comes from
-  the stored login, no request — so logging in or out anywhere shows here at once; the rows appear
-  only once the stored login has been read (`accountChecked`), and the dialog closes by itself if the
-  session ends while it is open.
+  `Screen.Account(LOGIN)`. Logged in, a "Delete account" row (`settings_account_delete`,
+  `onClickLabel` "Delete your account and diary") follows "Log out" and opens a second
+  `AlertDialog`: "Delete account?", the warning that the account and every diary answer are deleted
+  for good and that this cannot be undone, a `PasswordField` (`core/ui/password`) with its eye
+  button, and "Delete account" in the error colour — enabled once a password is typed, with a
+  progress indicator while it runs — and Cancel. Confirming calls
+  `SessionRepository.deleteAccount(password)`; success closes the dialog and the session flow shows
+  the signed-out rows, while a failure — a wrong password ("Couldn't delete the account. The password
+  is incorrect.") or no connection — keeps the dialog with its error (`DELETE_ACCOUNT` context, a
+  polite live region) until the next edit. While deleting, edits and dismissing are ignored. All
+  rows are full-width ≥ 48 dp in the primary colour with a decorative icon in front.
+  `SettingsViewModel` **observes** `SessionRepository.session` — the email comes from the stored
+  login, no request — so logging in or out anywhere shows here at once; the rows appear only once the
+  stored login has been read (`accountChecked`), and both dialogs close by themselves (the password
+  forgotten) if the session ends while they are open.
 - **Language** (`settings_section_language`) — the current choice in the same kind of row
   (`onClickLabel` "Change the language"), which opens an `AlertDialog` of radio rows (a
   `selectableGroup`, Cancel to close): System default (`settings_language_system`, translated),
@@ -1365,7 +1382,9 @@ restored through `navigateToTab`'s saved state) under a `TopAppBar` titled "Sett
 - **Impressum** (`settings_section_impressum`; "Mentions légales" / "Note legali") — "Developed by
   Tim Stenzel" (`settings_developed_by`, the name a code constant) and the contact address
   `developer.mobile.t3s@gmail.com`, a full-width row ≥ 48 dp that opens
-  `mailto:developer.mobile.t3s@gmail.com?subject=PollenInfo`.
+  `mailto:developer.mobile.t3s@gmail.com?subject=PollenInfo`, then the note that an account can also
+  be deleted by writing to that address (`settings_account_deletion_note`) — for a user who cannot
+  open the app any more.
 - **Data source** — the attribution in the exact form MeteoSwiss's terms of use prescribe for the
   language (`settings_data_source_attribution`: "Source: MeteoSwiss", "Quelle: MeteoSchweiz",
   "Source: MétéoSuisse", "Fonte: MeteoSvizzera" — **do not rephrase**, and the French one keeps the
@@ -1382,7 +1401,8 @@ Both links go through `LocalUriHandler`; a device with nothing to open them with
 rather than crash. Each row's icon is decorative and its `onClickLabel` says what a double tap does.
 `SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo,
 sessionRepository)` holds no text — only the station name, the account (`accountEmail`,
-`accountChecked`, `showLogoutDialog`), the language (`language`, `showLanguageDialog`,
+`accountChecked`, `showLogoutDialog`, and for deletion `showDeleteDialog`, `deletePassword`,
+`deletePasswordVisible`, `isDeleting`, `deleteError: AppError?`, derived `canConfirmDelete`), the language (`language`, `showLanguageDialog`,
 `languageAppliesOnRestart` once a change was made where it does not apply immediately) and the
 version pass through it (`SettingsViewModelTest`); the composable is checked by hand.
 
@@ -1594,8 +1614,8 @@ server/src/main/kotlin/.../server/
     │                   (Argon2PasswordHasher), SessionToken (+ newSessionToken, hash), UserId,
     │                   DiaryFeeling, DiaryEntry
     ├── store/          UserStore, SessionStore, DiaryStore (+ Exposed implementations), AccountTables
-    ├── model/          Wire DTOs (RegisterDto, LoginDto, SessionDto, DiaryAnswerDto, DiaryEntryDto,
-    │                   ErrorDto)
+    ├── model/          Wire DTOs (RegisterDto, LoginDto, DeleteAccountDto, SessionDto, DiaryAnswerDto,
+    │                   DiaryEntryDto, ErrorDto)
     └── AccountRoutes.kt
 ```
 
@@ -1630,6 +1650,7 @@ independently of the domain.
 | POST   | `/users`                                | `{ "email", "password", "consent": true }` → `201 { "sessionToken": "…" }`; `400 {error}` invalid, no consent or malformed; `409 {error}` email taken (in any capitals) |
 | POST   | `/users/session`                        | `{ "email", "password" }` → `201 { "sessionToken": "…" }` (a new session; the email in any capitals); `401 {error}` identical for a wrong password and an unknown email; `400 {error}` malformed |
 | DELETE | `/users/me/session`                     | (user auth) `204`; ends the calling session only — the account's other phones stay logged in |
+| DELETE | `/users/me`                             | (user auth) `{ "password": "…" }` → `204`; the account, every session and every diary answer are deleted; `403 {error}` wrong password (not `401`: the session stays valid); `400 {error}` malformed |
 | POST   | `/users/me/diary`                       | (user auth) `{ "feeling": "GOOD" }` → `201 { "date": "2026-10-15", "feeling": "GOOD" }` for the first answer of today's Swiss date; `200` with the **stored** answer if today has one; `400 {error}` unknown feeling or malformed |
 | GET    | `/users/me/diary?from=…&until=…`        | (user auth) `200 [{ "date", "feeling" }]` — the caller's answered days from `from` to `until` (ISO dates, both included), oldest first; `400 {error}` a missing or unparseable date, `until` before `from`, or more than 366 days |
 | GET    | `/users/me/diary/today`                 | (user auth) `200 { "date", "feeling" }`, or `204` while today has no answer |
@@ -1789,13 +1810,21 @@ value. `AccountSpec` and `RegisterDto` print neither field.
   most once per `LAST_USED_RESOLUTION` (1 day), so regular use keeps a session alive. A missing,
   malformed, unknown or expired token is the same `401` with `WWW-Authenticate: Bearer`, which is
   how the app learns it has been logged out. The provider's clock is `configureAccountRouting`'s.
+- **Deleting the account** (`DELETE /users/me {password}`, under the `user` provider) asks for the
+  password again, so an unlocked phone alone cannot delete it: `UserStore.passwordHash(user)` and
+  `verify` (`verifyDummy` if the account has gone meanwhile); a wrong password is
+  `403 {"error":"Password is incorrect"}` — not `401`, which would make the app drop a valid session —
+  and a malformed body `400`. The right one deletes the user (`UserStore.delete`); every session and
+  diary answer goes with it through `ON DELETE CASCADE`, so every token of the account is a `401` from
+  then on, the login fails, and the email can be registered again as a new, empty account.
 - **Email taken** is `UserStore.register`'s `EmailTaken` — the unique index decides, not a lookup
   first, so two concurrent registrations of one email cannot both succeed — and a `409`. That
   registration reveals whether an address has an account is an accepted limitation without email
   delivery.
 - The email and the token travel only in bodies and headers, never in a path or query, so call
   logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow
-  (registration, logins, today's answer, a range read, logout) and finds neither, nor the password.
+  (registration, logins, today's answer, a range read, logout, a refused and a successful account
+  deletion) and finds neither, nor the password.
 
 **The diary.** `account/domain/Diary.kt` holds `DiaryFeeling` (`VERY_BAD`, `BAD`, `GOOD`,
 `VERY_GOOD` — exact names on the wire and in the table, the app's `Feeling` names) and
@@ -1821,12 +1850,14 @@ value. `AccountSpec` and `RegisterDto` print neither field.
 - All three run under the `user` provider and `USER_LIMIT`, and only ever touch the caller's own
   answers.
 
-`AccountRoutesTest` (registration, login, logout, the `user` provider's `401`s and expiry, the device
+`AccountRoutesTest` (registration, login, logout, deletion — `403` keeps the account, `204` ends every
+session and the login and frees the email — the `user` provider's `401`s and expiry, the device
 and account routes installed together, the diary's `201` / `200`, both sides of Swiss midnight,
 `/today`, another user's answers, unknown feelings, `401` before the body, the range read's order,
 its 366/367-day edge and every refused query) and
 `ExposedAccountStoresTest` (incl. expiry at exactly 90 days, the daily `last_used_at` refresh and two
-concurrent answers keeping exactly the first) run on the test database; `AccountValidationTest`,
+concurrent answers keeping exactly the first, and a deleted user's sessions and answers gone with it
+while another user's stay) run on the test database; `AccountValidationTest`,
 `PasswordHasherTest` and `SessionTokenTest` need none.
 
 #### Persistence
@@ -1869,7 +1900,8 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   created_at, last_used_at timestamptz)` with an index on `user_id`, and
   `diary_entries(user_id → users ON DELETE CASCADE, date date — the Swiss day, feeling — a
   DiaryFeeling name, created_at timestamptz, PK(user_id, date))`: one answer per user and day, the
-  key that makes a second answer impossible to store. Arrays hold
+  key that makes a second answer impossible to store. Deleting a user (`DELETE /users/me`) takes its
+  sessions and diary answers with it through those cascades. Arrays hold
   enum names; instants are written at UTC (`toTimestamp()`). An alarm id that is not a UUID is
   simply not found (`toUuidOrNull()`), never an error.
 - Isolation is Postgres's default `READ COMMITTED`. **The ten-alarm limit locks the device row**

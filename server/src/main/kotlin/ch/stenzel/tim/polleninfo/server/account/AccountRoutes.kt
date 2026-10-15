@@ -5,6 +5,7 @@ import ch.stenzel.tim.polleninfo.server.account.domain.AccountValidationResult
 import ch.stenzel.tim.polleninfo.server.account.domain.DiaryEntry
 import ch.stenzel.tim.polleninfo.server.account.domain.DiaryFeeling
 import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.model.DeleteAccountDto
 import ch.stenzel.tim.polleninfo.server.account.model.DiaryAnswerDto
 import ch.stenzel.tim.polleninfo.server.account.model.DiaryEntryDto
 import ch.stenzel.tim.polleninfo.server.account.model.ErrorDto
@@ -50,6 +51,9 @@ import kotlinx.coroutines.withContext
  * Registration and login share one rate-limit bucket per client address, [ACCOUNT_LIMIT]; the
  * `/users/me` routes are limited per account under [USER_LIMIT], inside authentication, so an
  * unknown or expired token is a `401` before its body is read and never gets a bucket.
+ *
+ * Deleting the account (`DELETE /users/me`) asks for the password again and takes the sessions and
+ * the diary with it.
  *
  * Reading the diary takes its date range in the query; only dates travel there, nothing personal.
  *
@@ -124,6 +128,35 @@ fun Route.accountRoutes(
         authenticate(USER_AUTH) {
             rateLimit(USER_LIMIT) {
                 route("/me") {
+                    delete {
+                        val body = try {
+                            call.receive<DeleteAccountDto>()
+                        } catch (e: BadRequestException) {
+                            return@delete call.respond(
+                                HttpStatusCode.BadRequest,
+                                ErrorDto("Expected {\"password\": \"…\"}"),
+                            )
+                        }
+                        val userId = call.userPrincipal().userId
+                        // The password is asked again so an unlocked phone alone cannot delete the
+                        // account. A wrong one is 403, not 401: the session itself is still valid.
+                        val confirmed = withContext(Dispatchers.Default) {
+                            val stored = users.passwordHash(userId)
+                            if (stored == null) {
+                                hasher.verifyDummy(body.password)
+                                false
+                            } else {
+                                hasher.verify(body.password, stored)
+                            }
+                        }
+                        if (!confirmed) {
+                            return@delete call.respond(HttpStatusCode.Forbidden, ErrorDto("Password is incorrect"))
+                        }
+                        // Every session and diary answer goes with it.
+                        users.delete(userId)
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+
                     delete("/session") {
                         // Only this phone's session; the account's other phones stay logged in.
                         sessions.delete(call.userPrincipal().token)

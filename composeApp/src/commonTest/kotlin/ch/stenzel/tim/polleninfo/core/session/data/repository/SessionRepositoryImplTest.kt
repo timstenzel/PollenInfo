@@ -235,6 +235,93 @@ class SessionRepositoryImplTest {
         assertEquals(AppError.SignedOut, failure.toSessionAppError())
     }
 
+    // --- Deleting the account ---
+
+    private val signedIn = Session(token = "session-token-1", email = "tim@example.com")
+
+    @Test
+    fun `deleteAccount sends a DELETE with the bearer token and the password and clears the session on 204`() = runTest {
+        storage.store(signedIn)
+        val repository = repository { respond("", HttpStatusCode.NoContent) }
+
+        val result = repository.deleteAccount("  correct horse")
+
+        assertIs<Result.Success<Unit>>(result)
+        val request = recorded.single()
+        assertEquals(HttpMethod.Delete, request.method)
+        assertEquals("http://backend.test:8080/users/me", request.url.toString())
+        assertEquals("Bearer session-token-1", request.headers[HttpHeaders.Authorization])
+        val body = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
+        assertEquals(JsonPrimitive("  correct horse"), body["password"])
+        assertNull(repository.session.first())
+    }
+
+    @Test
+    fun `a 403 on deleteAccount is InvalidCredentials and keeps the session`() = runTest {
+        storage.store(signedIn)
+        val repository = repository {
+            respond("""{"error":"Password is incorrect"}""", HttpStatusCode.Forbidden, jsonHeaders)
+        }
+
+        val result = repository.deleteAccount("wrong horse")
+
+        val failure = assertIs<Result.Failure>(result)
+        assertIs<InvalidCredentialsException>(failure.exception)
+        assertEquals(AppError.InvalidCredentials, failure.exception.toSessionAppError())
+        assertEquals(signedIn, repository.session.first())
+    }
+
+    @Test
+    fun `a failed deleteAccount keeps the session`() = runTest {
+        val failures = listOf<suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData>(
+            { throw IOException("offline") },
+            { respondError(HttpStatusCode.BadGateway) },
+        )
+        failures.zip(listOf(AppError.Network, AppError.ServerUnavailable)).forEach { (failure, error) ->
+            storage.store(signedIn)
+            val repository = repository(failure)
+
+            val result = repository.deleteAccount("correct horse")
+
+            assertEquals(error, assertIs<Result.Failure>(result).exception.toSessionAppError())
+            assertEquals(signedIn, repository.session.first())
+        }
+    }
+
+    @Test
+    fun `a 401 on deleteAccount is SignedOut and clears the session`() = runTest {
+        storage.store(signedIn)
+        val repository = repository { respond("", HttpStatusCode.Unauthorized) }
+
+        val result = repository.deleteAccount("correct horse")
+
+        assertIs<SignedOutException>(assertIs<Result.Failure>(result).exception)
+        assertNull(repository.session.first())
+    }
+
+    @Test
+    fun `deleteAccount keeps a newer login that replaced the session meanwhile`() = runTest {
+        storage.store(signedIn)
+        val newer = Session(token = "session-token-2", email = "anna@example.com")
+        val repository = repository {
+            storage.store(newer)
+            respond("", HttpStatusCode.NoContent)
+        }
+
+        assertIs<Result.Success<Unit>>(repository.deleteAccount("correct horse"))
+        assertEquals(newer, repository.session.first())
+    }
+
+    @Test
+    fun `deleteAccount without a session is SignedOut and sends nothing`() = runTest {
+        val repository = repository { respond("", HttpStatusCode.NoContent) }
+
+        val result = repository.deleteAccount("correct horse")
+
+        assertIs<SignedOutException>(assertIs<Result.Failure>(result).exception)
+        assertEquals(emptyList(), recorded)
+    }
+
     @Test
     fun `clear forgets the stored session without a request`() = runTest {
         storage.store(Session(token = "session-token-1", email = "tim@example.com"))

@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.core.session.data.remote
 
 import ch.stenzel.tim.polleninfo.core.network.checkSuccess
+import ch.stenzel.tim.polleninfo.core.session.data.remote.dto.DeleteAccountRequestDto
 import ch.stenzel.tim.polleninfo.core.session.data.remote.dto.LoginRequestDto
 import ch.stenzel.tim.polleninfo.core.session.data.remote.dto.RegisterRequestDto
 import ch.stenzel.tim.polleninfo.core.session.data.remote.dto.SessionResponseDto
@@ -22,8 +23,8 @@ import io.ktor.http.contentType
  * point it at its `MockEngine`. The email and password travel only in the body.
  *
  * Account statuses are mapped here before [checkSuccess]: a `409` on registration is
- * [EmailTakenException], a `401` on login [InvalidCredentialsException], and a `401` on a call made
- * with a session token [SignedOutException]. The token travels only in the `Authorization` header.
+ * [EmailTakenException], a `401` on login and a `403` on deleting the account (a wrong password)
+ * [InvalidCredentialsException], and a `401` on a call made with a session token [SignedOutException]. The token travels only in the `Authorization` header.
  */
 class AccountApiService(
     private val client: HttpClient,
@@ -52,6 +53,23 @@ class AccountApiService(
     suspend fun logout(token: String) {
         val response = client.delete("$baseUrl/users/me/session") { bearerAuth(token) }
         if (response.status == HttpStatusCode.Unauthorized) throw SignedOutException()
+        response.checkSuccess()
+    }
+
+    /**
+     * Deletes the account [token] belongs to, with every session and diary answer, once [password]
+     * confirms it. A wrong password is `403`, not `401`, so the session stays valid.
+     */
+    suspend fun deleteAccount(token: String, password: String) {
+        val response = client.delete("$baseUrl/users/me") {
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(DeleteAccountRequestDto(password = password))
+        }
+        when (response.status) {
+            HttpStatusCode.Forbidden -> throw InvalidCredentialsException()
+            HttpStatusCode.Unauthorized -> throw SignedOutException()
+        }
         response.checkSuccess()
     }
 }

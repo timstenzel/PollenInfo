@@ -17,8 +17,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,15 +39,13 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.password.PasswordField
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.MAX_PASSWORD_LENGTH
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.MIN_PASSWORD_LENGTH
@@ -60,10 +56,8 @@ import ch.stenzel.tim.polleninfo.resources.account_email_label
 import ch.stenzel.tim.polleninfo.resources.account_hide_confirmation
 import ch.stenzel.tim.polleninfo.resources.account_hide_password
 import ch.stenzel.tim.polleninfo.resources.account_no_recovery
-import ch.stenzel.tim.polleninfo.resources.account_password_hidden
 import ch.stenzel.tim.polleninfo.resources.account_password_hint
 import ch.stenzel.tim.polleninfo.resources.account_password_label
-import ch.stenzel.tim.polleninfo.resources.account_password_shown
 import ch.stenzel.tim.polleninfo.resources.account_password_too_long
 import ch.stenzel.tim.polleninfo.resources.account_passwords_mismatch
 import ch.stenzel.tim.polleninfo.resources.account_show_confirmation
@@ -256,52 +250,6 @@ private fun RegisterFields(uiState: AccountUiState, viewModel: AccountViewModel)
         Spacer(Modifier.width(12.dp))
         Text(text = stringResource(Res.string.account_consent), style = MaterialTheme.typography.bodyMedium)
     }
-}
-
-/**
- * A password field with its own show/hide button. The button is named for what it does ("Show
- * password") and states what the field does now ("Password hidden"), so a screen reader user knows
- * whether the field's text will be read out.
- */
-@Composable
-private fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: StringResource,
-    visible: Boolean,
-    onToggleVisible: () -> Unit,
-    showLabel: StringResource,
-    hideLabel: StringResource,
-    enabled: Boolean,
-    isError: Boolean,
-    supportingText: String?,
-    imeAction: ImeAction,
-) {
-    val state = stringResource(if (visible) Res.string.account_password_shown else Res.string.account_password_hidden)
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(stringResource(label)) },
-        singleLine = true,
-        enabled = enabled,
-        isError = isError,
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password,
-            imeAction = imeAction,
-            autoCorrectEnabled = false,
-        ),
-        trailingIcon = {
-            IconButton(onClick = onToggleVisible, modifier = Modifier.semantics { stateDescription = state }) {
-                Icon(
-                    imageVector = if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = stringResource(if (visible) hideLabel else showLabel),
-                )
-            }
-        },
-        supportingText = supportingText?.let { text -> { Text(text) } },
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 private fun AccountMode.titleResource(): StringResource = when (this) {

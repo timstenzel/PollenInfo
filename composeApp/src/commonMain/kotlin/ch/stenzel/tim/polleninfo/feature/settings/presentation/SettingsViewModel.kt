@@ -7,6 +7,8 @@ import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
 import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
@@ -30,7 +32,8 @@ import kotlinx.coroutines.launch
  * outside the app (Android's per-app language screen), so [onResume] reads it again.
  *
  * The account is **observed** too, from the login stored on the phone — no request: logging in or
- * out anywhere in the app shows here at once. Logging out asks for confirmation first.
+ * out anywhere in the app shows here at once. Logging out asks for confirmation first; deleting the
+ * account asks for the password, and a wrong one keeps the dialog open with its error.
  */
 class SettingsViewModel(
     selectedStationRepository: SelectedStationRepository,
@@ -66,7 +69,7 @@ class SettingsViewModel(
                         accountChecked = true,
                         // Logged out elsewhere: there is nothing left to confirm.
                         showLogoutDialog = it.showLogoutDialog && session != null,
-                    )
+                    ).let { state -> if (session == null) state.withDeleteDialogClosed() else state }
                 }
             }
         }
@@ -88,6 +91,50 @@ class SettingsViewModel(
     fun onLogoutConfirmed() {
         _uiState.update { it.copy(showLogoutDialog = false) }
         viewModelScope.launch { sessionRepository.logout() }
+    }
+
+    fun onDeleteAccountClicked() {
+        if (_uiState.value.accountEmail == null) return
+        _uiState.update { it.withDeleteDialogClosed().copy(showDeleteDialog = true) }
+    }
+
+    /** Ignored while the deletion runs, which sends the password as it was when confirmed. */
+    fun onDeletePasswordChanged(password: String) {
+        if (_uiState.value.isDeleting) return
+        _uiState.update { it.copy(deletePassword = password, deleteError = null) }
+    }
+
+    fun onDeletePasswordVisibilityToggled() {
+        _uiState.update { it.copy(deletePasswordVisible = !it.deletePasswordVisible) }
+    }
+
+    /** Closes the dialog and forgets the password — unless the deletion is already running. */
+    fun onDeleteDismissed() {
+        if (_uiState.value.isDeleting) return
+        _uiState.update { it.withDeleteDialogClosed() }
+    }
+
+    /**
+     * Deletes the account. On success the session flow shows the signed-out rows and the dialog
+     * closes; a failure — a wrong password, no connection — keeps it open with its error. A backend
+     * that no longer knows the session has signed the phone out, which closes the dialog too.
+     */
+    fun onDeleteConfirmed() {
+        val state = _uiState.value
+        if (!state.showDeleteDialog || !state.canConfirmDelete) return
+        _uiState.update { it.copy(isDeleting = true, deleteError = null) }
+        viewModelScope.launch {
+            when (val result = sessionRepository.deleteAccount(state.deletePassword)) {
+                is Result.Success -> _uiState.update { it.withDeleteDialogClosed() }
+                is Result.Failure -> _uiState.update {
+                    if (result.exception is SignedOutException) {
+                        it.withDeleteDialogClosed()
+                    } else {
+                        it.copy(isDeleting = false, deleteError = result.exception.toSessionAppError())
+                    }
+                }
+            }
+        }
     }
 
     fun onLanguageRowClicked() {
@@ -117,3 +164,12 @@ class SettingsViewModel(
         _uiState.update { it.copy(language = languageRepository.current) }
     }
 }
+
+/** The deletion dialog closed, with nothing of it kept — the password least of all. */
+private fun SettingsUiState.withDeleteDialogClosed() = copy(
+    showDeleteDialog = false,
+    deletePassword = "",
+    deletePasswordVisible = false,
+    isDeleting = false,
+    deleteError = null,
+)

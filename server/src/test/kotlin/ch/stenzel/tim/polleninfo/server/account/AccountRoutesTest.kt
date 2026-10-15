@@ -533,4 +533,116 @@ class AccountRoutesTest {
         }
         assertEquals(0L, transaction(database) { DiaryEntriesTable.selectAll().count() })
     }
+
+    // --- Deleting the account ---
+
+    private suspend fun ApplicationTestBuilder.deleteAccount(token: String?, body: String): HttpResponse =
+        client.delete("/users/me") {
+            token?.let { bearerAuth(it) }
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+    private fun password(value: String) = """{"password":"$value"}"""
+
+    @Test
+    fun `a wrong password is 403 and the account keeps working`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+        answer(token, feeling("GOOD"))
+
+        val response = deleteAccount(token, password("wrong horse"))
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals("Password is incorrect", response.errorText())
+        assertEquals(HttpStatusCode.OK, today(token).status)
+        assertEquals(HttpStatusCode.Created, login(credentials()).status)
+        assertEquals(1L, userCount())
+    }
+
+    @Test
+    fun `the password of a deletion is not trimmed`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        assertEquals(HttpStatusCode.Forbidden, deleteAccount(token, password(" correct horse ")).status)
+        assertEquals(1L, userCount())
+    }
+
+    @Test
+    fun `the right password is 204 and ends every session and the login of that account`() = testApplication {
+        installApp()
+        val first = register(registration()).sessionToken()
+        val second = login(credentials()).sessionToken()
+        val other = register(registration(email = "anna@example.com")).sessionToken()
+        answer(first, feeling("BAD"))
+        answer(other, feeling("GOOD"))
+
+        val response = deleteAccount(first, password("correct horse"))
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+        listOf(first, second).forEach {
+            assertEquals(HttpStatusCode.Unauthorized, today(it).status)
+            assertEquals(HttpStatusCode.Unauthorized, logout(it).status)
+        }
+        assertEquals(HttpStatusCode.Unauthorized, login(credentials()).status)
+        // Another account is untouched.
+        assertEquals(HttpStatusCode.OK, today(other).status)
+        assertEquals(1L, userCount())
+        assertEquals(1L, transaction(database) { DiaryEntriesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `after deletion the same email registers a new empty account`() = testApplication {
+        installApp()
+        val old = register(registration()).sessionToken()
+        answer(old, feeling("VERY_BAD"))
+        deleteAccount(old, password("correct horse"))
+
+        val registered = register(registration(password = "a new password"))
+
+        assertEquals(HttpStatusCode.Created, registered.status)
+        val token = registered.sessionToken()
+        assertEquals(HttpStatusCode.NoContent, today(token).status)
+        val all = client.get("/users/me/diary?from=2026-01-01&until=2026-12-31") { bearerAuth(token) }
+        assertEquals("[]", all.bodyAsText())
+    }
+
+    @Test
+    fun `a malformed deletion is 400 and deletes nothing`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        listOf("{}", """{"pass":"correct horse"}""", "not json at all").forEach { body ->
+            val response = deleteAccount(token, body)
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(response.errorText().isNotBlank(), body)
+        }
+        assertEquals(1L, userCount())
+    }
+
+    @Test
+    fun `a deletion without a valid session is 401 before the body is read`() = testApplication {
+        installApp()
+        register(registration())
+
+        listOf(null, newSessionToken().value, "too-short").forEach { token ->
+            listOf("not json at all", password("correct horse")).forEach { body ->
+                val response = deleteAccount(token, body)
+                assertEquals(HttpStatusCode.Unauthorized, response.status, "$token $body")
+                assertTrue(response.headers[HttpHeaders.WWWAuthenticate].orEmpty().startsWith("Bearer"))
+            }
+        }
+        assertEquals(1L, userCount())
+    }
+
+    @Test
+    fun `an error body of a deletion never repeats the password`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        val response = deleteAccount(token, password("wrong horse"))
+
+        assertFalse("wrong horse" in response.bodyAsText())
+    }
 }

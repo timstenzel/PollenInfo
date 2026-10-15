@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -20,11 +21,15 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -38,8 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -47,8 +54,19 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
+import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
+import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.password.PasswordField
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.account_hide_password
+import ch.stenzel.tim.polleninfo.resources.account_password_label
+import ch.stenzel.tim.polleninfo.resources.account_show_password
 import ch.stenzel.tim.polleninfo.resources.common_cancel
+import ch.stenzel.tim.polleninfo.resources.settings_account_delete
+import ch.stenzel.tim.polleninfo.resources.settings_account_delete_action
+import ch.stenzel.tim.polleninfo.resources.settings_account_delete_text
+import ch.stenzel.tim.polleninfo.resources.settings_account_delete_title
+import ch.stenzel.tim.polleninfo.resources.settings_account_deletion_note
 import ch.stenzel.tim.polleninfo.resources.settings_account_log_in
 import ch.stenzel.tim.polleninfo.resources.settings_account_log_in_action
 import ch.stenzel.tim.polleninfo.resources.settings_account_log_out
@@ -112,11 +130,22 @@ fun SettingsScreen(
         onChangeStation = onChangeStation,
         onLogIn = onLogIn,
         onLogOut = viewModel::onLogoutClicked,
+        onDeleteAccount = viewModel::onDeleteAccountClicked,
         onLanguageRowClicked = viewModel::onLanguageRowClicked,
     )
 
     if (uiState.showLogoutDialog) {
         LogoutDialog(onConfirm = viewModel::onLogoutConfirmed, onDismiss = viewModel::onLogoutDismissed)
+    }
+
+    if (uiState.showDeleteDialog) {
+        DeleteAccountDialog(
+            uiState = uiState,
+            onPasswordChange = viewModel::onDeletePasswordChanged,
+            onToggleVisible = viewModel::onDeletePasswordVisibilityToggled,
+            onConfirm = viewModel::onDeleteConfirmed,
+            onDismiss = viewModel::onDeleteDismissed,
+        )
     }
 
     if (uiState.showLanguageDialog) {
@@ -135,6 +164,7 @@ private fun SettingsContent(
     onChangeStation: () -> Unit,
     onLogIn: () -> Unit,
     onLogOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
     onLanguageRowClicked: () -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) }) { padding ->
@@ -147,7 +177,7 @@ private fun SettingsContent(
         ) {
             StationSection(uiState.stationName, onChangeStation)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            AccountSection(uiState.accountChecked, uiState.accountEmail, onLogIn, onLogOut)
+            AccountSection(uiState.accountChecked, uiState.accountEmail, onLogIn, onLogOut, onDeleteAccount)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             LanguageSection(uiState.language, uiState.languageAppliesOnRestart, onLanguageRowClicked)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
@@ -172,11 +202,17 @@ private fun StationSection(stationName: String?, onChangeStation: () -> Unit) {
 }
 
 /**
- * Which account this phone is logged in to, with "Log out" — or "Not logged in" with "Log in". The
- * rows wait for the stored login to be read, so the wrong one never flashes up.
+ * Which account this phone is logged in to, with "Log out" and "Delete account" — or "Not logged in"
+ * with "Log in". The rows wait for the stored login to be read, so the wrong one never flashes up.
  */
 @Composable
-private fun AccountSection(checked: Boolean, email: String?, onLogIn: () -> Unit, onLogOut: () -> Unit) {
+private fun AccountSection(
+    checked: Boolean,
+    email: String?,
+    onLogIn: () -> Unit,
+    onLogOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
+) {
     SectionTitle(stringResource(Res.string.settings_section_account))
     if (!checked) return
     if (email != null) {
@@ -186,6 +222,12 @@ private fun AccountSection(checked: Boolean, email: String?, onLogIn: () -> Unit
             icon = Icons.AutoMirrored.Filled.Logout,
             onClickLabel = stringResource(Res.string.settings_account_log_out_action),
             onClick = onLogOut,
+        )
+        ActionRow(
+            text = stringResource(Res.string.settings_account_delete),
+            icon = Icons.Default.DeleteForever,
+            onClickLabel = stringResource(Res.string.settings_account_delete_action),
+            onClick = onDeleteAccount,
         )
     } else {
         BodyText(stringResource(Res.string.settings_account_not_logged_in))
@@ -210,6 +252,71 @@ private fun LogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
+    )
+}
+
+/**
+ * Deleting the account: the warning that the account and every answer go for good, the password
+ * asked again, and the confirm button with a progress indicator while it runs. A wrong password —
+ * or any other failure — stays in the dialog under the field. Dismissing is ignored while deleting.
+ */
+@Composable
+private fun DeleteAccountDialog(
+    uiState: SettingsUiState,
+    onPasswordChange: (String) -> Unit,
+    onToggleVisible: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.settings_account_delete_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(stringResource(Res.string.settings_account_delete_text))
+                PasswordField(
+                    value = uiState.deletePassword,
+                    onValueChange = onPasswordChange,
+                    label = Res.string.account_password_label,
+                    visible = uiState.deletePasswordVisible,
+                    onToggleVisible = onToggleVisible,
+                    showLabel = Res.string.account_show_password,
+                    hideLabel = Res.string.account_hide_password,
+                    enabled = !uiState.isDeleting,
+                    isError = uiState.deleteError != null,
+                )
+                uiState.deleteError?.let { error ->
+                    Text(
+                        text = error.message(ErrorContext.DELETE_ACCOUNT),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = uiState.canConfirmDelete,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                if (uiState.isDeleting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = LocalContentColor.current,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(stringResource(Res.string.settings_account_delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !uiState.isDeleting) {
+                Text(stringResource(Res.string.common_cancel))
+            }
         },
     )
 }
@@ -346,6 +453,13 @@ private fun ImpressumSection() {
         icon = Icons.Default.Email,
         onClickLabel = stringResource(Res.string.settings_email_action),
         uri = CONTACT_URI,
+    )
+    // For a user who cannot open the app any more: deletion by email request.
+    Text(
+        text = stringResource(Res.string.settings_account_deletion_note, DEVELOPER_EMAIL),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
     )
 }
 
