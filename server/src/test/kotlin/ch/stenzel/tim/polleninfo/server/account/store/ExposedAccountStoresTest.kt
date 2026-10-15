@@ -278,6 +278,29 @@ class ExposedAccountStoresTest {
     }
 
     @Test
+    fun `entries are the user's answers within the range both ends included and oldest first`() = runTest {
+        val tim = registered("tim@example.com")
+        val anna = registered("anna@example.com")
+        // Recorded out of order, so the order comes from the read.
+        listOf(5L, 0L, 3L, -1L, 6L).forEach { offset ->
+            diary.record(tim, day.plusDays(offset), DiaryFeeling.entries[offset.mod(4)], now)
+        }
+        diary.record(anna, day.plusDays(1), DiaryFeeling.GOOD, now)
+
+        assertEquals(
+            listOf(
+                DiaryEntry(day, DiaryFeeling.VERY_BAD),
+                DiaryEntry(day.plusDays(3), DiaryFeeling.VERY_GOOD),
+                DiaryEntry(day.plusDays(5), DiaryFeeling.BAD),
+            ),
+            diary.entries(tim, from = day, until = day.plusDays(5)),
+        )
+        assertEquals(listOf(DiaryEntry(day.plusDays(1), DiaryFeeling.GOOD)), diary.entries(anna, day, day.plusDays(5)))
+        assertEquals(listOf(DiaryEntry(day, DiaryFeeling.VERY_BAD)), diary.entries(tim, day, day))
+        assertEquals(emptyList(), diary.entries(tim, day.plusDays(1), day.plusDays(2)))
+    }
+
+    @Test
     fun `an answer cannot be stored for a user that does not exist`() = runTest {
         assertFailsWith<ExposedSQLException> { diary.record(UserId(UUID.randomUUID()), day, DiaryFeeling.GOOD, now) }
     }

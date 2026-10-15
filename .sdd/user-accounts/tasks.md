@@ -165,29 +165,29 @@ removed. End to end: `GET /users/me/diary?from&until`, `DiaryRepository.entries`
 
 ### Implementation steps
 
-- [ ] Server: `DiaryStore.entries(user, from, until)` and `GET /users/me/diary?from&until` (`200` sorted, answered days only; `400` missing, unparseable, `until < from` or more than 366 days).
-- [ ] App: `DiaryRepository.entries(from, until)`; `FakeDiaryRepository` gains scripted entries and a failure.
-- [ ] App: `DiaryViewModel` takes `DiaryRepository` instead of `LocalDiaryRepository`; it computes the window as the server does (`range` days ending yesterday in `Europe/Zurich`), fetches history and entries in parallel, filters entries to `history.from..history.until` and before today as before, maps either failure to `Error`, `SignedOutException` to `SignedOut`.
-- [ ] App: delete `LocalDiaryRepository`, `DiaryCodec`, `DataStoreDiaryRepository`, `List<DiaryEntry>.recording` and their tests (`DiaryCodecTest`, the recording cases of `DiaryEntryTest`).
-- [ ] Extend `AccountFlowLoggingTest` with a range read.
-- [ ] Docs: CLAUDE.md — Diary, `core/diary` row, Persisted user selections ("Diary answers" rewritten), Architecture (answers stored by the backend), Testing (fixtures).
+- [x] Server: `DiaryStore.entries(user, from, until)` and `GET /users/me/diary?from&until` (`200` sorted, answered days only; `400` missing, unparseable, `until < from` or more than 366 days).
+- [x] App: `DiaryRepository.entries(from, until)`; `FakeDiaryRepository` gains scripted entries and a failure.
+- [x] App: `DiaryViewModel` takes `DiaryRepository` instead of `LocalDiaryRepository`; it computes the window as the server does (`range` days ending yesterday in `Europe/Zurich`), fetches history and entries in parallel, filters entries to `history.from..history.until` and before today as before, maps either failure to `Error`, `SignedOutException` to `SignedOut`.
+- [x] App: delete `LocalDiaryRepository`, `DiaryCodec`, `DataStoreDiaryRepository`, `List<DiaryEntry>.recording` and their tests (`DiaryCodecTest`, the recording cases of `DiaryEntryTest`).
+- [x] Extend `AccountFlowLoggingTest` with a range read.
+- [x] Docs: CLAUDE.md — Diary, `core/diary` row, Persisted user selections ("Diary answers" rewritten), Architecture (answers stored by the backend), Testing (fixtures).
 
 ### Acceptance criteria
 
-- [ ] `AccountRoutesTest`: `GET /users/me/diary` returns only the caller's answered days within the range, sorted by date; a 366-day range is `200`; 367 days, `until < from`, an unparseable date and a missing parameter are `400`.
-- [ ] `DiaryRepositoryImplTest`: `entries` sends `from` and `until` as ISO dates with the bearer header and maps the list; `401` → `SignedOut`.
-- [ ] `DiaryViewModelTest`: history and entries are requested together on first load, Retry, station change and range change; with the clock at 23:59 and 00:01 Swiss time the requested `until` is the respective yesterday; entries failing while history succeeds → `Error`, and Retry recovers; a `401` → `SignedOut`; `hasNoEntries` still drives the hint.
-- [ ] `grep -rn "DiaryCodec\|DataStoreDiaryRepository\|LocalDiaryRepository" composeApp/src` finds nothing.
-- [ ] Manual: answers on earlier days (seeded through the API) appear on the feeling line for week, month and year at two stations; after logging out and in again the same answers are back.
+- [x] `AccountRoutesTest`: `GET /users/me/diary` returns only the caller's answered days within the range, sorted by date; a 366-day range is `200`; 367 days, `until < from`, an unparseable date and a missing parameter are `400`.
+- [x] `DiaryRepositoryImplTest`: `entries` sends `from` and `until` as ISO dates with the bearer header and maps the list; `401` → `SignedOut`.
+- [x] `DiaryViewModelTest`: history and entries are requested together on first load, Retry, station change and range change; with the clock at 23:59 and 00:01 Swiss time the requested `until` is the respective yesterday; entries failing while history succeeds → `Error`, and Retry recovers; a `401` → `SignedOut`; `hasNoEntries` still drives the hint.
+- [x] `grep -rn "DiaryCodec\|DataStoreDiaryRepository\|LocalDiaryRepository" composeApp/src` finds nothing.
+- [x] Manual: answers on earlier days (seeded through the API) appear on the feeling line for week, month and year at two stations; after logging out and in again the same answers are back. *(API 37 emulator against `:server:run` on a reset database. The API files an answer only under the server's today, so the account was registered and today answered through the API with curl and nine answers on earlier days (20 Apr – 14 Oct) were inserted into `diary_entries` with psql. Logged in from the gate: Bern showed the four answers of 8–14 Oct for Week, the six of 15 Sep – 14 Oct for Month and all nine for Year, never today's; Lugano showed different pollen lines with the same answers for Year, Month and Week. Logged out in Settings → the gate; logged in again with the email in other capitals → the same answers. Deleting the session in the database and changing the range → `401` on `GET /users/me/diary` and the gate. The server log held no email, password or token.)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs
 
 ---
 

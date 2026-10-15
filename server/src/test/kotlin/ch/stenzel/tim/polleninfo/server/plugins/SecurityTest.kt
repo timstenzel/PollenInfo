@@ -604,4 +604,6 @@ private object NoDiaryStore : DiaryStore {
         RecordResult.Recorded(DiaryEntry(date, feeling))
 
     override suspend fun entry(userId: UserId, date: LocalDate): DiaryEntry? = null
+
+    override suspend fun entries(userId: UserId, from: LocalDate, until: LocalDate): List<DiaryEntry> = emptyList()
 }

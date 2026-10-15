@@ -9,24 +9,35 @@ import kotlinx.datetime.LocalDate
 
 /**
  * In-memory stand-in for the account's diary, with the backend's rules: [today] is the server's
- * day, and the first answer for it is final — a second [record] returns the first.
+ * day, and the first answer for it is final — a second [record] returns the first. [entries] reads
+ * [stored], which a test can script with answers on earlier days.
  *
- * [recordFailure] and [todayFailure] fail the call (and, if [onFailure] is set, run it first, as the
- * real repository clears the session on a `401`). [recordGate] and [todayGate] hold a call in flight.
+ * [recordFailure], [todayFailure] and [entriesFailure] fail the call (and, if [onFailure] is set,
+ * run it first, as the real repository clears the session on a `401`). [recordGate], [todayGate]
+ * and [entriesGate] hold a call in flight.
  */
 class FakeDiaryRepository(
     var today: LocalDate,
     initialToday: Feeling? = null,
+    initialEntries: List<DiaryEntry> = emptyList(),
 ) : DiaryRepository {
 
     /** The account's answers by date. */
-    val stored = mutableMapOf<LocalDate, Feeling>().apply { initialToday?.let { put(today, it) } }
+    val stored = mutableMapOf<LocalDate, Feeling>().apply {
+        initialEntries.forEach { put(it.date, it.feeling) }
+        initialToday?.let { put(today, it) }
+    }
 
     var recordFailure: Exception? = null
     var todayFailure: Exception? = null
+    var entriesFailure: Exception? = null
     var onFailure: (suspend () -> Unit)? = null
     var recordGate: CompletableDeferred<Unit>? = null
     var todayGate: CompletableDeferred<Unit>? = null
+    var entriesGate: CompletableDeferred<Unit>? = null
+
+    /** Every range [entries] was asked for, in order, as `from..until`. */
+    val entriesRequests = mutableListOf<ClosedRange<LocalDate>>()
 
     /** Every answer sent, in order, whether or not it was stored. */
     val recorded = mutableListOf<Feeling>()
@@ -48,5 +59,14 @@ class FakeDiaryRepository(
         todayGate?.await()
         todayFailure?.let { onFailure?.invoke(); return Result.Failure(it) }
         return Result.Success(stored[today]?.let { DiaryEntry(today, it) })
+    }
+
+    override suspend fun entries(from: LocalDate, until: LocalDate): Result<List<DiaryEntry>> {
+        entriesRequests += from..until
+        entriesGate?.await()
+        entriesFailure?.let { onFailure?.invoke(); return Result.Failure(it) }
+        return Result.Success(
+            stored.filterKeys { it in from..until }.map { (date, feeling) -> DiaryEntry(date, feeling) }.sortedBy { it.date },
+        )
     }
 }

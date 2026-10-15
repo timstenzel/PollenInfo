@@ -433,6 +433,93 @@ class AccountRoutesTest {
         assertEquals(0L, transaction(database) { DiaryEntriesTable.selectAll().count() })
     }
 
+    private suspend fun ApplicationTestBuilder.entries(token: String?, query: String): HttpResponse =
+        client.get("/users/me/diary$query") { token?.let { bearerAuth(it) } }
+
+    private suspend fun HttpResponse.entryList(): List<DiaryEntryDto> = Json.decodeFromString(bodyAsText())
+
+    /** Answers [feeling] with the clock at 08:30 UTC on [date], i.e. on that Swiss day. */
+    private suspend fun ApplicationTestBuilder.answerOn(token: String, date: String, feeling: String) {
+        clock.now = Instant.parse("${date}T08:30:00Z")
+        assertEquals(HttpStatusCode.Created, answer(token, feeling(feeling)).status)
+    }
+
+    @Test
+    fun `the diary range is the caller's answered days within it sorted by date`() = testApplication {
+        installApp()
+        val tim = register(registration(email = "tim@example.com")).sessionToken()
+        val anna = register(registration(email = "anna@example.com")).sessionToken()
+        answerOn(tim, "2026-10-12", "GOOD")
+        answerOn(tim, "2026-10-08", "BAD")
+        answerOn(tim, "2026-10-10", "VERY_BAD")
+        answerOn(tim, "2026-10-13", "VERY_GOOD")
+        answerOn(anna, "2026-10-11", "GOOD")
+
+        val response = entries(tim, "?from=2026-10-09&until=2026-10-12")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(
+            listOf(DiaryEntryDto("2026-10-10", "VERY_BAD"), DiaryEntryDto("2026-10-12", "GOOD")),
+            response.entryList(),
+        )
+        // Both ends are included.
+        assertEquals(
+            listOf("2026-10-08", "2026-10-10", "2026-10-12", "2026-10-13"),
+            entries(tim, "?from=2026-10-08&until=2026-10-13").entryList().map { it.date },
+        )
+        assertEquals(emptyList(), entries(anna, "?from=2026-10-12&until=2026-10-13").entryList())
+    }
+
+    @Test
+    fun `a diary range of 366 days is 200 and one of 367 days is 400`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+        answerOn(token, "2026-10-12", "GOOD")
+
+        // 2025-10-12 … 2026-10-12 counts 366 days.
+        val longest = entries(token, "?from=2025-10-12&until=2026-10-12")
+        assertEquals(HttpStatusCode.OK, longest.status)
+        assertEquals(listOf(DiaryEntryDto("2026-10-12", "GOOD")), longest.entryList())
+
+        val tooLong = entries(token, "?from=2025-10-11&until=2026-10-12")
+        assertEquals(HttpStatusCode.BadRequest, tooLong.status)
+        assertTrue(tooLong.errorText().isNotBlank())
+    }
+
+    @Test
+    fun `a diary range that is backwards unparseable or incomplete is 400 with an error`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        listOf(
+            "?from=2026-10-12&until=2026-10-11",
+            "?from=2026-10-12&until=12.10.2026",
+            "?from=2026-02-30&until=2026-03-01",
+            "?from=yesterday&until=2026-10-12",
+            "?from=&until=2026-10-12",
+            "?from=2026-10-01",
+            "?until=2026-10-12",
+            "",
+        ).forEach { query ->
+            val response = entries(token, query)
+            assertEquals(HttpStatusCode.BadRequest, response.status, query)
+            assertTrue(response.errorText().isNotBlank(), query)
+        }
+        // A single day is a range.
+        assertEquals(HttpStatusCode.OK, entries(token, "?from=2026-10-12&until=2026-10-12").status)
+    }
+
+    @Test
+    fun `the diary range without a valid session is 401`() = testApplication {
+        installApp()
+
+        listOf(null, newSessionToken().value, "too-short").forEach { token ->
+            val response = entries(token, "?from=2026-10-01&until=2026-10-12")
+            assertEquals(HttpStatusCode.Unauthorized, response.status, "$token")
+            assertTrue(response.headers[HttpHeaders.WWWAuthenticate].orEmpty().startsWith("Bearer"))
+        }
+    }
+
     @Test
     fun `the diary without a valid session is 401 before the body is read`() = testApplication {
         installApp()

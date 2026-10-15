@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.core.diary.domain.repository
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.result.Result
+import kotlinx.datetime.LocalDate
 
 /**
  * The logged-in account's diary, kept by the backend. Every call needs a session: without one it
@@ -23,4 +24,10 @@ interface DiaryRepository {
 
     /** Today's answer, or `null` if today has none yet. */
     suspend fun today(): Result<DiaryEntry?>
+
+    /**
+     * The answers from [from] to [until], both included, oldest first; a day without an answer is
+     * absent. The backend reads at most 366 days at once.
+     */
+    suspend fun entries(from: LocalDate, until: LocalDate): Result<List<DiaryEntry>>
 }

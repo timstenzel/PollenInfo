@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.diary.presentation
 
-import ch.stenzel.tim.polleninfo.core.diary.FakeLocalDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.FakeDiaryRepository
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.FakeStationHistoryRepository
@@ -12,6 +12,7 @@ import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
 import ch.stenzel.tim.polleninfo.core.session.testSession
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
@@ -47,7 +48,7 @@ class DiaryViewModelTest {
     private val stationRepository = FakeStationRepository()
     private val speciesRepository = FakeSpeciesRepository()
     private val historyRepository = FakeStationHistoryRepository()
-    private val diaryRepository = FakeLocalDiaryRepository()
+    private val diaryRepository = FakeDiaryRepository(today = LocalDate(2026, 10, 4))
 
     /** Logged in unless a test says otherwise: the diary needs an account. */
     private val sessionRepository = FakeSessionRepository(initial = testSession)
@@ -56,8 +57,16 @@ class DiaryViewModelTest {
      * 4 October 2026, 00:30 in Zürich but still 3 October in UTC — so "today" must be the Swiss date.
      * The default `stationHistory()` covers 4 September to 3 October: the month ending yesterday.
      */
+    private var now = Instant.parse("2026-10-03T22:30:00Z")
     private val clock = object : Clock {
-        override fun now() = Instant.parse("2026-10-03T22:30:00Z")
+        override fun now() = now
+    }
+
+    /** The default month's window: 4 September to 3 October, yesterday. */
+    private val monthWindow: ClosedRange<LocalDate> = LocalDate(2026, 9, 4)..LocalDate(2026, 10, 3)
+
+    private fun FakeDiaryRepository.store(date: LocalDate, feeling: Feeling) {
+        stored[date] = feeling
     }
 
     @BeforeTest
@@ -370,10 +379,10 @@ class DiaryViewModelTest {
 
     @Test
     fun `content carries only the entries on the days of the history`() = runTest {
-        diaryRepository.add(LocalDate(2026, 9, 3), Feeling.BAD) // the day before the window
-        diaryRepository.add(LocalDate(2026, 9, 4), Feeling.VERY_BAD) // its first day
-        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD) // its last day: yesterday
-        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.VERY_GOOD) // today
+        diaryRepository.store(LocalDate(2026, 9, 3), Feeling.BAD) // the day before the window
+        diaryRepository.store(LocalDate(2026, 9, 4), Feeling.VERY_BAD) // its first day
+        diaryRepository.store(LocalDate(2026, 10, 3), Feeling.GOOD) // its last day: yesterday
+        diaryRepository.store(LocalDate(2026, 10, 4), Feeling.VERY_GOOD) // today
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -389,8 +398,8 @@ class DiaryViewModelTest {
         // A history whose last day is the Swiss today — the backend never sends one, but the rule
         // that today is never plotted must not depend on that.
         historyRepository.result = Result.Success(stationHistory(from = LocalDate(2026, 9, 5)))
-        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD)
-        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
+        diaryRepository.store(LocalDate(2026, 10, 3), Feeling.GOOD)
+        diaryRepository.store(LocalDate(2026, 10, 4), Feeling.BAD)
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -402,34 +411,27 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `a new entry inside the window appears without a history reload`() = runTest {
+    fun `an answer given after the load joins the graph only with the next load`() = runTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        diaryRepository.add(LocalDate(2026, 9, 20), Feeling.BAD)
+        diaryRepository.store(LocalDate(2026, 9, 20), Feeling.BAD)
+        advanceUntilIdle()
+        assertEquals(emptyList(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries)
+
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        historyRepository.result = Result.Success(stationHistory(from = LocalDate(2025, 10, 4), days = 365))
         advanceUntilIdle()
 
         assertEquals(
             listOf(DiaryEntry(LocalDate(2026, 9, 20), Feeling.BAD)),
             assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries,
         )
-        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
-    }
-
-    @Test
-    fun `an answer recorded today does not join the graph`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
-        advanceUntilIdle()
-
-        assertEquals(emptyList(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries)
     }
 
     @Test
     fun `entries follow the history on screen while a range change loads`() = runTest {
-        diaryRepository.add(LocalDate(2026, 9, 10), Feeling.BAD)
+        diaryRepository.store(LocalDate(2026, 9, 10), Feeling.BAD)
         val viewModel = viewModel()
         advanceUntilIdle()
 
@@ -449,8 +451,8 @@ class DiaryViewModelTest {
 
     @Test
     fun `reports no entries when the window holds none`() = runTest {
-        diaryRepository.add(LocalDate(2026, 9, 3), Feeling.BAD)
-        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
+        diaryRepository.store(LocalDate(2026, 9, 3), Feeling.BAD)
+        diaryRepository.store(LocalDate(2026, 10, 4), Feeling.BAD)
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -459,15 +461,154 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `reports entries once the window holds one`() = runTest {
+    fun `reports entries when the window holds one`() = runTest {
+        diaryRepository.store(LocalDate(2026, 10, 3), Feeling.GOOD)
         val viewModel = viewModel()
-        advanceUntilIdle()
-        assertTrue(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
 
-        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD)
         advanceUntilIdle()
 
         assertFalse(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
+    }
+
+    // --- The account's answers ---
+
+    @Test
+    fun `history and answers are requested together for the same window`() = runTest {
+        historyRepository.gate = CompletableDeferred()
+        diaryRepository.entriesGate = CompletableDeferred()
+        val viewModel = viewModel()
+
+        runCurrent()
+
+        // Both are in flight at once: neither waits for the other.
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+        assertEquals(listOf(monthWindow), diaryRepository.entriesRequests)
+        assertIs<DiaryUiState.Loading>(viewModel.uiState.value)
+
+        historyRepository.gate?.complete(Unit)
+        runCurrent()
+        // The history alone is not enough to draw.
+        assertIs<DiaryUiState.Loading>(viewModel.uiState.value)
+
+        diaryRepository.entriesGate?.complete(Unit)
+        advanceUntilIdle()
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+    }
+
+    @Test
+    fun `answers are requested again with every history on retry station change and range change`() = runTest {
+        historyRepository.result = Result.Failure(IOException("backend unreachable"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.result = Result.Success(stationHistory())
+        viewModel.retry()
+        advanceUntilIdle()
+        viewModel.onStationSelected("PBE")
+        advanceUntilIdle()
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                "PZH" to HistoryRange.MONTH,
+                "PZH" to HistoryRange.MONTH,
+                "PBE" to HistoryRange.MONTH,
+                "PBE" to HistoryRange.WEEK,
+            ),
+            historyRepository.requested,
+        )
+        assertEquals(
+            listOf<ClosedRange<LocalDate>>(monthWindow, monthWindow, monthWindow, LocalDate(2026, 9, 27)..LocalDate(2026, 10, 3)),
+            diaryRepository.entriesRequests,
+        )
+    }
+
+    @Test
+    fun `a year asks for the 365 days ending yesterday`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        advanceUntilIdle()
+
+        assertEquals<ClosedRange<LocalDate>>(LocalDate(2025, 10, 4)..LocalDate(2026, 10, 3), diaryRepository.entriesRequests.last())
+    }
+
+    @Test
+    fun `the answers asked for end on the Swiss yesterday either side of Swiss midnight`() = runTest {
+        // 23:59 on 3 October in Zürich (CEST, UTC+2): yesterday is 2 October.
+        now = Instant.parse("2026-10-03T21:59:00Z")
+        viewModel()
+        advanceUntilIdle()
+        assertEquals(LocalDate(2026, 10, 2), diaryRepository.entriesRequests.single().endInclusive)
+
+        // 00:01 on 4 October in Zürich, still 3 October in UTC: yesterday is 3 October.
+        now = Instant.parse("2026-10-03T22:01:00Z")
+        viewModel()
+        advanceUntilIdle()
+        assertEquals(LocalDate(2026, 10, 3), diaryRepository.entriesRequests.last().endInclusive)
+        assertEquals(LocalDate(2026, 9, 4), diaryRepository.entriesRequests.last().start)
+    }
+
+    @Test
+    fun `answers failing while the history succeeds is Error and Retry recovers`() = runTest {
+        diaryRepository.store(LocalDate(2026, 9, 20), Feeling.GOOD)
+        diaryRepository.entriesFailure = IOException("backend unreachable")
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        // Never a chart without its feeling line.
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
+
+        diaryRepository.entriesFailure = null
+        viewModel.retry()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(DiaryEntry(LocalDate(2026, 9, 20), Feeling.GOOD)),
+            assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries,
+        )
+    }
+
+    @Test
+    fun `answers failing on a range change is Error rather than the old graph`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        diaryRepository.entriesFailure = IOException("backend unreachable")
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.Error(AppError.Network), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `a 401 on the answers returns to the gate`() = runTest {
+        diaryRepository.entriesFailure = SignedOutException()
+        // As the real repository does: a refused session is forgotten.
+        diaryRepository.onFailure = { sessionRepository.current = null }
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.SignedOut, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `a 401 for a session replaced meanwhile loads with the new one`() = runTest {
+        diaryRepository.entriesFailure = SignedOutException()
+        // A login landed while the refused request ran: the repository keeps the newer session.
+        diaryRepository.onFailure = {
+            sessionRepository.current = testSession.copy(token = "newer-token")
+            diaryRepository.entriesFailure = null
+        }
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals(2, diaryRepository.entriesRequests.size)
     }
 
     // Station choice

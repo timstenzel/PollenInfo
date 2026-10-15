@@ -37,6 +37,8 @@ import io.ktor.server.routing.route
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -48,6 +50,8 @@ import kotlinx.coroutines.withContext
  * Registration and login share one rate-limit bucket per client address, [ACCOUNT_LIMIT]; the
  * `/users/me` routes are limited per account under [USER_LIMIT], inside authentication, so an
  * unknown or expired token is a `401` before its body is read and never gets a bucket.
+ *
+ * Reading the diary takes its date range in the query; only dates travel there, nothing personal.
  *
  * The diary's "today" is always the server's: the Swiss calendar day of [clock]'s instant, so an
  * answer is filed under the same date as the daily means it is compared with, whatever zone or clock
@@ -149,6 +153,19 @@ fun Route.accountRoutes(
                             }
                         }
 
+                        get {
+                            val range = diaryRange(call.request.queryParameters["from"], call.request.queryParameters["until"])
+                                ?: return@get call.respond(
+                                    HttpStatusCode.BadRequest,
+                                    ErrorDto(
+                                        "Expected from and until as YYYY-MM-DD, until not before from, " +
+                                            "at most $MAX_DIARY_RANGE_DAYS days",
+                                    ),
+                                )
+                            val entries = diary.entries(call.userPrincipal().userId, range.start, range.endInclusive)
+                            call.respond(entries.map { it.toDto() })
+                        }
+
                         get("/today") {
                             val entry = diary.entry(call.userPrincipal().userId, clock.instant().swissDate())
                             if (entry == null) call.respond(HttpStatusCode.NoContent) else call.respond(entry.toDto())
@@ -161,6 +178,28 @@ fun Route.accountRoutes(
 }
 
 private fun Instant.swissDate(): LocalDate = atZone(SWISS_ZONE).toLocalDate()
+
+/**
+ * The days `GET /users/me/diary` reads, from [from] to [until] inclusive, or `null` if either is
+ * missing or not an ISO date, [until] is before [from], or the range is longer than
+ * [MAX_DIARY_RANGE_DAYS] — enough for the Diary's year, even one reaching across a leap day.
+ */
+private fun diaryRange(from: String?, until: String?): ClosedRange<LocalDate>? {
+    val start = from?.toLocalDateOrNull() ?: return null
+    val end = until?.toLocalDateOrNull() ?: return null
+    if (end < start || ChronoUnit.DAYS.between(start, end) + 1 > MAX_DIARY_RANGE_DAYS) return null
+    return start..end
+}
+
+private fun String.toLocalDateOrNull(): LocalDate? =
+    try {
+        LocalDate.parse(this)
+    } catch (e: DateTimeParseException) {
+        null
+    }
+
+/** The longest range, in days counting both ends, one diary read may cover. */
+const val MAX_DIARY_RANGE_DAYS = 366
 
 private fun DiaryEntry.toDto() = DiaryEntryDto(date = date.toString(), feeling = feeling.name)
 

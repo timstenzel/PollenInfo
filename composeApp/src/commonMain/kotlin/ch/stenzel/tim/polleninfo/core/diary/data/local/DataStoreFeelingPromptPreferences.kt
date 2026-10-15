@@ -23,7 +23,7 @@ class DataStoreFeelingPromptPreferences(
 ) : FeelingPromptPreferences {
 
     override val dismissedOn: Flow<LocalDate?> =
-        dataStore.data.map { preferences -> preferences[DISMISSED_ON_KEY]?.let(DiaryCodec::decodeDate) }
+        dataStore.data.map { preferences -> preferences[DISMISSED_ON_KEY]?.let(LocalDate.Formats.ISO::parseOrNull) }
 
     override suspend fun dismiss(date: LocalDate): Result<Unit> = safeCall {
         dataStore.edit { it[DISMISSED_ON_KEY] = date.toString() }

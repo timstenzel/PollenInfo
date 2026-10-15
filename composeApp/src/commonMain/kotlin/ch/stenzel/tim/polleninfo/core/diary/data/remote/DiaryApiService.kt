@@ -8,6 +8,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -39,6 +40,16 @@ class DiaryApiService(
     suspend fun today(token: String): DiaryEntryDto? {
         val response = client.get("$baseUrl/users/me/diary/today") { bearerAuth(token) }.checkSession()
         return if (response.status == HttpStatusCode.NoContent) null else response.body()
+    }
+
+    /** The answers from [from] to [until], both ISO dates and both included, oldest first. */
+    suspend fun entries(token: String, from: String, until: String): List<DiaryEntryDto> {
+        val response = client.get("$baseUrl/users/me/diary") {
+            bearerAuth(token)
+            parameter("from", from)
+            parameter("until", until)
+        }
+        return response.checkSession().body()
     }
 
     private fun HttpResponse.checkSession(): HttpResponse {

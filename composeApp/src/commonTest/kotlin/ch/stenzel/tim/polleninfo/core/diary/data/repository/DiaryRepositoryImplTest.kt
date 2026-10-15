@@ -112,13 +112,74 @@ class DiaryRepositoryImplTest {
         assertEquals(Result.Success(null), repository.today())
     }
 
+    private val sep4 = LocalDate(2026, 9, 4)
+    private val oct3 = LocalDate(2026, 10, 3)
+
     @Test
-    fun `without a session nothing is sent and both calls fail as signed out`() = runTest {
+    fun `entries sends from and until as ISO dates with the bearer token`() = runTest {
+        val repository = repository { respond("[]", HttpStatusCode.OK, jsonHeaders) }
+
+        repository.entries(sep4, oct3)
+
+        val request = recorded.single()
+        assertEquals(HttpMethod.Get, request.method)
+        assertEquals("/users/me/diary", request.url.encodedPath)
+        assertEquals("2026-09-04", request.url.parameters["from"])
+        assertEquals("2026-10-03", request.url.parameters["until"])
+        assertEquals("Bearer ${testSession.token}", request.headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun `entries maps the list in the backend's order`() = runTest {
+        val repository = repository {
+            respond(
+                """[{"date":"2026-09-04","feeling":"VERY_BAD"},{"date":"2026-09-20","feeling":"GOOD"}]""",
+                HttpStatusCode.OK,
+                jsonHeaders,
+            )
+        }
+
+        assertEquals(
+            Result.Success(listOf(DiaryEntry(sep4, Feeling.VERY_BAD), DiaryEntry(LocalDate(2026, 9, 20), Feeling.GOOD))),
+            repository.entries(sep4, oct3),
+        )
+    }
+
+    @Test
+    fun `entries maps an empty list to no answers`() = runTest {
+        val repository = repository { respond("[]", HttpStatusCode.OK, jsonHeaders) }
+
+        assertEquals(Result.Success(emptyList()), repository.entries(sep4, oct3))
+    }
+
+    @Test
+    fun `a 401 on entries clears the session and fails as SignedOut`() = runTest {
+        val repository = repository { respondError(HttpStatusCode.Unauthorized) }
+
+        val failure = repository.entries(sep4, oct3).failure()
+
+        assertIs<SignedOutException>(failure)
+        assertEquals(AppError.SignedOut, failure.toSessionAppError())
+        assertNull(sessions.current)
+    }
+
+    @Test
+    fun `entries with an answer the app does not understand is an Unknown failure`() = runTest {
+        val repository = repository {
+            respond("""[{"date":"2026-09-04","feeling":"MEH"}]""", HttpStatusCode.OK, jsonHeaders)
+        }
+
+        assertEquals(AppError.Unknown, repository.entries(sep4, oct3).failure().toSessionAppError())
+    }
+
+    @Test
+    fun `without a session nothing is sent and every call fails as signed out`() = runTest {
         sessions.current = null
         val repository = repository { entry(HttpStatusCode.Created) }
 
         assertIs<SignedOutException>(repository.record(Feeling.GOOD).failure())
         assertIs<SignedOutException>(repository.today().failure())
+        assertIs<SignedOutException>(repository.entries(sep4, oct3).failure())
         assertEquals(emptyList(), recorded)
     }
 

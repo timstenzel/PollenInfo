@@ -11,6 +11,7 @@ import ch.stenzel.tim.polleninfo.core.result.safeCall
 import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
 import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.datetime.LocalDate
 
 /**
  * [DiaryRepository] over the backend, with the token of [sessions]' current session. No session
@@ -27,6 +28,9 @@ class DiaryRepositoryImpl(
 
     override suspend fun today(): Result<DiaryEntry?> =
         withSession { token -> api.today(token)?.toDomain() }
+
+    override suspend fun entries(from: LocalDate, until: LocalDate): Result<List<DiaryEntry>> =
+        withSession { token -> api.entries(token, from.toString(), until.toString()).map { it.toDomain() } }
 
     private suspend fun <T> withSession(call: suspend (token: String) -> T): Result<T> {
         val session = sessions.session.first() ?: return Result.Failure(SignedOutException())

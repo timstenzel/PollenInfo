@@ -4,13 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.swissToday
-import ch.stenzel.tim.polleninfo.core.diary.domain.repository.LocalDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.toAppError
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
 import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
@@ -26,6 +28,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.minus
 
 /**
  * The Diary tab: the user's answers and the daily pollen levels at a station over a period ending
@@ -45,8 +50,12 @@ import kotlinx.coroutines.launch
  * The station list and the pollen types are fetched on the first load and kept; a Retry fetches
  * only what has not arrived yet.
  *
- * The answers are observed: one recorded while the Diary is open joins the graph at once if its day
- * is on it, with no history reload. Today's answer never is — "today" is [swissToday] of [clock].
+ * The answers come from the account: every history load — first open, Retry, another station or
+ * range — asks for the history and for the answers of the same days at once, the window computed as
+ * the backend computes the history's ([historyWindow]). Either failing is [DiaryUiState.Error], so
+ * a missing feeling line is never mistaken for "no answers"; a `401` returns to the gate. Today's
+ * answer is never drawn — "today" is [swissToday] of [clock] — and no answer joins the graph
+ * between loads: it only matters from the next day on.
  *
  * The diary needs an account. While nobody is logged in the state is [DiaryUiState.SignedOut] and
  * nothing is fetched; a session appearing — the user logged in or registered from the gate — starts
@@ -57,7 +66,7 @@ class DiaryViewModel(
     private val stationRepository: StationRepository,
     private val speciesRepository: SpeciesRepository,
     private val stationHistoryRepository: StationHistoryRepository,
-    private val diaryRepository: LocalDiaryRepository,
+    private val diaryRepository: DiaryRepository,
     private val sessionRepository: SessionRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
@@ -83,17 +92,7 @@ class DiaryViewModel(
     /** Whether an account is logged in; nothing loads until it is. */
     private var signedIn = false
 
-    /** Every answer the user has given, as last read; filtered per history in [withEntries]. */
-    private var allEntries: List<DiaryEntry> = emptyList()
-
     init {
-        viewModelScope.launch {
-            diaryRepository.entries.collect { entries ->
-                allEntries = entries
-                val current = _uiState.value as? DiaryUiState.Content ?: return@collect
-                _uiState.value = withEntries(current)
-            }
-        }
         viewModelScope.launch {
             sessionRepository.session.map { it != null }.distinctUntilChanged().collect { signedIn ->
                 this@DiaryViewModel.signedIn = signedIn
@@ -135,11 +134,11 @@ class DiaryViewModel(
         _uiState.value = content.copy(checked = toggled)
     }
 
-    /** [content] with the answers on the days its history covers, today excluded. */
-    private fun withEntries(content: DiaryUiState.Content): DiaryUiState.Content {
+    /** [entries] on the days [content]'s history covers, today excluded. */
+    private fun withEntries(content: DiaryUiState.Content, entries: List<DiaryEntry>): DiaryUiState.Content {
         val today = swissToday(clock)
         val window = content.history.from..content.history.until
-        return content.copy(entries = allEntries.filter { it.date in window && it.date < today })
+        return content.copy(entries = entries.filter { it.date in window && it.date < today })
     }
 
     private fun load() {
@@ -180,25 +179,59 @@ class DiaryViewModel(
                     ?.also { stationAbbr = it }
                 ?: return@launch fail(AppError.NoStations)
 
-            _uiState.value = when (val result = stationHistoryRepository.history(abbr, range)) {
-                is Result.Success -> withEntries(
-                    DiaryUiState.Content(
-                        stations = stations,
-                        stationAbbr = abbr,
-                        range = range,
-                        historyRange = range,
-                        history = result.data,
-                        species = species,
-                        checked = checked,
-                    ),
-                )
-
-                is Result.Failure -> DiaryUiState.Error(result.exception.toAppError())
+            val window = historyWindow(range, swissToday(clock))
+            val historyRequest = async { stationHistoryRepository.history(abbr, range) }
+            val entriesRequest = async { diaryRepository.entries(window.start, window.endInclusive) }
+            val history = when (val result = historyRequest.await()) {
+                is Result.Success -> result.data
+                is Result.Failure -> return@launch fail(result.exception.toAppError())
             }
+            val entries = when (val result = entriesRequest.await()) {
+                is Result.Success -> result.data
+                is Result.Failure -> return@launch if (result.exception is SignedOutException) {
+                    signedOut()
+                } else {
+                    fail(result.exception.toSessionAppError())
+                }
+            }
+            _uiState.value = withEntries(
+                DiaryUiState.Content(
+                    stations = stations,
+                    stationAbbr = abbr,
+                    range = range,
+                    historyRange = range,
+                    history = history,
+                    species = species,
+                    checked = checked,
+                ),
+                entries,
+            )
+        }
+    }
+
+    /**
+     * The backend refused the session. The repository has forgotten it, and the session flow takes
+     * the screen back to the gate; if a newer login replaced it meanwhile, that one is loaded.
+     */
+    private suspend fun signedOut() {
+        if (sessionRepository.session.first() == null) {
+            _uiState.value = DiaryUiState.SignedOut
+        } else {
+            load()
         }
     }
 
     private fun fail(error: AppError) {
         _uiState.value = DiaryUiState.Error(error)
     }
+}
+
+/**
+ * The days a [range] history covers when [today] is the Swiss date: [HistoryRange.days] whole days
+ * ending yesterday — the backend's own window, so the answers asked for are those of the days the
+ * history brings.
+ */
+internal fun historyWindow(range: HistoryRange, today: LocalDate): ClosedRange<LocalDate> {
+    val until = today.minus(DatePeriod(days = 1))
+    return until.minus(DatePeriod(days = range.days - 1))..until
 }

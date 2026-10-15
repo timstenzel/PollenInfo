@@ -9,8 +9,11 @@ import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
@@ -27,6 +30,9 @@ interface DiaryStore {
 
     /** [userId]'s answer for [date], or `null` if that day has none. */
     suspend fun entry(userId: UserId, date: LocalDate): DiaryEntry?
+
+    /** [userId]'s answers from [from] to [until], both inclusive, oldest first; unanswered days are absent. */
+    suspend fun entries(userId: UserId, from: LocalDate, until: LocalDate): List<DiaryEntry>
 }
 
 sealed interface RecordResult {
@@ -60,6 +66,20 @@ class ExposedDiaryStore(private val database: Database) : DiaryStore {
     override suspend fun entry(userId: UserId, date: LocalDate): DiaryEntry? = withContext(Dispatchers.IO) {
         transaction(database) { selectEntry(userId, date) }
     }
+
+    override suspend fun entries(userId: UserId, from: LocalDate, until: LocalDate): List<DiaryEntry> =
+        withContext(Dispatchers.IO) {
+            transaction(database) {
+                DiaryEntriesTable.select(DiaryEntriesTable.date, DiaryEntriesTable.feeling)
+                    .where {
+                        (DiaryEntriesTable.userId eq userId.value) and
+                            (DiaryEntriesTable.date greaterEq from) and
+                            (DiaryEntriesTable.date lessEq until)
+                    }
+                    .orderBy(DiaryEntriesTable.date to SortOrder.ASC)
+                    .map { it.toEntry() }
+            }
+        }
 
     private fun selectEntry(userId: UserId, date: LocalDate): DiaryEntry? =
         DiaryEntriesTable.select(DiaryEntriesTable.date, DiaryEntriesTable.feeling)

@@ -1,12 +1,10 @@
 package ch.stenzel.tim.polleninfo.core.di
 
-import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreDiaryRepository
 import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreFeelingPromptPreferences
 import ch.stenzel.tim.polleninfo.core.diary.data.remote.DiaryApiService
 import ch.stenzel.tim.polleninfo.core.diary.data.repository.DiaryRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.diary.domain.repository.FeelingPromptPreferences
-import ch.stenzel.tim.polleninfo.core.diary.domain.repository.LocalDiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.data.remote.StationHistoryApiService
 import ch.stenzel.tim.polleninfo.core.history.data.repository.StationHistoryRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
@@ -92,8 +90,6 @@ val dataModule = module {
     single { DiaryApiService(get(), get(API_BASE_URL)) }
     single<DiaryRepository> { DiaryRepositoryImpl(get(), get()) }
     single<FeelingPromptPreferences> { DataStoreFeelingPromptPreferences(get()) }
-    // The answers recorded on the device before the move, read by the Diary chart alone.
-    single<LocalDiaryRepository> { DataStoreDiaryRepository(get()) }
 
     // PushTokenProvider comes from platformModule.
     single { AlarmApiService(get(), get(API_BASE_URL)) }
