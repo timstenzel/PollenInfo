@@ -2,44 +2,51 @@ package ch.stenzel.tim.polleninfo.core.diary
 
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
-import ch.stenzel.tim.polleninfo.core.diary.domain.model.recording
 import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.datetime.LocalDate
 
 /**
- * In-memory stand-in for `DataStoreDiaryRepository`, with the same never-overwrite rule.
+ * In-memory stand-in for the account's diary, with the backend's rules: [today] is the server's
+ * day, and the first answer for it is final — a second [record] returns the first.
  *
- * [failWrite] makes [record] and [dismiss] fail without storing anything.
+ * [recordFailure] and [todayFailure] fail the call (and, if [onFailure] is set, run it first, as the
+ * real repository clears the session on a `401`). [recordGate] and [todayGate] hold a call in flight.
  */
 class FakeDiaryRepository(
-    initialEntries: List<DiaryEntry> = emptyList(),
-    initialDismissedOn: LocalDate? = null,
-    var failWrite: Boolean = false,
+    var today: LocalDate,
+    initialToday: Feeling? = null,
 ) : DiaryRepository {
 
-    private val _entries = MutableStateFlow(initialEntries.sortedBy { it.date })
-    override val entries: Flow<List<DiaryEntry>> = _entries.asStateFlow()
+    /** The account's answers by date. */
+    val stored = mutableMapOf<LocalDate, Feeling>().apply { initialToday?.let { put(today, it) } }
 
-    private val _dismissedOn = MutableStateFlow(initialDismissedOn)
-    override val dismissedOn: Flow<LocalDate?> = _dismissedOn.asStateFlow()
+    var recordFailure: Exception? = null
+    var todayFailure: Exception? = null
+    var onFailure: (suspend () -> Unit)? = null
+    var recordGate: CompletableDeferred<Unit>? = null
+    var todayGate: CompletableDeferred<Unit>? = null
 
-    override suspend fun record(date: LocalDate, feeling: Feeling): Result<Unit> {
-        if (failWrite) return Result.Failure(RuntimeException("disk full"))
-        _entries.value = _entries.value.recording(date, feeling)
-        return Result.Success(Unit)
+    /** Every answer sent, in order, whether or not it was stored. */
+    val recorded = mutableListOf<Feeling>()
+
+    /** How often [today] was asked. */
+    var todayCalls = 0
+        private set
+
+    override suspend fun record(feeling: Feeling): Result<DiaryEntry> {
+        recorded += feeling
+        recordGate?.await()
+        recordFailure?.let { onFailure?.invoke(); return Result.Failure(it) }
+        val kept = stored.getOrPut(today) { feeling }
+        return Result.Success(DiaryEntry(today, kept))
     }
 
-    override suspend fun dismiss(date: LocalDate): Result<Unit> {
-        if (failWrite) return Result.Failure(RuntimeException("disk full"))
-        _dismissedOn.value = date
-        return Result.Success(Unit)
+    override suspend fun today(): Result<DiaryEntry?> {
+        todayCalls++
+        todayGate?.await()
+        todayFailure?.let { onFailure?.invoke(); return Result.Failure(it) }
+        return Result.Success(stored[today]?.let { DiaryEntry(today, it) })
     }
-
-    /** The currently stored values, for assertions that do not want to collect the flows. */
-    val storedEntries: List<DiaryEntry> get() = _entries.value
-    val storedDismissedOn: LocalDate? get() = _dismissedOn.value
 }

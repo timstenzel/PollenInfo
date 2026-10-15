@@ -38,7 +38,6 @@
     <string name="error_action_pause_alarm">Impossibile sospendere l’allarme.</string>
     <string name="error_action_resume_alarm">Impossibile riattivare l’allarme.</string>
 
-    <string name="home_feeling_save_error">Non è stato possibile salvare la Sua risposta. Riprovi.</string>
     <string name="home_load_failed">Non è stato possibile caricare i valori dei pollini.</string>
     <string name="home_driven_by">Polline principale: %1$s</string>
     <string name="home_feeling_question">Come si sente oggi?</string>
@@ -272,6 +271,7 @@
     <string name="error_invalid_credentials">L’indirizzo e-mail o la password non sono corretti.</string>
     <string name="error_signed_out">È stato disconnesso. Acceda di nuovo.</string>
     <string name="error_action_login">Impossibile accedere.</string>
+    <string name="error_action_save_feeling">Non è stato possibile salvare la Sua risposta.</string>
     <string name="account_title_login">Accedi</string>
     <string name="account_title_register">Crea account</string>
     <string name="account_email_label">Indirizzo e-mail</string>

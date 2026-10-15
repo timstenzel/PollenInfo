@@ -4,11 +4,15 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryEntry
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryFeeling
 import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.SessionToken
 import ch.stenzel.tim.polleninfo.server.account.domain.UserId
 import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
+import ch.stenzel.tim.polleninfo.server.account.store.DiaryStore
+import ch.stenzel.tim.polleninfo.server.account.store.RecordResult
 import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
 import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.StoredCredentials
@@ -53,6 +57,7 @@ import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -113,6 +118,7 @@ class SecurityTest {
             configureAccountRouting(
                 users = users,
                 sessions = sessions,
+                diary = NoDiaryStore,
                 hasher = hasher,
                 clock = Clock.systemUTC(),
             )
@@ -590,4 +596,12 @@ private class InMemorySessionStore : SessionStore {
     override suspend fun delete(token: SessionToken) {
         deleted += token
     }
+}
+
+/** A diary that keeps nothing; no security test reaches the diary routes. */
+private object NoDiaryStore : DiaryStore {
+    override suspend fun record(userId: UserId, date: LocalDate, feeling: DiaryFeeling, now: Instant): RecordResult =
+        RecordResult.Recorded(DiaryEntry(date, feeling))
+
+    override suspend fun entry(userId: UserId, date: LocalDate): DiaryEntry? = null
 }

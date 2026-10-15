@@ -36,8 +36,9 @@ sealed interface HomeUiState {
      * new ones replace them.
      *
      * [showFeelingPrompt] asks "How do you feel today?" — only here, never over a spinner or an
-     * error — while today's Swiss date has neither an answer nor a dismissal. [feelingSaveError] is
-     * true while the last answer could not be stored on the device, and the prompt stays up so it can be retried.
+     * error — while today's Swiss date has no dismissal and, when logged in, the account has no
+     * answer for it (see `HomeViewModel`). [feelingSaveError] is why the last answer could not be
+     * sent to the account; the prompt stays up so it can be retried.
      */
     data class Content(
         override val stationName: String,
@@ -49,7 +50,7 @@ sealed interface HomeUiState {
         val refreshedAt: Instant,
         val isRefreshing: Boolean = false,
         val showFeelingPrompt: Boolean = false,
-        val feelingSaveError: Boolean = false,
+        val feelingSaveError: AppError? = null,
     ) : HomeUiState
 
     data class Error(

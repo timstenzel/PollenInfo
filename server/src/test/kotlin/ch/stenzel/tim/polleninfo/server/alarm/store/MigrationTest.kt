@@ -23,8 +23,8 @@ class MigrationTest {
         assertEquals(listOf("1"), result.migrations.map { it.version })
         assertEquals(
             listOf(
-                "alarms", "devices", "flyway_schema_history", "notification_log", "scheduler_state", "sessions",
-                "users",
+                "alarms", "devices", "diary_entries", "flyway_schema_history", "notification_log", "scheduler_state",
+                "sessions", "users",
             ),
             asOwner { connection ->
                 connection.query(
@@ -88,10 +88,29 @@ class MigrationTest {
                 )
             }
             assertEquals("23505", duplicate.sqlState)
+            connection.execute(
+                """
+                INSERT INTO diary_entries (user_id, date, feeling, created_at)
+                VALUES ('00000000-0000-0000-0000-0000000000a1', '2026-08-03', 'GOOD', now())
+                """,
+            )
+            // 23505 unique_violation: one answer per user and day.
+            val secondAnswer = assertFailsWith<SQLException> {
+                connection.execute(
+                    """
+                    INSERT INTO diary_entries (user_id, date, feeling, created_at)
+                    VALUES ('00000000-0000-0000-0000-0000000000a1', '2026-08-03', 'BAD', now())
+                    """,
+                )
+            }
+            assertEquals("23505", secondAnswer.sqlState)
             connection.execute("UPDATE users SET password_hash = 'g'")
             connection.execute("UPDATE sessions SET last_used_at = '2026-08-03T06:00:00Z'")
+            connection.execute("UPDATE diary_entries SET feeling = 'VERY_GOOD'")
             assertEquals(listOf("g"), connection.query("SELECT password_hash FROM users"))
             assertEquals(listOf("1"), connection.query("SELECT count(*) FROM sessions"))
+            assertEquals(listOf("VERY_GOOD"), connection.query("SELECT feeling FROM diary_entries"))
+            connection.execute("DELETE FROM diary_entries")
             connection.execute("DELETE FROM sessions")
             connection.execute("DELETE FROM users")
             connection.execute("UPDATE devices SET fcm_token = 'u'")
@@ -125,6 +144,7 @@ class MigrationTest {
             assertDenied { connection.execute("TRUNCATE devices CASCADE") }
             assertDenied { connection.execute("ALTER TABLE users ADD COLUMN intruder int") }
             assertDenied { connection.execute("DROP TABLE sessions") }
+            assertDenied { connection.execute("ALTER TABLE diary_entries ADD COLUMN intruder int") }
         }
     }
 

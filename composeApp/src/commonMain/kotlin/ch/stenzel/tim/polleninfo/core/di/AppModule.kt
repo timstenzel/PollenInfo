@@ -1,7 +1,12 @@
 package ch.stenzel.tim.polleninfo.core.di
 
 import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreFeelingPromptPreferences
+import ch.stenzel.tim.polleninfo.core.diary.data.remote.DiaryApiService
+import ch.stenzel.tim.polleninfo.core.diary.data.repository.DiaryRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.FeelingPromptPreferences
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.LocalDiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.data.remote.StationHistoryApiService
 import ch.stenzel.tim.polleninfo.core.history.data.repository.StationHistoryRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
@@ -83,8 +88,12 @@ val dataModule = module {
     single<SessionStorage> { DataStoreSessionStorage(get(SESSION_DATA_STORE)) }
     single { AccountApiService(get(), get(API_BASE_URL)) }
     single<SessionRepository> { SessionRepositoryImpl(get(), get()) }
-    // Device-only: no API service takes a diary entry.
-    single<DiaryRepository> { DataStoreDiaryRepository(get()) }
+    // The answers live in the account; only the prompt's dismissal stays on the device.
+    single { DiaryApiService(get(), get(API_BASE_URL)) }
+    single<DiaryRepository> { DiaryRepositoryImpl(get(), get()) }
+    single<FeelingPromptPreferences> { DataStoreFeelingPromptPreferences(get()) }
+    // The answers recorded on the device before the move, read by the Diary chart alone.
+    single<LocalDiaryRepository> { DataStoreDiaryRepository(get()) }
 
     // PushTokenProvider comes from platformModule.
     single { AlarmApiService(get(), get(API_BASE_URL)) }
@@ -106,7 +115,7 @@ val presentationModule = module {
     viewModel { ExampleViewModel(get()) }
     // CoarseLocationProvider comes from platformModule; the ViewModel only knows the interface.
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
-    viewModel { HomeViewModel(get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
     viewModel { DiaryViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { params -> AccountViewModel(params.get(), get()) }

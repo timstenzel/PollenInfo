@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -64,11 +65,20 @@ import org.koin.compose.viewmodel.koinViewModel
  * The pollen situation at the station the user chose.
  *
  * There is deliberately no way to change the station from here — the pin in the top bar is
- * decorative. Station changes belong to Settings.
+ * decorative. Station changes belong to Settings. [onOpenAccount] opens the login, when a feeling
+ * is tapped while nobody is logged in.
  */
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = koinViewModel()) {
+fun HomeScreen(onOpenAccount: () -> Unit, viewModel: HomeViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                HomeEvent.OpenAccount -> onOpenAccount()
+            }
+        }
+    }
 
     HomeContent(
         uiState = uiState,

@@ -127,31 +127,31 @@ Home in this state do not reach the chart.
 
 ### Implementation steps
 
-- [ ] Server: `diary_entries` in `V1__init.sql` + table definition; `DiaryFeeling`; `DiaryStore.record` (`INSERT … ON CONFLICT DO NOTHING` + read → `Recorded` / `AlreadyAnswered`) and `entry(user, date)`.
-- [ ] Server: `POST /users/me/diary` (`201` / `200` with the stored entry / `400` unknown feeling) and `GET /users/me/diary/today` (`200` / `204`), date from `SWISS_ZONE` and the injected clock.
-- [ ] App: rename the local interface to `LocalDiaryRepository` (read-only `entries`), move the dismissal to `FeelingPromptPreferences` (logic-free DataStore in the shared store, `FakeFeelingPromptPreferences`), drop the local `record`.
-- [ ] App: `DiaryApiService`; new `DiaryRepository` with `record(feeling): Result<DiaryEntry>` and `today(): Result<DiaryEntry?>` through `DiaryRepositoryImpl(api, sessions)` (no session → `SignedOutException` without a request; `401` → `clear()`); new `FakeDiaryRepository` with `recordGate` / `todayGate`; `ErrorContext.SAVE_FEELING`.
-- [ ] App: `HomeViewModel(selectedStationRepository, getStationMeasurement, sessionRepository, diaryRepository, feelingPromptPreferences, clock)` — signed out: prompt shown unless dismissed, a tap sends `HomeEvent.OpenAccount` (the screen navigates to `Screen.Account(LOGIN)`); signed in: hidden until `today()` answers, shown for `null`, hidden for an entry or a failure, re-checked on load, refresh and every session change; `feelingSaveError: AppError?`.
-- [ ] Extend `AccountFlowLoggingTest` with an answer; strings in four languages.
-- [ ] Docs: CLAUDE.md — The feeling prompt, REST API, Persistence (`diary_entries`), Persisted user selections ("Diary answers": answers now leave the device; dismissal stays), `core/diary` row.
+- [x] Server: `diary_entries` in `V1__init.sql` + table definition; `DiaryFeeling`; `DiaryStore.record` (`INSERT … ON CONFLICT DO NOTHING` + read → `Recorded` / `AlreadyAnswered`) and `entry(user, date)`.
+- [x] Server: `POST /users/me/diary` (`201` / `200` with the stored entry / `400` unknown feeling) and `GET /users/me/diary/today` (`200` / `204`), date from `SWISS_ZONE` and the injected clock.
+- [x] App: rename the local interface to `LocalDiaryRepository` (read-only `entries`), move the dismissal to `FeelingPromptPreferences` (logic-free DataStore in the shared store, `FakeFeelingPromptPreferences`), drop the local `record`.
+- [x] App: `DiaryApiService`; new `DiaryRepository` with `record(feeling): Result<DiaryEntry>` and `today(): Result<DiaryEntry?>` through `DiaryRepositoryImpl(api, sessions)` (no session → `SignedOutException` without a request; `401` → `clear()`); new `FakeDiaryRepository` with `recordGate` / `todayGate`; `ErrorContext.SAVE_FEELING`.
+- [x] App: `HomeViewModel(selectedStationRepository, getStationMeasurement, sessionRepository, diaryRepository, feelingPromptPreferences, clock)` — signed out: prompt shown unless dismissed, a tap sends `HomeEvent.OpenAccount` (the screen navigates to `Screen.Account(LOGIN)`); signed in: hidden until `today()` answers, shown for `null`, hidden for an entry or a failure, re-checked on load, refresh and every session change; `feelingSaveError: AppError?`.
+- [x] Extend `AccountFlowLoggingTest` with an answer; strings in four languages.
+- [x] Docs: CLAUDE.md — The feeling prompt, REST API, Persistence (`diary_entries`), Persisted user selections ("Diary answers": answers now leave the device; dismissal stays), `core/diary` row.
 
 ### Acceptance criteria
 
-- [ ] `AccountRoutesTest`: the first `POST /users/me/diary` of a Swiss day is `201` with that date; a second with another feeling is `200` returning the first; with the `MutableClock` at 23:59:59 and 00:00:00 Swiss time the two answers get different dates; `/today` is `204` before and `200` after; another user's `/today` stays `204`; an unknown feeling is `400`; a request without a token is `401` before the body is read.
-- [ ] `ExposedAccountStoresTest`: two concurrent `record`s for one user and day store exactly one entry, the first; `MigrationTest` covers `diary_entries`.
-- [ ] `DiaryRepositoryImplTest` (`MockEngine`): `record` succeeds for `201` and `200`, `today` maps `200` and `204`, no request without a session, a `401` clears the session and fails with `SignedOut`; `AppErrorTextTest` covers `SAVE_FEELING`.
-- [ ] `HomeViewModelTest` signed out: prompt shown unless dismissed (a dismissal from an earlier "session" of the fake preferences still hides it), a feeling tap emits `OpenAccount` once and records nothing, the prompt is still shown afterwards.
-- [ ] `HomeViewModelTest` signed in: prompt hidden while `today()` is gated, shown for `null`, hidden for an entry and for a failure; a successful `record` hides it; a failed `record` keeps it with its `AppError`, cleared by the next attempt; a `401` on `record` leaves the app signed out so the next tap emits `OpenAccount`; a session change re-checks.
-- [ ] Manual: answering on emulator A hides the prompt on emulator B with the same account after a pull-to-refresh; with no network the prompt stays up with the error; "Not today" survives an app restart; a signed-out tap opens login and Back returns to Home with the prompt still shown.
+- [x] `AccountRoutesTest`: the first `POST /users/me/diary` of a Swiss day is `201` with that date; a second with another feeling is `200` returning the first; with the `MutableClock` at 23:59:59 and 00:00:00 Swiss time the two answers get different dates; `/today` is `204` before and `200` after; another user's `/today` stays `204`; an unknown feeling is `400`; a request without a token is `401` before the body is read.
+- [x] `ExposedAccountStoresTest`: two concurrent `record`s for one user and day store exactly one entry, the first; `MigrationTest` covers `diary_entries`.
+- [x] `DiaryRepositoryImplTest` (`MockEngine`): `record` succeeds for `201` and `200`, `today` maps `200` and `204`, no request without a session, a `401` clears the session and fails with `SignedOut`; `AppErrorTextTest` covers `SAVE_FEELING`.
+- [x] `HomeViewModelTest` signed out: prompt shown unless dismissed (a dismissal from an earlier "session" of the fake preferences still hides it), a feeling tap emits `OpenAccount` once and records nothing, the prompt is still shown afterwards.
+- [x] `HomeViewModelTest` signed in: prompt hidden while `today()` is gated, shown for `null`, hidden for an entry and for a failure; a successful `record` hides it; a failed `record` keeps it with its `AppError`, cleared by the next attempt; a `401` on `record` leaves the app signed out so the next tap emits `OpenAccount`; a session change re-checks.
+- [x] Manual: answering on emulator A hides the prompt on emulator B with the same account after a pull-to-refresh; with no network the prompt stays up with the error; "Not today" survives an app restart; a signed-out tap opens login and Back returns to Home with the prompt still shown. *(API 37 emulator against `:server:run` on a reset database. Only one emulator was used: the second phone was a second session of the same account, driven over the REST API with curl — the same calls a second phone sends. Results: an answer from that session followed by a pull-to-refresh hid the prompt on the emulator (`/today` 204, then 200); an answer tapped on the emulator for another account was returned by that account's other session's `/today`; in airplane mode the prompt stayed up with "Your answer couldn’t be saved. Couldn’t reach the server. …"; "Not today" was still in force after a force-stop and restart; a signed-out tap on "Bad" opened Log in, Back returned to Home with the prompt up, and `diary_entries` stayed empty. The server log held no email, password or token.)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs
 
 ---
 

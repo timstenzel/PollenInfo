@@ -96,7 +96,7 @@ private fun AppNavHost(
         }
 
         composable<Screen.Home> {
-            HomeScreen()
+            HomeScreen(onOpenAccount = { navController.navigate(Screen.Account(AccountMode.LOGIN)) })
         }
 
         composable<Screen.AllStations> {

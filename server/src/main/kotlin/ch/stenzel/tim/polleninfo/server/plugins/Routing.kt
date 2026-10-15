@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.server.plugins
 
 import ch.stenzel.tim.polleninfo.server.account.accountRoutes
 import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.store.DiaryStore
 import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.UserStore
 import ch.stenzel.tim.polleninfo.server.alarm.alarmRoutes
@@ -61,18 +62,19 @@ fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) 
 
 /**
  * The account routes with the account authentication they need, over stores the caller has built —
- * there are no defaults. [clock] stamps accounts and sessions and decides when a session has
- * expired. [configureSecurity] must be installed first.
+ * there are no defaults. [clock] stamps accounts and sessions, decides when a session has expired
+ * and which Swiss day a diary answer belongs to. [configureSecurity] must be installed first.
  */
 fun Application.configureAccountRouting(
     users: UserStore,
     sessions: SessionStore,
+    diary: DiaryStore,
     hasher: PasswordHasher,
     clock: Clock,
 ) {
     configureUserAuthentication(sessions, clock)
     routing {
-        accountRoutes(users, sessions, hasher, clock)
+        accountRoutes(users, sessions, diary, hasher, clock)
     }
 }
 

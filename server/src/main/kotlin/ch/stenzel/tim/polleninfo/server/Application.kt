@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.server
 
 import ch.stenzel.tim.polleninfo.server.account.domain.Argon2PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedDiaryStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
 import ch.stenzel.tim.polleninfo.server.alarm.push.pushSender
@@ -95,6 +96,7 @@ fun Application.module(config: ServerConfig) {
     configureAccountRouting(
         users = ExposedUserStore(database.database),
         sessions = ExposedSessionStore(database.database),
+        diary = ExposedDiaryStore(database.database),
         hasher = Argon2PasswordHasher(),
         clock = clock,
     )

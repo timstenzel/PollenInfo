@@ -1,7 +1,7 @@
 -- The alarm store (registered installs, their alarms and what each threshold alert has notified
--- about) and the accounts (users and their sessions). Applied by Flyway as polleninfo_owner; the
--- running server's polleninfo_app login receives SELECT, INSERT, UPDATE and DELETE on these tables
--- through the owner's default privileges (deploy/postgres/init/01-roles.sh).
+-- about) and the accounts (users, their sessions and their diary answers). Applied by Flyway as
+-- polleninfo_owner; the running server's polleninfo_app login receives SELECT, INSERT, UPDATE and
+-- DELETE on these tables through the owner's default privileges (deploy/postgres/init/01-roles.sh).
 
 CREATE TABLE devices (
     id            uuid        PRIMARY KEY,          -- internal; never sent to the app
@@ -43,7 +43,7 @@ CREATE TABLE scheduler_state (
 );
 
 -- Personal accounts: a user logs in with an email address and a password and holds sessions, one
--- per logged-in phone. Nothing here is pruned for inactivity except expired sessions.
+-- per logged-in phone, and their diary. Nothing here is pruned for inactivity except expired sessions.
 CREATE TABLE users (
     id            uuid        PRIMARY KEY,          -- internal; never sent to the app
     email         text        NOT NULL UNIQUE,      -- trimmed and lowercased
@@ -60,3 +60,13 @@ CREATE TABLE sessions (
 );
 
 CREATE INDEX sessions_user ON sessions(user_id);
+
+-- The diary: at most one answer per user and Swiss calendar day, chosen by the server. The first
+-- answer of a day is final; a second one is never written (INSERT … ON CONFLICT DO NOTHING).
+CREATE TABLE diary_entries (
+    user_id       uuid        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date          date        NOT NULL,             -- Swiss calendar day
+    feeling       varchar(16) NOT NULL,             -- VERY_BAD | BAD | GOOD | VERY_GOOD
+    created_at    timestamptz NOT NULL,
+    PRIMARY KEY (user_id, date)
+);

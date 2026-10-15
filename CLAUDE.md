@@ -375,7 +375,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/species` | `Species` (`id`, `name`), `SpeciesRepository`(+`Impl`), `SpeciesApiService`, `SpeciesDto`, `SpeciesMapper` — `GET /pollen/species`, in the server's order. The app's pollen-type vocabulary where there is no reading (the alarm editor), loaded rather than declared so `PollenSpecies` stays authoritative |
 | `core/measurement` | `StationMeasurement`, `SpeciesReading`, `PollenSeverity`, `StationPollenOverview`, `ReadingAge` (+`readingAgeOf`, `STALE_AFTER`), `StationMeasurementRepository`(+`Impl`), `StationMeasurementApiService`, its DTO and mapper, and `GetStationMeasurementUseCase` (worst severity, `drivenBy`, display order) |
 | `core/history` | `HistoryRange` (`WEEK` / `MONTH` / `YEAR`), `StationHistory` + `HistoryDay` (`levels` by species id, `null` = no value), `StationHistoryRepository`(+`Impl`), `StationHistoryApiService`, its DTOs and mapper — `GET /pollen/stations/{abbr}/history`. In `core/` as the reading pipeline's daily counterpart of `core/measurement` |
-| `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`, `DiaryRepository`, the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` — the user's answers, **on the device only** (see "Diary answers") |
+| `core/diary` | `Feeling` (`VERY_BAD` … `VERY_GOOD`, each with its `level` on the pollen scale), `DiaryEntry` (+ the pure `recording`, which never replaces a date's answer), `swissToday(clock)`; `DiaryRepository` (`record(feeling)`, `today()`) + `DiaryRepositoryImpl` over `DiaryApiService` (`POST /users/me/diary`, `GET /users/me/diary/today`), its DTOs and mapper — the account's answers; `FeelingPromptPreferences` + the logic-free `DataStoreFeelingPromptPreferences` — Home's dismissal, on the device; and, until the chart reads the account, the read-only `LocalDiaryRepository` with the pure `DiaryCodec` and the logic-free `DataStoreDiaryRepository` (see "Diary answers") |
 | `core/ui/feeling` | `Feeling.label()` (+`labelResource()`) — "Very bad" … "Very good", the words on Home's prompt buttons and on the Diary chart's feeling axis |
 | `core/ui/species` | `speciesColor(id)` — a species id to its `SpeciesPalette` colour, light or dark by the same surface-luminance rule as `PollenSeverity.color()`; `null` for an id the app has no colour for. `speciesName(id, fallback)` (`SpeciesNames.kt`) — the species' name in the app's language, the server's name for an id the app does not know (see "Localization") |
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
@@ -393,7 +393,9 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 Test fixtures sit next to their subjects in `commonTest`: `core/station/StationFixtures.kt` and
 `FakeStationRepository.kt`, `core/measurement/MeasurementFixtures.kt` (including the gated
 `FakeStationMeasurementRepository`), `core/history/HistoryFixtures.kt` (`stationHistory(...)` and
-the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt`,
+the gated `FakeStationHistoryRepository`), `core/diary/FakeDiaryRepository.kt` (the account's
+diary with the backend's first-answer-is-final rule, `recordGate` / `todayGate`, scripted failures),
+`FakeFeelingPromptPreferences.kt` and `FakeLocalDiaryRepository.kt`, `core/session/FakeSessionRepository.kt`,
 `core/appinfo/FakeAppInfo.kt`.
 
 ### Talking to our own backend
@@ -498,8 +500,8 @@ into `SignedOutException`.)
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
 snackbar shown from an event. `ErrorContext` is `LOAD` (the reason sentence alone, under the
 screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM` /
-`REGISTER` / `LOGIN`, which put "Couldn't save the alarm.", "Couldn't create the account.",
-"Couldn't log in." etc. before the
+`REGISTER` / `LOGIN` / `SAVE_FEELING`, which put "Couldn't save the alarm.", "Couldn't create the
+account.", "Couldn't log in.", "Your answer couldn't be saved." etc. before the
 reason; `NotFound` reads "This alarm no longer exists." in the four alarm contexts. The choice is the pure `AppError.text(context)` → `ErrorText(action,
 reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
 in all four languages. No exception text — host names, status codes, library messages — reaches a
@@ -579,26 +581,33 @@ iOS's `AppleLanguages` default. `core/language/LanguageRepository` reads and wri
 
 #### Diary answers
 
-`core/diary/DiaryRepository` is the fourth, and the only one holding health information: the
-user's daily answers (`entries`, sorted by date), the last date the Home prompt was closed
-unanswered (`dismissedOn`), `record(date, feeling)` and `dismiss(date)`. **The answers never leave
-the device** — no API service or request DTO takes a `Feeling` or `DiaryEntry`, so nothing has to be
-promised about a server. They are kept indefinitely and never pruned; clearing app data or
-reinstalling loses them (accepted until accounts exist). An answer is immutable: `record` on a date
-that already has one changes nothing.
+**The answers now leave the device: they are stored in the user's account.** Home sends a
+logged-in user's answer to the backend through `core/diary/DiaryRepository` (`record(feeling)`,
+`today()`, see "The feeling prompt"), which files it under the server's Swiss date and keeps the
+first answer of a day for good (see "Accounts (server)"). Nothing new is written on the phone: there
+is no offline queue and no local copy, so an answer that cannot be sent is not saved at all and the
+prompt says so. `DiaryRepositoryImpl(api, sessions)` takes the token from `SessionRepository`; with
+no session it fails with `SignedOutException` before any request, and a `401` calls
+`sessions.clear()` (only if the refused session is still the stored one) and fails the same way.
+`DiaryRepositoryImplTest` pins it through `MockEngine`.
 
-`DataStoreDiaryRepository` stores two string keys in the shared `DataStore<Preferences>` — the
-entries as `DiaryCodec` JSON (`[{"date":"2026-10-04","feeling":"BAD"}]`, ISO dates and enum names,
-so the file is portable to a later account) and the dismissed date as ISO text. It is logic-free and
-untested like the others: the format is `DiaryCodec` (pure, `DiaryCodecTest` — an unknown feeling or
-a malformed element is skipped, corrupt input decodes to an empty diary rather than crashing every
-start) and the never-overwrite rule is `List<DiaryEntry>.recording` (`DiaryEntryTest`); `record`
-applies it inside one `edit`, so two quick taps cannot both see an empty day. Consumers use
-`FakeDiaryRepository`.
+**The dismissal stays on the device.** `FeelingPromptPreferences` (`dismissedOn`, `dismiss(date)`)
+is a choice about this phone's prompt, not an answer, so it applies logged in and out alike.
+`DataStoreFeelingPromptPreferences` keeps it as ISO text in the shared `DataStore<Preferences>`,
+under the key the on-device diary used (`diary_prompt_dismissed_on`), so an earlier dismissal still
+holds; logic-free and untested like the others, consumers use `FakeFeelingPromptPreferences`.
+
+**Interim, until the Diary chart reads the account:** answers recorded on the device before the
+move are still read — and only read — by `DiaryViewModel` through `LocalDiaryRepository`
+(`entries`), whose `DataStoreDiaryRepository` decodes the `diary_entries` key with `DiaryCodec`
+(pure, `DiaryCodecTest` — an unknown feeling or a malformed element is skipped, corrupt input
+decodes to an empty diary). Nothing writes that key any more, so answers given on Home do not reach
+the chart in this state. Consumers use `FakeLocalDiaryRepository`.
 
 **A day is the Swiss calendar day**: `swissToday(clock)` (`Europe/Zurich`) is the app's single
-definition of "today", so an answer is filed under the same date as the backend's daily means it is
-compared with, whatever zone the device is in.
+definition of "today" — what the prompt and its dismissal are judged against — and the backend
+answers the same question with `SWISS_ZONE`, so an answer is filed under the same date as the daily
+means it is compared with, whatever zone the device is in.
 
 ### Location
 
@@ -700,16 +709,33 @@ past the startup gate) resolves to `Error` with a message, never an endless spin
 **The feeling prompt.** Once per Swiss day Home asks "How do you feel today?" in a card
 (`FeelingPrompt.kt`) floated bottom-centre over its list, inside the pull-to-refresh box. It has
 four full-word buttons, Very bad → Very good left to right, a close `IconButton` announced as "Not
-today", and the question as a heading. `HomeViewModel` takes `DiaryRepository` and collects its two
-flows; `Content.showFeelingPrompt` is re-derived on every `Content` it builds (load, refresh, station
-change) and on every diary change: shown while `swissToday(clock)` has neither an entry nor
-`dismissedOn`. Until the diary has been read it is hidden, so the card never flashes up for a day
-already answered. `Loading` and `Error` never carry it. `onFeelingSelected(feeling)` records today's
-answer and `onFeelingPromptDismissed()` records only the dismissal; either hides the card through the
-diary flow, with no reload. A failed save keeps the card with `Content.feelingSaveError` (a
-`Boolean` — a local storage failure, shown as `home_feeling_save_error`), cleared by the next
-attempt. Swiss midnight passing while Home stays open shows the prompt at the next such
-event, not on the dot — accepted. While the card is up the list's bottom padding grows by its
+today", and the question as a heading. `HomeViewModel(selectedStationRepository,
+getStationMeasurement, sessionRepository, diaryRepository, feelingPromptPreferences, clock)`
+observes the session and the dismissal; `Content.showFeelingPrompt` is re-derived on every
+`Content` it builds (load, refresh, station change) and on every change of either. `Loading` and
+`Error` never carry it, and it is hidden until both the session and the dismissal have been read.
+
+- **Logged out** it is shown unless `swissToday(clock)` is `dismissedOn`. A tap on a feeling records
+  nothing and sends `HomeEvent.OpenAccount` (a buffered `Channel`), on which the screen opens
+  `Screen.Account(LOGIN)`; Back returns to Home with the card still up. An answer tapped while
+  logged out is not kept through the login — the user taps again (accepted).
+- **Logged in** it stays hidden until `DiaryRepository.today()` has answered, and is shown only if
+  the account has no answer for today and today is not dismissed. `today()` is asked again on every
+  load, refresh and session change (a login on the Diary while Home sits on the back stack, a
+  logout, the backend refusing the session), so an answer given on another phone hides the card
+  after a pull-to-refresh. A check that fails keeps the card hidden until the next one; a refresh
+  keeps the previous answer in force until the new one arrives, so a shown card does not blink. A
+  tap sends `record(feeling)` (further taps are ignored while it runs); success hides the card with
+  no reload. A failure keeps it with `Content.feelingSaveError: AppError?`
+  (`toSessionAppError()`, shown in the `SAVE_FEELING` context: "Your answer couldn't be saved. Couldn't
+  reach the server. …"), cleared by the next attempt. A `SignedOutException` adds no error: the
+  repository has cleared the session, the card switches to the logged-out rules and the next tap
+  opens the login.
+- `onFeelingPromptDismissed()` stores the dismissal through `FeelingPromptPreferences` — on this
+  phone only, in both states — and hides the card at once.
+
+Swiss midnight passing while Home stays open shows the prompt at the next such event, not on the
+dot — accepted. While the card is up the list's bottom padding grows by its
 measured height (plus its margin), so the last species row still scrolls fully above it.
 
 It **observes** the selection rather than taking its first value, unlike the startup gate below —
@@ -718,7 +744,8 @@ There is deliberately no way to change the station from Home; the pin in its top
 and station changes belong to Settings (see "Settings").
 
 **The account screen.** `Screen.Account(mode: AccountMode = LOGIN)` — not a tab, so the bottom bar
-is hidden — is opened from the Diary's gate in either mode (`toRoute` hands the mode to
+is hidden — is opened from the Diary's gate in either mode, from Settings and from Home's feeling
+prompt (both `LOGIN`) (`toRoute` hands the mode to
 `AccountViewModel` through Koin's `parametersOf`), and pops itself on `AccountEvent.Done` or Back.
 See "Accounts".
 
@@ -980,12 +1007,14 @@ missing line is not read as "no pollen". Its choice stays in `checked`, so the l
 station that measures it. `Content.shownSpeciesIds` — checked and measured, in order — is what the
 chart draws and counts in its description.
 
-**The feeling line.** `DiaryViewModel` collects `DiaryRepository.entries` for as long as it lives;
+**The feeling line.** `DiaryViewModel` collects `LocalDiaryRepository.entries` — the answers
+recorded on the device before they moved to the account (interim, see "Diary answers") — for as
+long as it lives;
 `Content.entries` are the answers whose date lies in `history.from..history.until` **and** before
 `swissToday(clock)` — today's answer is never plotted, even if a history reached today. The filter
 follows the history on screen, not the selected range, so while a range change loads the old
-history keeps its own answers. An answer recorded while the Diary is open joins the graph through
-the flow, with no history reload. `Content.hasNoEntries` (derived, no answer in the window) overlays
+history keeps its own answers. Answers given on Home now go to the account and do not reach this
+line until the chart reads the account. `Content.hasNoEntries` (derived, no answer in the window) overlays
 the hint "Answer 'How do you feel today?' on Home to see your line here." at the top of the chart —
 outside the chart's semantics node, so a screen reader reads it on its own.
 
@@ -1521,7 +1550,7 @@ Ktor plugin configuration is split into `plugins/` extension functions on `Appli
 upstream `PollenService` (via `meteoSwissPollenService`), the `MeasurementService` and the
 `HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`
 (health and pollen, no database), `configureAlarmRouting(devices, alarms)` and
-`configureAccountRouting(users, sessions, hasher, clock)` (no defaults), then
+`configureAccountRouting(users, sessions, diary, hasher, clock)` (no defaults), then
 starts the alarm scheduler with the same `MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
@@ -1552,9 +1581,11 @@ server/src/main/kotlin/.../server/
     └── AlarmRoutes.kt
 └── account/
     ├── domain/         AccountValidation (+ AccountSpec, AccountValidationResult), PasswordHasher
-    │                   (Argon2PasswordHasher), SessionToken (+ newSessionToken, hash), UserId
-    ├── store/          UserStore, SessionStore (+ Exposed implementations), AccountTables
-    ├── model/          Wire DTOs (RegisterDto, SessionDto, ErrorDto)
+    │                   (Argon2PasswordHasher), SessionToken (+ newSessionToken, hash), UserId,
+    │                   DiaryFeeling, DiaryEntry
+    ├── store/          UserStore, SessionStore, DiaryStore (+ Exposed implementations), AccountTables
+    ├── model/          Wire DTOs (RegisterDto, LoginDto, SessionDto, DiaryAnswerDto, DiaryEntryDto,
+    │                   ErrorDto)
     └── AccountRoutes.kt
 ```
 
@@ -1589,6 +1620,8 @@ independently of the domain.
 | POST   | `/users`                                | `{ "email", "password", "consent": true }` → `201 { "sessionToken": "…" }`; `400 {error}` invalid, no consent or malformed; `409 {error}` email taken (in any capitals) |
 | POST   | `/users/session`                        | `{ "email", "password" }` → `201 { "sessionToken": "…" }` (a new session; the email in any capitals); `401 {error}` identical for a wrong password and an unknown email; `400 {error}` malformed |
 | DELETE | `/users/me/session`                     | (user auth) `204`; ends the calling session only — the account's other phones stay logged in |
+| POST   | `/users/me/diary`                       | (user auth) `{ "feeling": "GOOD" }` → `201 { "date": "2026-10-15", "feeling": "GOOD" }` for the first answer of today's Swiss date; `200` with the **stored** answer if today has one; `400 {error}` unknown feeling or malformed |
+| GET    | `/users/me/diary/today`                 | (user auth) `200 { "date", "feeling" }`, or `204` while today has no answer |
 
 (auth) = `Authorization: Bearer <deviceToken>`, (user auth) = `Authorization: Bearer
 <sessionToken>`; a missing, malformed, unknown (or, for a session, expired) token is `401` with
@@ -1714,7 +1747,7 @@ scheduler only ever loads enabled alarms.
 
 #### Accounts (server)
 
-Personal accounts hold the diary (the diary itself moves there in later steps). `POST /users`
+Personal accounts hold the diary (see "The diary" below). `POST /users`
 takes `{email, password, consent}` and answers `201 {sessionToken}`, logged in at once.
 `account/domain/AccountValidation` — pure, `AccountValidationResult.Valid(AccountSpec)` |
 `Invalid(message)` — trims and lowercases the email (≤ 254 characters, exactly one `@` with text on
@@ -1750,12 +1783,31 @@ value. `AccountSpec` and `RegisterDto` print neither field.
   registration reveals whether an address has an account is an accepted limitation without email
   delivery.
 - The email and the token travel only in bodies and headers, never in a path or query, so call
-  logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow and
-  finds neither, nor the password.
+  logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow
+  (registration, logins, today's answer, logout) and finds neither, nor the password.
+
+**The diary.** `account/domain/Diary.kt` holds `DiaryFeeling` (`VERY_BAD`, `BAD`, `GOOD`,
+`VERY_GOOD` — exact names on the wire and in the table, the app's `Feeling` names) and
+`DiaryEntry(date, feeling)`; `account/store/DiaryStore` stores them (`ExposedDiaryStore`).
+
+- **The server picks the date**: the Swiss calendar day (`SWISS_ZONE`) of `configureAccountRouting`'s
+  clock, never one the phone sends, so an answer lines up with the daily means it is compared with.
+- **The first answer of a day is final.** `DiaryStore.record(user, date, feeling, now)` is an
+  `INSERT … ON CONFLICT DO NOTHING` (`insertIgnore`) followed by a read in the same transaction:
+  `Recorded(entry)` for the first answer, `AlreadyAnswered(entry)` — the stored one — otherwise, so
+  of two concurrent answers (two taps, two phones) the loser reads the winner's and neither
+  overwrites the other. `POST /users/me/diary {feeling}` answers `201 {date, feeling}` or `200` with
+  the stored entry; a feeling that is not exactly one of the four names is `400 {error}` (the body's
+  `feeling` is a plain string, so it reaches that check), a malformed body too.
+- `GET /users/me/diary/today` is `200 {date, feeling}` or `204` — what Home asks before showing
+  its prompt. Both run under the `user` provider and `USER_LIMIT`, and only ever touch the caller's
+  own answers.
 
 `AccountRoutesTest` (registration, login, logout, the `user` provider's `401`s and expiry, the device
-and account routes installed together) and `ExposedAccountStoresTest` (incl. expiry at exactly 90
-days and the daily `last_used_at` refresh) run on the test database; `AccountValidationTest`,
+and account routes installed together, the diary's `201` / `200`, both sides of Swiss midnight,
+`/today`, another user's answers, unknown feelings, `401` before the body) and
+`ExposedAccountStoresTest` (incl. expiry at exactly 90 days, the daily `last_used_at` refresh and two
+concurrent answers keeping exactly the first) run on the test database; `AccountValidationTest`,
 `PasswordHasherTest` and `SessionTokenTest` need none.
 
 #### Persistence
@@ -1795,7 +1847,10 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   minute the alarm scheduler finished (see "Alarm delivery"). The accounts: `users(id uuid PK, email
   text UNIQUE — trimmed and lowercased, password_hash text — Argon2id PHC, consented_at, created_at
   timestamptz)` and `sessions(token_hash bytea PK — SHA-256, user_id → users ON DELETE CASCADE,
-  created_at, last_used_at timestamptz)` with an index on `user_id`. Arrays hold
+  created_at, last_used_at timestamptz)` with an index on `user_id`, and
+  `diary_entries(user_id → users ON DELETE CASCADE, date date — the Swiss day, feeling — a
+  DiaryFeeling name, created_at timestamptz, PK(user_id, date))`: one answer per user and day, the
+  key that makes a second answer impossible to store. Arrays hold
   enum names; instants are written at UTC (`toTimestamp()`). An alarm id that is not a UUID is
   simply not found (`toUuidOrNull()`), never an error.
 - Isolation is Postgres's default `READ COMMITTED`. **The ten-alarm limit locks the device row**

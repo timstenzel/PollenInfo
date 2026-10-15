@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.server.account.store
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
+import org.jetbrains.exposed.v1.javatime.date
 import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 
 /*
@@ -37,4 +38,17 @@ internal object SessionsTable : Table("sessions") {
     val lastUsedAt = timestampWithTimeZone("last_used_at")
 
     override val primaryKey = PrimaryKey(tokenHash)
+}
+
+/**
+ * The diary: one answer per user and Swiss calendar day, the key that makes a second answer for a
+ * day impossible to store. [feeling] is a `DiaryFeeling` name. Rows go with their user.
+ */
+internal object DiaryEntriesTable : Table("diary_entries") {
+    val userId = reference("user_id", UsersTable.id, onDelete = ReferenceOption.CASCADE)
+    val date = date("date")
+    val feeling = varchar("feeling", 16)
+    val createdAt = timestampWithTimeZone("created_at")
+
+    override val primaryKey = PrimaryKey(userId, date)
 }

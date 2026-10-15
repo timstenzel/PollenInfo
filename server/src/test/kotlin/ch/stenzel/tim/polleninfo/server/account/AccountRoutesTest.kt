@@ -6,6 +6,9 @@ import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
 import ch.stenzel.tim.polleninfo.server.account.domain.hash
 import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
 import ch.stenzel.tim.polleninfo.server.account.model.SessionDto
+import ch.stenzel.tim.polleninfo.server.account.model.DiaryEntryDto
+import ch.stenzel.tim.polleninfo.server.account.store.DiaryEntriesTable
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedDiaryStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
 import ch.stenzel.tim.polleninfo.server.account.store.SessionsTable
@@ -55,6 +58,7 @@ class AccountRoutesTest {
     private val database = TestPostgres.cleanDatabase()
     private val users = ExposedUserStore(database)
     private val sessions = ExposedSessionStore(database)
+    private val diary = ExposedDiaryStore(database)
     private val hasher = cheapHasher()
     private val clock = MutableClock(Instant.parse("2026-10-12T08:30:00Z"))
 
@@ -63,7 +67,7 @@ class AccountRoutesTest {
             configureSerialization()
             // Generous, so the route tests never meet the account limiter; SecurityTest pins it.
             configureSecurity(RateLimits(accountPerHour = 1_000))
-            configureAccountRouting(users = users, sessions = sessions, hasher = hasher, clock = clock)
+            configureAccountRouting(users = users, sessions = sessions, diary = diary, hasher = hasher, clock = clock)
         }
     }
 
@@ -318,7 +322,7 @@ class AccountRoutesTest {
             configureSerialization()
             configureSecurity(RateLimits(accountPerHour = 1_000))
             configureAlarmRouting(devices = ExposedDeviceStore(database), alarms = ExposedAlarmStore(database))
-            configureAccountRouting(users = users, sessions = sessions, hasher = hasher, clock = clock)
+            configureAccountRouting(users = users, sessions = sessions, diary = diary, hasher = hasher, clock = clock)
         }
         val session = register(registration()).sessionToken()
         val device = client.post("/devices") {
@@ -330,5 +334,116 @@ class AccountRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, client.get("/devices/me/alarms") { bearerAuth(session) }.status)
         assertEquals(HttpStatusCode.Unauthorized, logout(device).status)
         assertEquals(HttpStatusCode.NoContent, logout(session).status)
+    }
+
+    // --- Diary ---
+
+    private suspend fun ApplicationTestBuilder.answer(token: String?, body: String): HttpResponse =
+        client.post("/users/me/diary") {
+            token?.let { bearerAuth(it) }
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+    private fun feeling(name: String) = """{"feeling":"$name"}"""
+
+    private suspend fun ApplicationTestBuilder.today(token: String?): HttpResponse =
+        client.get("/users/me/diary/today") { token?.let { bearerAuth(it) } }
+
+    private suspend fun HttpResponse.entry(): DiaryEntryDto = Json.decodeFromString(bodyAsText())
+
+    @Test
+    fun `the first answer of a Swiss day is 201 with that date and a second is 200 with the first`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        val first = answer(token, feeling("GOOD"))
+        val second = answer(token, feeling("VERY_BAD"))
+
+        assertEquals(HttpStatusCode.Created, first.status)
+        assertEquals(DiaryEntryDto(date = "2026-10-12", feeling = "GOOD"), first.entry())
+        assertEquals(HttpStatusCode.OK, second.status)
+        assertEquals(DiaryEntryDto(date = "2026-10-12", feeling = "GOOD"), second.entry())
+        assertEquals(1L, transaction(database) { DiaryEntriesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `answers either side of Swiss midnight get different dates`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        // 23:59:59 in Zürich on 12 October (summer time, UTC+2) and the next second, already the 13th.
+        clock.now = Instant.parse("2026-10-12T21:59:59Z")
+        val evening = answer(token, feeling("BAD"))
+        clock.now = Instant.parse("2026-10-12T22:00:00Z")
+        val midnight = answer(token, feeling("VERY_GOOD"))
+
+        assertEquals(HttpStatusCode.Created, evening.status)
+        assertEquals(DiaryEntryDto(date = "2026-10-12", feeling = "BAD"), evening.entry())
+        assertEquals(HttpStatusCode.Created, midnight.status)
+        assertEquals(DiaryEntryDto(date = "2026-10-13", feeling = "VERY_GOOD"), midnight.entry())
+    }
+
+    @Test
+    fun `today is 204 before the day's answer and 200 with it after`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        assertEquals(HttpStatusCode.NoContent, today(token).status)
+        answer(token, feeling("GOOD"))
+
+        val after = today(token)
+        assertEquals(HttpStatusCode.OK, after.status)
+        assertEquals(DiaryEntryDto(date = "2026-10-12", feeling = "GOOD"), after.entry())
+
+        // A new Swiss day has no answer yet.
+        clock.now = Instant.parse("2026-10-12T22:00:00Z")
+        assertEquals(HttpStatusCode.NoContent, today(token).status)
+    }
+
+    @Test
+    fun `another user's answer never shows in today`() = testApplication {
+        installApp()
+        val tim = register(registration(email = "tim@example.com")).sessionToken()
+        val anna = register(registration(email = "anna@example.com")).sessionToken()
+
+        answer(tim, feeling("GOOD"))
+
+        assertEquals(HttpStatusCode.NoContent, today(anna).status)
+        // Anna's own first answer is still the first of her day.
+        assertEquals(HttpStatusCode.Created, answer(anna, feeling("BAD")).status)
+    }
+
+    @Test
+    fun `an unknown or malformed feeling is 400 with an error and stores nothing`() = testApplication {
+        installApp()
+        val token = register(registration()).sessionToken()
+
+        listOf(
+            feeling("MEH"),
+            feeling("good"),
+            """{"feeling":3}""",
+            """{}""",
+            "feeling=GOOD",
+        ).forEach { body ->
+            val response = answer(token, body)
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(response.errorText().isNotBlank(), body)
+        }
+        assertEquals(0L, transaction(database) { DiaryEntriesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `the diary without a valid session is 401 before the body is read`() = testApplication {
+        installApp()
+
+        listOf(null, newSessionToken().value, "too-short").forEach { token ->
+            val malformed = answer(token, "not json at all")
+            assertEquals(HttpStatusCode.Unauthorized, malformed.status, "$token")
+            assertTrue(malformed.headers[HttpHeaders.WWWAuthenticate].orEmpty().startsWith("Bearer"))
+            assertEquals(HttpStatusCode.Unauthorized, answer(token, feeling("GOOD")).status, "$token")
+            assertEquals(HttpStatusCode.Unauthorized, today(token).status, "$token")
+        }
+        assertEquals(0L, transaction(database) { DiaryEntriesTable.selectAll().count() })
     }
 }

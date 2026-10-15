@@ -2,37 +2,64 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.swissToday
 import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.FeelingPromptPreferences
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.toAppError
+import ch.stenzel.tim.polleninfo.core.session.domain.model.Session
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
+import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
+/** What Home asks its navigation to do, once. */
+sealed interface HomeEvent {
+    /** A feeling was tapped while nobody is logged in: open the login, nothing was saved. */
+    data object OpenAccount : HomeEvent
+}
+
+/**
+ * Home: the stored station's reading, and once a Swiss day the feeling prompt.
+ *
+ * **The prompt follows the session.** Logged out it is shown unless today was dismissed on this
+ * phone, and a tap only asks for the login ([HomeEvent.OpenAccount]) — nothing is kept. Logged in it
+ * stays hidden until the backend has said whether today is answered ([DiaryRepository.today]) —
+ * asked again on every load, refresh and session change, so an answer given on another phone hides
+ * it here — and a tap sends the answer to the account. A failed check keeps it hidden until the
+ * next one; a dismissal hides it either way.
+ */
 class HomeViewModel(
     selectedStationRepository: SelectedStationRepository,
     private val getStationMeasurement: GetStationMeasurementUseCase,
+    sessionRepository: SessionRepository,
     private val diaryRepository: DiaryRepository,
+    private val feelingPromptPreferences: FeelingPromptPreferences,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading(stationName = ""))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val _events = Channel<HomeEvent>(Channel.BUFFERED)
+    val events: Flow<HomeEvent> = _events.receiveAsFlow()
 
     /** The latest stored selection — what [refresh] and [retry] reload. */
     private var selected: SelectedStation? = null
@@ -44,27 +71,47 @@ class HomeViewModel(
      */
     private var loadJob: Job? = null
 
-    /** The diary as last read; `null` until it has been, so the prompt never flashes up unasked. */
-    private var diary: DiarySnapshot? = null
+    /**
+     * Whether anyone is logged in; `null` until the stored session has been read, so the prompt
+     * never flashes up before it is known which rules apply.
+     */
+    private var signedIn: Boolean? = null
 
-    /** The last answer was not stored; cleared by the next attempt. */
-    private var feelingSaveError = false
+    /** The last dismissal as read, valid once [dismissalRead]; until then the prompt stays hidden. */
+    private var dismissedOn: LocalDate? = null
+    private var dismissalRead = false
+
+    /** What the backend last said about today, for the logged-in prompt. */
+    private var today: TodayAnswer = TodayAnswer.Unknown
+
+    /** The check of [today] in flight; a newer one — a session change, a reload — replaces it. */
+    private var todayJob: Job? = null
+
+    /** An answer being sent; further taps are ignored until it is done. */
+    private var recordJob: Job? = null
+
+    /** Why the last answer was not saved; cleared by the next attempt. */
+    private var feelingSaveError: AppError? = null
 
     init {
         viewModelScope.launch {
-            combine(diaryRepository.entries, diaryRepository.dismissedOn, ::DiarySnapshot)
-                .collect { snapshot ->
-                    diary = snapshot
-                    // An answer or a dismissal hides the prompt at once, with no reload.
-                    refreshPrompt()
-                }
+            feelingPromptPreferences.dismissedOn.collect { date ->
+                dismissedOn = date
+                dismissalRead = true
+                // A dismissal hides the prompt at once, with no reload.
+                refreshPrompt()
+            }
+        }
+        viewModelScope.launch {
+            sessionRepository.session
+                .distinctUntilChanged()
+                .collect { session -> onSession(session) }
         }
         viewModelScope.launch {
             // Observed, not read once. `StartupViewModel` takes only the first value because
             // rebuilding the navigation graph mid-session would yank the user out of the navigation
             // they just triggered; that reason does not transfer here, where a station change is
-            // exactly what should reload the readings. Nothing can change the selection today, so
-            // the two behave identically — this one stays correct when the settings screen lands.
+            // exactly what should reload the readings.
             selectedStationRepository.selectedStation
                 .distinctUntilChanged()
                 .collect { station ->
@@ -74,6 +121,19 @@ class HomeViewModel(
                     load(keepReadings = false)
                 }
         }
+    }
+
+    /**
+     * Logging in or out — here, on the Diary, in Settings, or by the backend refusing the session —
+     * starts the prompt over: what the previous account had answered says nothing about this one.
+     */
+    private fun onSession(session: Session?) {
+        signedIn = session != null
+        recordJob?.cancel()
+        feelingSaveError = null
+        today = TodayAnswer.Unknown
+        if (session != null) checkToday() else todayJob?.cancel()
+        refreshPrompt()
     }
 
     /**
@@ -88,22 +148,63 @@ class HomeViewModel(
     /** Leaves the error state by loading again from scratch. */
     fun retry() = load(keepReadings = false)
 
-    /** Stores today's answer; the prompt hides when the diary reports it stored. */
+    /**
+     * Logged in, sends today's answer; the prompt hides once the account holds one. Logged out,
+     * asks for the login instead and keeps nothing — the user taps again once logged in.
+     */
     fun onFeelingSelected(feeling: Feeling) {
+        when (signedIn) {
+            null -> return
+            false -> {
+                feelingSaveError = null
+                refreshPrompt()
+                _events.trySend(HomeEvent.OpenAccount)
+            }
+            true -> {
+                if (recordJob?.isActive == true) return
+                feelingSaveError = null
+                refreshPrompt()
+                recordJob = viewModelScope.launch {
+                    when (val result = diaryRepository.record(feeling)) {
+                        // The stored answer, whichever phone gave it, is today's.
+                        is Result.Success -> today = TodayAnswer.Known(result.data.date, answered = true)
+                        is Result.Failure -> {
+                            // A refused session has been cleared, and the session change shows the
+                            // logged-out prompt, whose next tap opens the login; no error to add.
+                            if (result.exception !is SignedOutException) {
+                                feelingSaveError = result.exception.toSessionAppError()
+                            }
+                        }
+                    }
+                    refreshPrompt()
+                }
+            }
+        }
+    }
+
+    /** Closes the prompt for today without recording an answer, on this phone only. */
+    fun onFeelingPromptDismissed() {
         viewModelScope.launch {
-            feelingSaveError = false
-            val result = diaryRepository.record(swissToday(clock), feeling)
-            feelingSaveError = result is Result.Failure
+            feelingSaveError = null
+            // A failed dismissal simply leaves the prompt up to be closed again.
+            feelingPromptPreferences.dismiss(swissToday(clock))
             refreshPrompt()
         }
     }
 
-    /** Closes the prompt for today without recording an answer. */
-    fun onFeelingPromptDismissed() {
-        viewModelScope.launch {
-            feelingSaveError = false
-            // A failed dismissal simply leaves the prompt up to be closed again.
-            diaryRepository.dismiss(swissToday(clock))
+    /**
+     * Asks the backend whether today is answered. The previous answer stays in force until the new
+     * one arrives, so a refresh does not make a shown prompt blink; a failure hides the prompt
+     * until the next check, since a prompt for a day that may be answered must not invite a tap.
+     */
+    private fun checkToday() {
+        todayJob?.cancel()
+        todayJob = viewModelScope.launch {
+            val date = swissToday(clock)
+            today = when (val result = diaryRepository.today()) {
+                is Result.Success -> TodayAnswer.Known(date, answered = result.data != null)
+                is Result.Failure -> TodayAnswer.Unknown
+            }
             refreshPrompt()
         }
     }
@@ -116,16 +217,20 @@ class HomeViewModel(
 
     /**
      * "Today" is taken from the clock each time Content is built, so the prompt returns on the
-     * first load, refresh or diary change after Swiss midnight.
+     * first load, refresh or prompt change after Swiss midnight; a logged-in answer known for an
+     * earlier day counts as not known.
      */
     private fun withPrompt(content: HomeUiState.Content): HomeUiState.Content {
-        val today = swissToday(clock)
-        val show = diary?.let { snapshot ->
-            snapshot.dismissedOn != today && snapshot.entries.none { it.date == today }
-        } ?: false
+        val date = swissToday(clock)
+        val notDismissed = dismissalRead && dismissedOn != date
+        val show = notDismissed && when (signedIn) {
+            null -> false
+            false -> true
+            true -> (today as? TodayAnswer.Known)?.let { it.date == date && !it.answered } ?: false
+        }
         return content.copy(
             showFeelingPrompt = show,
-            feelingSaveError = show && feelingSaveError,
+            feelingSaveError = feelingSaveError.takeIf { show },
         )
     }
 
@@ -147,6 +252,10 @@ class HomeViewModel(
         } else {
             HomeUiState.Loading(station.name)
         }
+
+        // Every load and refresh asks again whether today is answered, so an answer given on
+        // another phone, or a new Swiss day, is picked up.
+        if (signedIn == true) checkToday()
 
         loadJob = viewModelScope.launch {
             // A refresh served from the backend's cache answers within milliseconds — before the
@@ -181,5 +290,12 @@ class HomeViewModel(
         val MIN_REFRESH_INDICATOR = 500.milliseconds
     }
 
-    private data class DiarySnapshot(val entries: List<DiaryEntry>, val dismissedOn: LocalDate?)
+    /** What is known about today's answer in the account. */
+    private sealed interface TodayAnswer {
+        /** Not asked yet, being asked for the first time, or the last check failed. */
+        data object Unknown : TodayAnswer
+
+        /** Whether the Swiss day [date] has an answer. */
+        data class Known(val date: LocalDate, val answered: Boolean) : TodayAnswer
+    }
 }

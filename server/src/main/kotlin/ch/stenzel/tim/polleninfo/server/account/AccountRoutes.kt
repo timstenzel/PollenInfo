@@ -2,11 +2,17 @@ package ch.stenzel.tim.polleninfo.server.account
 
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountValidation
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountValidationResult
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryEntry
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryFeeling
 import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.model.DiaryAnswerDto
+import ch.stenzel.tim.polleninfo.server.account.model.DiaryEntryDto
 import ch.stenzel.tim.polleninfo.server.account.model.ErrorDto
 import ch.stenzel.tim.polleninfo.server.account.model.LoginDto
 import ch.stenzel.tim.polleninfo.server.account.model.RegisterDto
 import ch.stenzel.tim.polleninfo.server.account.model.SessionDto
+import ch.stenzel.tim.polleninfo.server.account.store.DiaryStore
+import ch.stenzel.tim.polleninfo.server.account.store.RecordResult
 import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
 import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.UserStore
@@ -14,6 +20,7 @@ import ch.stenzel.tim.polleninfo.server.plugins.ACCOUNT_LIMIT
 import ch.stenzel.tim.polleninfo.server.plugins.USER_AUTH
 import ch.stenzel.tim.polleninfo.server.plugins.USER_LIMIT
 import ch.stenzel.tim.polleninfo.server.plugins.UserPrincipal
+import ch.stenzel.tim.polleninfo.server.pollen.domain.SWISS_ZONE
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -24,9 +31,12 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,8 +48,18 @@ import kotlinx.coroutines.withContext
  * Registration and login share one rate-limit bucket per client address, [ACCOUNT_LIMIT]; the
  * `/users/me` routes are limited per account under [USER_LIMIT], inside authentication, so an
  * unknown or expired token is a `401` before its body is read and never gets a bucket.
+ *
+ * The diary's "today" is always the server's: the Swiss calendar day of [clock]'s instant, so an
+ * answer is filed under the same date as the daily means it is compared with, whatever zone or clock
+ * the phone has.
  */
-fun Route.accountRoutes(users: UserStore, sessions: SessionStore, hasher: PasswordHasher, clock: Clock) {
+fun Route.accountRoutes(
+    users: UserStore,
+    sessions: SessionStore,
+    diary: DiaryStore,
+    hasher: PasswordHasher,
+    clock: Clock,
+) {
     route("/users") {
         rateLimit(ACCOUNT_LIMIT) {
             post {
@@ -105,11 +125,44 @@ fun Route.accountRoutes(users: UserStore, sessions: SessionStore, hasher: Passwo
                         sessions.delete(call.userPrincipal().token)
                         call.respond(HttpStatusCode.NoContent)
                     }
+
+                    route("/diary") {
+                        post {
+                            val body = try {
+                                call.receive<DiaryAnswerDto>()
+                            } catch (e: BadRequestException) {
+                                return@post call.respond(
+                                    HttpStatusCode.BadRequest,
+                                    ErrorDto("Expected {\"feeling\": \"…\"}"),
+                                )
+                            }
+                            val feeling = DiaryFeeling.fromNameOrNull(body.feeling)
+                                ?: return@post call.respond(
+                                    HttpStatusCode.BadRequest,
+                                    ErrorDto("feeling must be one of ${DiaryFeeling.entries.joinToString()}"),
+                                )
+                            val now = clock.instant()
+                            // The first answer of the day is 201; any later one gets the stored answer back.
+                            when (val result = diary.record(call.userPrincipal().userId, now.swissDate(), feeling, now)) {
+                                is RecordResult.Recorded -> call.respond(HttpStatusCode.Created, result.entry.toDto())
+                                is RecordResult.AlreadyAnswered -> call.respond(HttpStatusCode.OK, result.entry.toDto())
+                            }
+                        }
+
+                        get("/today") {
+                            val entry = diary.entry(call.userPrincipal().userId, clock.instant().swissDate())
+                            if (entry == null) call.respond(HttpStatusCode.NoContent) else call.respond(entry.toDto())
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+private fun Instant.swissDate(): LocalDate = atZone(SWISS_ZONE).toLocalDate()
+
+private fun DiaryEntry.toDto() = DiaryEntryDto(date = date.toString(), feeling = feeling.name)
 
 /** The one answer to a login that fails, whichever of the two was wrong. */
 private const val INVALID_CREDENTIALS = "Email or password is incorrect"

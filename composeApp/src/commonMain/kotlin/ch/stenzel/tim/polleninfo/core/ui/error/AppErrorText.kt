@@ -9,6 +9,7 @@ import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_save_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_save_feeling
 import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
 import ch.stenzel.tim.polleninfo.resources.error_email_taken
@@ -36,6 +37,7 @@ enum class ErrorContext {
     RESUME_ALARM,
     REGISTER,
     LOGIN,
+    SAVE_FEELING,
 }
 
 /** The contexts that act on one alarm, where the only thing that can be missing is that alarm. */
@@ -75,6 +77,7 @@ fun AppError.text(context: ErrorContext): ErrorText {
         ErrorContext.RESUME_ALARM -> Res.string.error_action_resume_alarm
         ErrorContext.REGISTER -> Res.string.error_action_register
         ErrorContext.LOGIN -> Res.string.error_action_login
+        ErrorContext.SAVE_FEELING -> Res.string.error_action_save_feeling
     }
     return ErrorText(action, reason)
 }

@@ -41,7 +41,6 @@
     <string name="error_action_pause_alarm">Impossible de mettre l’alarme en pause.</string>
     <string name="error_action_resume_alarm">Impossible de réactiver l’alarme.</string>
 
-    <string name="home_feeling_save_error">Votre réponse n’a pas pu être enregistrée. Veuillez réessayer.</string>
     <string name="home_load_failed">Les mesures de pollen n’ont pas pu être chargées.</string>
     <string name="home_driven_by">Pollen dominant : %1$s</string>
     <string name="home_feeling_question">Comment vous sentez-vous aujourd’hui ?</string>
@@ -275,6 +274,7 @@
     <string name="error_invalid_credentials">L’adresse e-mail ou le mot de passe est incorrect.</string>
     <string name="error_signed_out">Vous avez été déconnecté. Veuillez vous reconnecter.</string>
     <string name="error_action_login">Impossible de se connecter.</string>
+    <string name="error_action_save_feeling">Votre réponse n’a pas pu être enregistrée.</string>
     <string name="account_title_login">Se connecter</string>
     <string name="account_title_register">Créer un compte</string>
     <string name="account_email_label">Adresse e-mail</string>

@@ -23,20 +23,23 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
+import ch.stenzel.tim.polleninfo.core.result.AppError
+import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
+import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.feeling.label
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.home_feeling_dismiss
 import ch.stenzel.tim.polleninfo.resources.home_feeling_question
-import ch.stenzel.tim.polleninfo.resources.home_feeling_save_error
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * The once-a-day question floated over Home's list: four full-word answers from Very bad to Very
- * good, left to right, and a close button announced as "Not today".
+ * good, left to right, and a close button announced as "Not today". [saveError] is why the last
+ * answer was not saved, shown under the buttons until the next attempt.
  */
 @Composable
 fun FeelingPrompt(
-    saveError: Boolean,
+    saveError: AppError?,
     onFeelingSelected: (Feeling) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -72,9 +75,9 @@ fun FeelingPrompt(
                     }
                 }
             }
-            if (saveError) {
+            if (saveError != null) {
                 Text(
-                    text = stringResource(Res.string.home_feeling_save_error),
+                    text = saveError.message(ErrorContext.SAVE_FEELING),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 8.dp, end = 12.dp),

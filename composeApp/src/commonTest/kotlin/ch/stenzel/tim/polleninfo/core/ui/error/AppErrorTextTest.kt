@@ -8,6 +8,7 @@ import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_save_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_save_feeling
 import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
 import ch.stenzel.tim.polleninfo.resources.error_email_taken
@@ -117,5 +118,19 @@ class AppErrorTextTest {
     @Test
     fun `an ended session asks to log in again`() {
         assertEquals(ErrorText(null, Res.string.error_signed_out), AppError.SignedOut.text(ErrorContext.LOAD))
+    }
+
+    @Test
+    fun `a feeling that could not be saved says so before the reason`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_save_feeling, Res.string.error_network),
+            AppError.Network.text(ErrorContext.SAVE_FEELING),
+        )
+        assertEquals(
+            ErrorText(Res.string.error_action_save_feeling, Res.string.error_server_unavailable),
+            AppError.ServerUnavailable.text(ErrorContext.SAVE_FEELING),
+        )
+        // Not about an alarm: nothing on Home's prompt is one.
+        assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.SAVE_FEELING).reason)
     }
 }

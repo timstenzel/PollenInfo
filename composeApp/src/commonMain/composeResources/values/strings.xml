@@ -51,7 +51,6 @@
     <string name="error_action_resume_alarm">Couldn’t resume the alarm.</string>
 
     <!-- Home -->
-    <string name="home_feeling_save_error">Your answer couldn’t be saved. Please try again.</string>
     <string name="home_load_failed">The pollen readings could not be loaded.</string>
     <!-- %1$s is the pollen type with the worst severity, which sets the overall level. -->
     <string name="home_driven_by">Driven by %1$s</string>
@@ -304,6 +303,7 @@
     <string name="error_invalid_credentials">The email address or password is incorrect.</string>
     <string name="error_signed_out">You’ve been logged out. Please log in again.</string>
     <string name="error_action_login">Couldn’t log in.</string>
+    <string name="error_action_save_feeling">Your answer couldn’t be saved.</string>
     <string name="account_title_login">Log in</string>
     <string name="account_title_register">Create account</string>
     <string name="account_email_label">Email address</string>

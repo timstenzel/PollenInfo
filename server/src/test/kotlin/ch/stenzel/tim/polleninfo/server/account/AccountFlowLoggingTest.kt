@@ -6,6 +6,7 @@ import ch.qos.logback.classic.spi.ThrowableProxyUtil
 import ch.qos.logback.core.read.ListAppender
 import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
 import ch.stenzel.tim.polleninfo.server.account.model.SessionDto
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedDiaryStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
 import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
@@ -15,6 +16,7 @@ import ch.stenzel.tim.polleninfo.server.plugins.configureSecurity
 import ch.stenzel.tim.polleninfo.server.plugins.configureSerialization
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -66,6 +68,7 @@ class AccountFlowLoggingTest {
             configureAccountRouting(
                 users = ExposedUserStore(database),
                 sessions = ExposedSessionStore(database),
+                diary = ExposedDiaryStore(database),
                 hasher = cheapHasher(),
                 clock = Clock.systemUTC(),
             )
@@ -95,6 +98,18 @@ class AccountFlowLoggingTest {
         }
         assertEquals(HttpStatusCode.Created, loggedIn.status)
         val loginToken = Json.decodeFromString<SessionDto>(loggedIn.bodyAsText()).sessionToken
+        // Today's answer: unanswered, answered, answered again, and an unknown feeling refused.
+        assertEquals(HttpStatusCode.NoContent, client.get("/users/me/diary/today") { bearerAuth(loginToken) }.status)
+        listOf("GOOD" to HttpStatusCode.Created, "BAD" to HttpStatusCode.OK, "MEH" to HttpStatusCode.BadRequest)
+            .forEach { (feeling, expected) ->
+                val answered = client.post("/users/me/diary") {
+                    bearerAuth(loginToken)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"feeling":"$feeling"}""")
+                }
+                assertEquals(expected, answered.status, feeling)
+            }
+        assertEquals(HttpStatusCode.OK, client.get("/users/me/diary/today") { bearerAuth(loginToken) }.status)
         listOf(token, loginToken).forEach {
             assertEquals(HttpStatusCode.NoContent, client.delete("/users/me/session") { bearerAuth(it) }.status)
         }
@@ -107,6 +122,7 @@ class AccountFlowLoggingTest {
         // Call logging wrote a line per request, so the capture itself works.
         assertTrue(logged.any { "POST /users" in it }, "captured: $logged")
         assertTrue(logged.any { "POST /users/session" in it } && logged.any { "DELETE /users/me/session" in it })
+        assertTrue(logged.any { "POST /users/me/diary" in it } && logged.any { "GET /users/me/diary/today" in it })
         listOf(token, loginToken, email, password, "logged.flow").forEach { secret ->
             assertTrue(logged.none { secret in it }, "a log line contains $secret: $logged")
         }

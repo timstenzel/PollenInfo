@@ -1,7 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import ch.stenzel.tim.polleninfo.core.diary.FakeDiaryRepository
-import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
+import ch.stenzel.tim.polleninfo.core.diary.FakeFeelingPromptPreferences
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.measurement.FakeStationMeasurementRepository
 import ch.stenzel.tim.polleninfo.core.measurement.MEASURED_AT
@@ -14,12 +14,16 @@ import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
+import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
+import ch.stenzel.tim.polleninfo.core.session.testSession
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
@@ -29,7 +33,10 @@ import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -47,7 +54,10 @@ class HomeViewModelTest {
 
     private var selectedStationRepository = FakeSelectedStationRepository(initial = zurich)
     private val measurementRepository = FakeStationMeasurementRepository()
-    private var diaryRepository = FakeDiaryRepository()
+    /** Signed out unless a test logs in; the readings do not depend on it. */
+    private val sessionRepository = FakeSessionRepository()
+    private val diaryRepository = FakeDiaryRepository(today = LocalDate(2026, 8, 1))
+    private val feelingPromptPreferences = FakeFeelingPromptPreferences()
 
     /** Wall-clock time the ViewModel stamps on each received reading; moved by hand, never ticks. */
     private val clock = object : Clock {
@@ -68,9 +78,22 @@ class HomeViewModelTest {
     private fun viewModel() = HomeViewModel(
         selectedStationRepository,
         GetStationMeasurementUseCase(measurementRepository),
+        sessionRepository,
         diaryRepository,
+        feelingPromptPreferences,
         clock,
     )
+
+    /** Drains the one-shot event channel; see `OnboardingViewModelTest.collectEvents`. */
+    private fun TestScope.events(viewModel: HomeViewModel): List<HomeEvent> {
+        val received = mutableListOf<HomeEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.events.collect { received += it }
+        }
+        return received
+    }
+
+    private fun HomeViewModel.content() = assertIs<HomeUiState.Content>(uiState.value)
 
     @Test
     fun `starts in Loading before the readings arrive`() {
@@ -356,21 +379,25 @@ class HomeViewModelTest {
     /** The Swiss date of [clock]'s starting time, 09:12 UTC on 1 August. */
     private val today = LocalDate(2026, 8, 1)
 
+    // --- The feeling prompt, signed out ---
+
     @Test
-    fun `the feeling prompt is shown on Content when today has no answer`() = runTest {
+    fun `signed out the feeling prompt is shown on Content unless dismissed`() = runTest {
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
+        val state = viewModel.content()
         assertTrue(state.showFeelingPrompt)
-        assertFalse(state.feelingSaveError)
+        assertNull(state.feelingSaveError)
+        // Nobody to ask: the account's diary is never contacted.
+        assertEquals(0, diaryRepository.todayCalls)
     }
 
     @Test
     fun `the feeling prompt is never part of Loading or Error`() = runTest {
         // Neither state has the field at all; what is pinned here is that the ViewModel does not
-        // leave Loading or Error just because the diary answered first.
+        // leave Loading or Error just because the prompt's inputs answered first.
         measurementRepository.gate = CompletableDeferred()
         val loading = viewModel()
         advanceUntilIdle()
@@ -384,62 +411,53 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `the feeling prompt is hidden when today already has an answer`() = runTest {
-        diaryRepository = FakeDiaryRepository(initialEntries = listOf(DiaryEntry(today, Feeling.GOOD)))
+    fun `signed out the feeling prompt is hidden when it was dismissed today`() = runTest {
+        feelingPromptPreferences.dismiss(today)
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
+        assertFalse(viewModel.content().showFeelingPrompt)
     }
 
     @Test
-    fun `the feeling prompt is hidden when it was dismissed today`() = runTest {
-        diaryRepository = FakeDiaryRepository(initialDismissedOn = today)
+    fun `a dismissal outlives the ViewModel that made it`() = runTest {
+        val first = viewModel()
+        advanceUntilIdle()
+        first.onFeelingPromptDismissed()
+        advanceUntilIdle()
+
+        // The same stored preferences under a new ViewModel: the app started again.
+        val second = viewModel()
+        advanceUntilIdle()
+
+        assertFalse(second.content().showFeelingPrompt)
+    }
+
+    @Test
+    fun `a dismissal from an earlier day does not hide the feeling prompt`() = runTest {
+        feelingPromptPreferences.dismiss(LocalDate(2026, 7, 31))
         val viewModel = viewModel()
 
         advanceUntilIdle()
 
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
+        assertTrue(viewModel.content().showFeelingPrompt)
     }
 
     @Test
-    fun `answers from earlier days do not hide the feeling prompt`() = runTest {
-        val yesterday = LocalDate(2026, 7, 31)
-        diaryRepository = FakeDiaryRepository(
-            initialEntries = listOf(DiaryEntry(yesterday, Feeling.BAD)),
-            initialDismissedOn = yesterday,
-        )
+    fun `signed out a feeling tap asks for the login once and records nothing`() = runTest {
         val viewModel = viewModel()
-
-        advanceUntilIdle()
-
-        assertTrue(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
-    }
-
-    @Test
-    fun `answering records today's feeling and hides the prompt without a reload`() = runTest {
-        val viewModel = viewModel()
+        val events = events(viewModel)
         advanceUntilIdle()
 
         viewModel.onFeelingSelected(Feeling.BAD)
         advanceUntilIdle()
 
-        assertEquals(listOf(DiaryEntry(today, Feeling.BAD)), diaryRepository.storedEntries)
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
-        assertEquals(listOf("PZH"), measurementRepository.requested)
-    }
-
-    @Test
-    fun `an answer stored from elsewhere hides the prompt through the diary`() = runTest {
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        diaryRepository.record(today, Feeling.VERY_GOOD)
-        advanceUntilIdle()
-
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
-        assertEquals(listOf("PZH"), measurementRepository.requested)
+        assertEquals(listOf<HomeEvent>(HomeEvent.OpenAccount), events)
+        assertEquals(emptyList(), diaryRepository.recorded)
+        // Nothing happened the user did not choose: back from the login, the prompt is still up.
+        assertTrue(viewModel.content().showFeelingPrompt)
+        assertNull(feelingPromptPreferences.storedDismissedOn)
     }
 
     @Test
@@ -450,9 +468,10 @@ class HomeViewModelTest {
         viewModel.onFeelingPromptDismissed()
         advanceUntilIdle()
 
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
-        assertEquals(today, diaryRepository.storedDismissedOn)
-        assertEquals(emptyList(), diaryRepository.storedEntries)
+        assertFalse(viewModel.content().showFeelingPrompt)
+        assertEquals(today, feelingPromptPreferences.storedDismissedOn)
+        assertEquals(emptyList(), diaryRepository.recorded)
+        assertEquals(listOf("PZH"), measurementRepository.requested)
     }
 
     @Test
@@ -467,7 +486,7 @@ class HomeViewModelTest {
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertFalse(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
+        assertFalse(viewModel.content().showFeelingPrompt)
     }
 
     @Test
@@ -482,52 +501,199 @@ class HomeViewModelTest {
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertTrue(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
+        assertTrue(viewModel.content().showFeelingPrompt)
+    }
+
+    // --- The feeling prompt, signed in ---
+
+    @Test
+    fun `signed in the prompt stays hidden until the account says today is unanswered`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.todayGate = CompletableDeferred()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().showFeelingPrompt)
+
+        diaryRepository.todayGate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.content().showFeelingPrompt)
     }
 
     @Test
-    fun `an answer from yesterday lets the prompt return the next day`() = runTest {
+    fun `signed in the prompt is hidden when the account has today's answer`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.stored[today] = Feeling.GOOD
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().showFeelingPrompt)
+    }
+
+    @Test
+    fun `signed in a failed check hides the prompt until a refresh succeeds`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.todayFailure = IOException("no network")
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().showFeelingPrompt)
+
+        diaryRepository.todayFailure = null
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.content().showFeelingPrompt)
+    }
+
+    @Test
+    fun `signed in a dismissal today hides the unanswered prompt`() = runTest {
+        sessionRepository.current = testSession
+        feelingPromptPreferences.dismiss(today)
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().showFeelingPrompt)
+    }
+
+    @Test
+    fun `signed in answering sends the feeling and hides the prompt without a reload`() = runTest {
+        sessionRepository.current = testSession
+        val viewModel = viewModel()
+        val events = events(viewModel)
+        advanceUntilIdle()
+
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Feeling.BAD), diaryRepository.recorded)
+        assertEquals(Feeling.BAD, diaryRepository.stored[today])
+        assertFalse(viewModel.content().showFeelingPrompt)
+        assertEquals(emptyList(), events)
+        assertEquals(listOf("PZH"), measurementRepository.requested)
+    }
+
+    @Test
+    fun `signed in a tap while an answer is being sent is ignored`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.recordGate = CompletableDeferred()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+        viewModel.onFeelingSelected(Feeling.VERY_GOOD)
+        diaryRepository.recordGate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Feeling.BAD), diaryRepository.recorded)
+    }
+
+    @Test
+    fun `signed in a failed answer keeps the prompt with its error until the next attempt`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.recordFailure = IOException("no network")
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+
+        val failed = viewModel.content()
+        assertTrue(failed.showFeelingPrompt)
+        assertEquals(AppError.Network, failed.feelingSaveError)
+
+        // The next attempt clears the error at once, while it is still being sent.
+        diaryRepository.recordFailure = null
+        diaryRepository.recordGate = CompletableDeferred()
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+        assertNull(viewModel.content().feelingSaveError)
+        assertTrue(viewModel.content().showFeelingPrompt)
+
+        diaryRepository.recordGate?.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.content().showFeelingPrompt)
+        assertNull(viewModel.content().feelingSaveError)
+    }
+
+    @Test
+    fun `a refused session on answering leaves the app signed out and the next tap asks for the login`() = runTest {
+        sessionRepository.current = testSession
+        diaryRepository.recordFailure = SignedOutException()
+        // As the real repository does on a 401.
+        diaryRepository.onFailure = { sessionRepository.clear() }
+        val viewModel = viewModel()
+        val events = events(viewModel)
+        advanceUntilIdle()
+
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+
+        assertNull(sessionRepository.current)
+        val state = viewModel.content()
+        assertTrue(state.showFeelingPrompt)
+        assertNull(state.feelingSaveError)
+        assertEquals(emptyList(), events)
+
+        viewModel.onFeelingSelected(Feeling.BAD)
+        advanceUntilIdle()
+
+        assertEquals(listOf<HomeEvent>(HomeEvent.OpenAccount), events)
+        assertEquals(listOf(Feeling.BAD), diaryRepository.recorded)
+    }
+
+    @Test
+    fun `logging in re-checks today and logging out shows the prompt again`() = runTest {
+        diaryRepository.stored[today] = Feeling.GOOD
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.content().showFeelingPrompt)
+
+        // Logged in on the Diary while Home stays on the back stack.
+        sessionRepository.current = testSession
+        advanceUntilIdle()
+        assertFalse(viewModel.content().showFeelingPrompt)
+        assertEquals(1, diaryRepository.todayCalls)
+
+        sessionRepository.current = null
+        advanceUntilIdle()
+        assertTrue(viewModel.content().showFeelingPrompt)
+        assertEquals(1, diaryRepository.todayCalls)
+    }
+
+    @Test
+    fun `a refresh picks up an answer given on another phone`() = runTest {
+        sessionRepository.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.content().showFeelingPrompt)
+
+        diaryRepository.stored[today] = Feeling.VERY_GOOD
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.content().showFeelingPrompt)
+        assertEquals(2, diaryRepository.todayCalls)
+    }
+
+    @Test
+    fun `signed in an answer from yesterday lets the prompt return on the next Swiss day`() = runTest {
+        sessionRepository.current = testSession
         val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.onFeelingSelected(Feeling.GOOD)
         advanceUntilIdle()
+        assertFalse(viewModel.content().showFeelingPrompt)
 
         clock.now += 24.hours
+        diaryRepository.today = LocalDate(2026, 8, 2)
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertTrue(assertIs<HomeUiState.Content>(viewModel.uiState.value).showFeelingPrompt)
-    }
-
-    @Test
-    fun `a failed save keeps the prompt and reports the error`() = runTest {
-        diaryRepository.failWrite = true
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.onFeelingSelected(Feeling.BAD)
-        advanceUntilIdle()
-
-        val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
-        assertTrue(state.showFeelingPrompt)
-        assertTrue(state.feelingSaveError)
-        assertEquals(emptyList(), diaryRepository.storedEntries)
-    }
-
-    @Test
-    fun `a successful retry after a failed save clears the error and hides the prompt`() = runTest {
-        diaryRepository.failWrite = true
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        viewModel.onFeelingSelected(Feeling.BAD)
-        advanceUntilIdle()
-
-        diaryRepository.failWrite = false
-        viewModel.onFeelingSelected(Feeling.BAD)
-        advanceUntilIdle()
-
-        val state = assertIs<HomeUiState.Content>(viewModel.uiState.value)
-        assertFalse(state.showFeelingPrompt)
-        assertFalse(state.feelingSaveError)
+        assertTrue(viewModel.content().showFeelingPrompt)
     }
 }

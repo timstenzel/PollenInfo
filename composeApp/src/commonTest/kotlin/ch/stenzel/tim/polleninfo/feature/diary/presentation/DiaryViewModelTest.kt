@@ -1,6 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.diary.presentation
 
-import ch.stenzel.tim.polleninfo.core.diary.FakeDiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.FakeLocalDiaryRepository
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.history.FakeStationHistoryRepository
@@ -47,7 +47,7 @@ class DiaryViewModelTest {
     private val stationRepository = FakeStationRepository()
     private val speciesRepository = FakeSpeciesRepository()
     private val historyRepository = FakeStationHistoryRepository()
-    private val diaryRepository = FakeDiaryRepository()
+    private val diaryRepository = FakeLocalDiaryRepository()
 
     /** Logged in unless a test says otherwise: the diary needs an account. */
     private val sessionRepository = FakeSessionRepository(initial = testSession)
@@ -370,10 +370,10 @@ class DiaryViewModelTest {
 
     @Test
     fun `content carries only the entries on the days of the history`() = runTest {
-        diaryRepository.record(LocalDate(2026, 9, 3), Feeling.BAD) // the day before the window
-        diaryRepository.record(LocalDate(2026, 9, 4), Feeling.VERY_BAD) // its first day
-        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD) // its last day: yesterday
-        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.VERY_GOOD) // today
+        diaryRepository.add(LocalDate(2026, 9, 3), Feeling.BAD) // the day before the window
+        diaryRepository.add(LocalDate(2026, 9, 4), Feeling.VERY_BAD) // its first day
+        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD) // its last day: yesterday
+        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.VERY_GOOD) // today
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -389,8 +389,8 @@ class DiaryViewModelTest {
         // A history whose last day is the Swiss today — the backend never sends one, but the rule
         // that today is never plotted must not depend on that.
         historyRepository.result = Result.Success(stationHistory(from = LocalDate(2026, 9, 5)))
-        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD)
-        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD)
+        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -406,7 +406,7 @@ class DiaryViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        diaryRepository.record(LocalDate(2026, 9, 20), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 9, 20), Feeling.BAD)
         advanceUntilIdle()
 
         assertEquals(
@@ -421,7 +421,7 @@ class DiaryViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
         advanceUntilIdle()
 
         assertEquals(emptyList(), assertIs<DiaryUiState.Content>(viewModel.uiState.value).entries)
@@ -429,7 +429,7 @@ class DiaryViewModelTest {
 
     @Test
     fun `entries follow the history on screen while a range change loads`() = runTest {
-        diaryRepository.record(LocalDate(2026, 9, 10), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 9, 10), Feeling.BAD)
         val viewModel = viewModel()
         advanceUntilIdle()
 
@@ -449,8 +449,8 @@ class DiaryViewModelTest {
 
     @Test
     fun `reports no entries when the window holds none`() = runTest {
-        diaryRepository.record(LocalDate(2026, 9, 3), Feeling.BAD)
-        diaryRepository.record(LocalDate(2026, 10, 4), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 9, 3), Feeling.BAD)
+        diaryRepository.add(LocalDate(2026, 10, 4), Feeling.BAD)
         val viewModel = viewModel()
 
         advanceUntilIdle()
@@ -464,7 +464,7 @@ class DiaryViewModelTest {
         advanceUntilIdle()
         assertTrue(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)
 
-        diaryRepository.record(LocalDate(2026, 10, 3), Feeling.GOOD)
+        diaryRepository.add(LocalDate(2026, 10, 3), Feeling.GOOD)
         advanceUntilIdle()
 
         assertFalse(assertIs<DiaryUiState.Content>(viewModel.uiState.value).hasNoEntries)

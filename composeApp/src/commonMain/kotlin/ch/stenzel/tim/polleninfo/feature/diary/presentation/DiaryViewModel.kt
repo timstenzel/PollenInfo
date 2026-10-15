@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.DiaryEntry
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.swissToday
-import ch.stenzel.tim.polleninfo.core.diary.domain.repository.DiaryRepository
+import ch.stenzel.tim.polleninfo.core.diary.domain.repository.LocalDiaryRepository
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.history.domain.repository.StationHistoryRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
@@ -57,7 +57,7 @@ class DiaryViewModel(
     private val stationRepository: StationRepository,
     private val speciesRepository: SpeciesRepository,
     private val stationHistoryRepository: StationHistoryRepository,
-    private val diaryRepository: DiaryRepository,
+    private val diaryRepository: LocalDiaryRepository,
     private val sessionRepository: SessionRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {

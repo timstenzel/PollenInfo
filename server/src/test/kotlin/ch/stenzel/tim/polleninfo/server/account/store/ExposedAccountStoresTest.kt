@@ -1,12 +1,15 @@
 package ch.stenzel.tim.polleninfo.server.account.store
 
 import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryEntry
+import ch.stenzel.tim.polleninfo.server.account.domain.DiaryFeeling
 import ch.stenzel.tim.polleninfo.server.account.domain.UserId
 import ch.stenzel.tim.polleninfo.server.account.domain.hash
 import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
 import ch.stenzel.tim.polleninfo.server.alarm.store.TestPostgres
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.Test
@@ -33,6 +36,7 @@ class ExposedAccountStoresTest {
     private val database = TestPostgres.cleanDatabase()
     private val users = ExposedUserStore(database)
     private val sessions = ExposedSessionStore(database)
+    private val diary = ExposedDiaryStore(database)
 
     private val now = Instant.parse("2026-10-12T08:30:00Z")
 
@@ -206,4 +210,75 @@ class ExposedAccountStoresTest {
 
     private fun lastUsedAt(): Instant =
         transaction(database) { SessionsTable.selectAll().single()[SessionsTable.lastUsedAt].toInstant() }
+
+    // --- Diary ---
+
+    private val day = LocalDate.parse("2026-10-12")
+
+    @Test
+    fun `the first answer of a day is Recorded and stored with its time`() = runTest {
+        val id = registered()
+
+        val result = diary.record(id, day, DiaryFeeling.GOOD, now)
+
+        assertEquals(RecordResult.Recorded(DiaryEntry(day, DiaryFeeling.GOOD)), result)
+        val row = transaction(database) { DiaryEntriesTable.selectAll().single() }
+        assertEquals(id.value, row[DiaryEntriesTable.userId])
+        assertEquals("GOOD", row[DiaryEntriesTable.feeling])
+        assertEquals(now, row[DiaryEntriesTable.createdAt].toInstant())
+    }
+
+    @Test
+    fun `a second answer for the day is AlreadyAnswered with the first and changes nothing`() = runTest {
+        val id = registered()
+        diary.record(id, day, DiaryFeeling.GOOD, now)
+
+        val result = diary.record(id, day, DiaryFeeling.VERY_BAD, now.plusSeconds(60))
+
+        assertEquals(RecordResult.AlreadyAnswered(DiaryEntry(day, DiaryFeeling.GOOD)), result)
+        assertEquals(DiaryEntry(day, DiaryFeeling.GOOD), diary.entry(id, day))
+        assertEquals(1L, transaction(database) { DiaryEntriesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `two concurrent answers for one user and day store exactly one and both return it`() = runTest {
+        // Several days, so an overwrite or a lost read has more than one chance to show.
+        val id = registered()
+        repeat(5) { round ->
+            val date = day.plusDays(round.toLong())
+            val start = CompletableDeferred<Unit>()
+
+            val results = listOf(DiaryFeeling.GOOD, DiaryFeeling.VERY_BAD).map { feeling ->
+                async(Dispatchers.IO) {
+                    start.await()
+                    diary.record(id, date, feeling, now)
+                }
+            }.also { start.complete(Unit) }.awaitAll()
+
+            assertEquals(1, results.count { it is RecordResult.Recorded }, "results: $results")
+            assertEquals(1, results.count { it is RecordResult.AlreadyAnswered }, "results: $results")
+            val stored = assertNotNull(diary.entry(id, date))
+            assertEquals(listOf(stored, stored), results.map { it.entry })
+            // The first answer to reach the database is the one kept.
+            assertEquals(results.single { it is RecordResult.Recorded }.entry, stored)
+        }
+        assertEquals(5L, transaction(database) { DiaryEntriesTable.selectAll().count() })
+    }
+
+    @Test
+    fun `an entry is the user's answer for that day and null for another day or user`() = runTest {
+        val tim = registered("tim@example.com")
+        val anna = registered("anna@example.com")
+        diary.record(tim, day, DiaryFeeling.BAD, now)
+
+        assertEquals(DiaryEntry(day, DiaryFeeling.BAD), diary.entry(tim, day))
+        assertNull(diary.entry(tim, day.plusDays(1)))
+        assertNull(diary.entry(anna, day))
+        assertEquals(RecordResult.Recorded(DiaryEntry(day, DiaryFeeling.VERY_GOOD)), diary.record(anna, day, DiaryFeeling.VERY_GOOD, now))
+    }
+
+    @Test
+    fun `an answer cannot be stored for a user that does not exist`() = runTest {
+        assertFailsWith<ExposedSQLException> { diary.record(UserId(UUID.randomUUID()), day, DiaryFeeling.GOOD, now) }
+    }
 }
