@@ -22,7 +22,10 @@ class MigrationTest {
 
         assertEquals(listOf("1"), result.migrations.map { it.version })
         assertEquals(
-            listOf("alarms", "devices", "flyway_schema_history", "notification_log", "scheduler_state"),
+            listOf(
+                "alarms", "devices", "flyway_schema_history", "notification_log", "scheduler_state", "sessions",
+                "users",
+            ),
             asOwner { connection ->
                 connection.query(
                     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
@@ -63,6 +66,34 @@ class MigrationTest {
                 "INSERT INTO notification_log VALUES ('00000000-0000-0000-0000-000000000001', 'BIRCH', '2026-08-03')",
             )
             connection.execute("INSERT INTO scheduler_state (last_minute) VALUES (now())")
+            connection.execute(
+                """
+                INSERT INTO users (id, email, password_hash, consented_at, created_at)
+                VALUES ('00000000-0000-0000-0000-0000000000a1', 'tim@example.com', 'h', now(), now())
+                """,
+            )
+            connection.execute(
+                """
+                INSERT INTO sessions (token_hash, user_id, created_at, last_used_at)
+                VALUES ('\x01', '00000000-0000-0000-0000-0000000000a1', now(), now())
+                """,
+            )
+            // 23505 unique_violation: one account per email.
+            val duplicate = assertFailsWith<SQLException> {
+                connection.execute(
+                    """
+                    INSERT INTO users (id, email, password_hash, consented_at, created_at)
+                    VALUES ('00000000-0000-0000-0000-0000000000a2', 'tim@example.com', 'h', now(), now())
+                    """,
+                )
+            }
+            assertEquals("23505", duplicate.sqlState)
+            connection.execute("UPDATE users SET password_hash = 'g'")
+            connection.execute("UPDATE sessions SET last_used_at = '2026-08-03T06:00:00Z'")
+            assertEquals(listOf("g"), connection.query("SELECT password_hash FROM users"))
+            assertEquals(listOf("1"), connection.query("SELECT count(*) FROM sessions"))
+            connection.execute("DELETE FROM sessions")
+            connection.execute("DELETE FROM users")
             connection.execute("UPDATE devices SET fcm_token = 'u'")
             connection.execute("UPDATE alarms SET enabled = false")
             connection.execute("UPDATE notification_log SET species = 'ASH'")
@@ -92,6 +123,8 @@ class MigrationTest {
             assertDenied { connection.execute("ALTER TABLE alarms ADD COLUMN intruder int") }
             assertDenied { connection.execute("DROP TABLE alarms") }
             assertDenied { connection.execute("TRUNCATE devices CASCADE") }
+            assertDenied { connection.execute("ALTER TABLE users ADD COLUMN intruder int") }
+            assertDenied { connection.execute("DROP TABLE sessions") }
         }
     }
 

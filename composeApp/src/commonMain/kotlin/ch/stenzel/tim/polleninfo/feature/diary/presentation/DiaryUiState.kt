@@ -12,6 +12,12 @@ sealed interface DiaryUiState {
     data object Loading : DiaryUiState
 
     /**
+     * Nobody is logged in: the diary needs an account, so the screen explains why and offers to log
+     * in or create one. Nothing is fetched in this state, and nothing of an earlier login is kept.
+     */
+    data object SignedOut : DiaryUiState
+
+    /**
      * A history on screen. [isLoading] is set while a new history replaces this one; [history] stays
      * on screen until then.
      *

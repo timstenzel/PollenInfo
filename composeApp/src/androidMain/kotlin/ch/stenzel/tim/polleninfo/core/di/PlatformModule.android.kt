@@ -22,6 +22,7 @@ import org.koin.dsl.module
 actual val platformModule: Module = module {
     single<DataStore<Preferences>> { createDataStore(get(), DATA_STORE_NAME) }
     single<DataStore<Preferences>>(DEVICE_DATA_STORE) { createDataStore(get(), DEVICE_DATA_STORE_NAME) }
+    single<DataStore<Preferences>>(SESSION_DATA_STORE) { createDataStore(get(), SESSION_DATA_STORE_NAME) }
     single<CoarseLocationProvider> { AndroidCoarseLocationProvider(get()) }
     single<PushTokenProvider> { FirebasePushTokenProvider() }
     single<AppInfo> { AndroidAppInfo(get()) }

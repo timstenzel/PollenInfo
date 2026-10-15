@@ -26,6 +26,7 @@ import platform.Foundation.NSUserDomainMask
 actual val platformModule: Module = module {
     single<DataStore<Preferences>> { createDataStore(DATA_STORE_NAME) }
     single<DataStore<Preferences>>(DEVICE_DATA_STORE) { createDataStore(DEVICE_DATA_STORE_NAME) }
+    single<DataStore<Preferences>>(SESSION_DATA_STORE) { createDataStore(SESSION_DATA_STORE_NAME) }
     single<CoarseLocationProvider> { IosCoarseLocationProvider() }
     single<PushTokenProvider> { UnavailablePushTokenProvider() }
     single<AppInfo> { IosAppInfo() }

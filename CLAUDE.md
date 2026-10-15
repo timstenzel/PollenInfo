@@ -359,6 +359,10 @@ else reads alarms. `feature/diary` reads `core/history` and so has no `data/` ei
   a stored fallback). The first screen whose text comes entirely from string resources — the model
   for that (see "Localization"). Also the change-station screen, the second user of
   `core/stationpicker`. See "Settings" below.
+- **`feature/account`** — creating an account (and logging in): `domain/model` (`AccountMode`, the
+  pure `AccountFormState` with every form rule) and `presentation/` (`AccountViewModel`,
+  `AccountScreen`); the session itself is `core/session`, since Home, the Diary and Settings read it
+  too. See "Accounts" below.
 
 Cross-feature code lives in `core/` (`core/network`, `core/result`, `core/di`, …). A feature never
 imports another feature, and nothing in `core/` imports a feature except the DI module that wires
@@ -377,6 +381,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
+| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`; `409` → `EmailTakenException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `API_BASE_URL` (the Koin qualifier of the backend address), `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
@@ -467,27 +472,30 @@ that omits it binds to the stdlib type and fails to compile against `Success` / 
 **UI states carry an `AppError`, never a message string.** `core/result/AppError.kt` is a sealed
 interface of what went wrong *for the user*: `Network`, `ServerUnavailable`, `NotFound` (mapped from
 exceptions), `NoStationSelected`, `NoReadings`, `NoStations` (conditions a ViewModel finds itself),
-`PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures) and `Unknown`. A ViewModel
+`PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures), `EmailTaken` (account
+failures) and `Unknown`. A ViewModel
 turns a `Failure` into one with `exception.toAppError()`: any `kotlinx.io.IOException` — every
 engine's transport failures and Ktor's `HttpRequestTimeoutException` — is `Network`, an
 `HttpStatusException` 5xx `ServerUnavailable` and 404 `NotFound`, anything else (a payload that does
 not parse, another status) `Unknown`. `feature/alarms` has its own `toAlarmAppError()`
 (`domain/model/AlarmAppError.kt`) that maps its five exceptions — `UnknownDeviceException`, which
 only escapes after the repository's one re-registration, is `Unknown` — and delegates the rest; the
-alarm exceptions stay in the feature because `core/` may not import one.
+alarm exceptions stay in the feature because `core/` may not import one. The account failures live
+in `core/session` (`domain/model/SessionFailures.kt`), whose `toSessionAppError()` maps
+`EmailTakenException` to `EmailTaken` and delegates the rest the same way.
 
 **Every API service checks the status before `body()`** through `core/network`'s
 `HttpResponse.checkSuccess()`, which throws `HttpStatusException(status)` on a non-2xx — so an error
 body is never read as the expected payload and the mapping can tell a 502 from a 404.
 (`AlarmApiService` first turns its own statuses — 400, 401, 409, and 404 on a single alarm — into
-the alarm exceptions.)
+the alarm exceptions; `AccountApiService` turns a `409` on registration into `EmailTakenException`.)
 
 **Screens turn an `AppError` into text** with `core/ui/error/AppErrorText.kt`:
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
 snackbar shown from an event. `ErrorContext` is `LOAD` (the reason sentence alone, under the
-screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM`, which
-put "Couldn't save the alarm." etc. before the reason; `NotFound` reads "This alarm no longer
-exists." outside `LOAD`. The choice is the pure `AppError.text(context)` → `ErrorText(action,
+screen's own heading) or one of `SAVE_ALARM` / `DELETE_ALARM` / `PAUSE_ALARM` / `RESUME_ALARM` /
+`REGISTER`, which put "Couldn't save the alarm.", "Couldn't create the account." etc. before the
+reason; `NotFound` reads "This alarm no longer exists." in the four alarm contexts. The choice is the pure `AppError.text(context)` → `ErrorText(action,
 reason)` of `StringResource`s, tested in `AppErrorTextTest`; the sentences are `error_*` resources
 in all four languages. No exception text — host names, status codes, library messages — reaches a
 screen; `feature/example` is the one exception: its `Error` carries the exception's own text (the
@@ -544,11 +552,20 @@ the device alone — in a **DataStore file of its own**, `polleninfo_device` (`D
 `DEVICE_DATA_STORE_NAME` in `core/di/PlatformModule.kt`, provided by both platform modules under
 that Koin qualifier), which Android's backup rules exclude from cloud backup and device transfer
 (`androidApp/src/main/res/xml/data_extraction_rules.xml` for API 31+, `backup_rules.xml` below,
-both referenced from the manifest; they name `datastore/polleninfo_device.preferences_pb` and
-nothing else, so the diary and the selections are still backed up). Clearing app data, or restoring
-onto another phone, loses access to the alarms; the app then registers afresh. Same rules again:
-`DataStoreDeviceRegistrationRepository` is logic-free, consumers use
+both referenced from the manifest; they name `datastore/polleninfo_device.preferences_pb` and the
+login's file below and nothing else, so the diary and the selections are still backed up). Clearing
+app data, or restoring onto another phone, loses access to the alarms; the app then registers
+afresh. Same rules again: `DataStoreDeviceRegistrationRepository` is logic-free, consumers use
 `FakeDeviceRegistrationRepository`.
+
+**The login** — the session token and the account's email — follows the device token's rules:
+`core/session/data/local/SessionStorage` over a **DataStore file of its own**, `polleninfo_session`
+(`SESSION_DATA_STORE` / `SESSION_DATA_STORE_NAME` in `core/di/PlatformModule.kt`, both platform
+modules), which both backup rule files exclude (`datastore/polleninfo_session.preferences_pb`), so
+a restored backup or a device transfer starts logged out rather than carrying a login to another
+phone. `DataStoreSessionStorage` is logic-free and untested; `SessionRepositoryImplTest` drives
+`SessionRepositoryImpl` over an in-memory storage, and every other consumer uses
+`FakeSessionRepository` (`core/session`, with `testSession`).
 
 **The app language is deliberately not here.** It belongs to the platform, so it can never disagree
 with the platform's own setting: Android's per-app language (AppCompat stores it below API 33),
@@ -695,6 +712,42 @@ see that section for why the two differ — so a station changed in Settings sho
 There is deliberately no way to change the station from Home; the pin in its top bar is decorative,
 and station changes belong to Settings (see "Settings").
 
+**The account screen.** `Screen.Account(mode: AccountMode = LOGIN)` — not a tab, so the bottom bar
+is hidden — is opened from the Diary's gate in either mode (`toRoute` hands the mode to
+`AccountViewModel` through Koin's `parametersOf`), and pops itself on `AccountEvent.Done` or Back.
+See "Accounts".
+
+#### Accounts
+
+`feature/account` creates an account (logging in arrives with the next step: until then the login
+mode of `Screen.Account` shows its title and the switch to "Create account" only). `AccountScreen`
+under a `TopAppBar` titled "Create account" / "Log in" with a back arrow: the email field, the
+password and "Repeat password" fields — **each with its own eye `IconButton`**, named for what it
+does ("Show password" / "Hide repeated password") and stating what the field does now
+(`stateDescription` "Password shown" / "Password hidden") — the hint "At least 8 characters" (an
+error "At most 128 characters" above that) and "The passwords don't match." under the confirmation,
+the line that a forgotten password cannot be reset, the consent row (checkbox and sentence as **one**
+toggleable focus stop), "Create account" with a progress indicator, the error, and a text button to
+switch mode that keeps the email.
+
+**`AccountFormState` (`domain/model/`) holds every rule**, pure and unit-tested
+(`AccountFormStateTest`): `withMode` keeps the email and starts the rest over; `passwordLength`
+counts code points as the backend does (an emoji once); `passwordsMismatch` only once the
+confirmation has text; `isEmailPlausible` is the backend's light check (≤ 254 characters trimmed,
+exactly one `@` with text on each side); `canSubmit` is, for registering, a plausible email, a
+password of `MIN_PASSWORD_LENGTH` (8) to `MAX_PASSWORD_LENGTH` (128), the same confirmation and the
+consent — for logging in, a plausible email and any password. `AccountViewModel(initialMode,
+sessionRepository)` holds `AccountUiState(form, isSubmitting, error: AppError?)`: field changes are
+ignored while submitting, every edit or submit clears `error`, a success sends `AccountEvent.Done`
+once on a buffered `Channel` and leaves `isSubmitting` set, a failure is `toSessionAppError()` shown
+in the `REGISTER` context ("An account with this email address already exists. Log in instead.").
+
+`SessionRepository.register(email, password)` posts `POST /users` with `consent: true` (the form
+cannot be sent without it), stores the issued token with the email trimmed and lowercased — the
+backend's spelling — and so logs in; the Diary, observing the session, loads as soon as the account
+screen has popped. `AccountViewModelTest` and `SessionRepositoryImplTest` (`MockEngine`) pin it;
+the composable is checked by hand.
+
 #### All stations
 
 The second tab, `feature/allstations`: every station's current reading, one row per station,
@@ -828,7 +881,7 @@ keeps its own saved state. There is no placeholder screen any more: the former `
 deleted when the last placeholder tab became Settings.
 
 **The bar is shown exactly when the current back-stack destination is a tab** — never on
-`Onboarding`, `AlarmEditor`, `ChangeStation` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
+`Onboarding`, `AlarmEditor`, `ChangeStation`, `Account` or `Example`. The rule is `TopLevelDestination.current(isOnRoute)`: it returns the
 matching tab (which is also the selected one) or `null` (bar hidden). It takes a
 `(KClass<out Screen>) -> Boolean` predicate rather than a `NavDestination`, so `AppNavigation`
 calls it with `destination.hasRoute(it)` and `TopLevelDestinationTest` with a plain class
@@ -871,8 +924,18 @@ felt with the pollen levels at a station.\*", the chart, one checkbox per pollen
 "\* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor." The
 screen scrolls as a whole and has no pull-to-refresh.
 
+**The account gate.** The diary needs an account. While nobody is logged in the Diary is
+`DiaryUiState.SignedOut` and fetches nothing: a heading ("Your diary needs an account"), a line and
+four points saying why — the answers are health information kept safely in the account, survive a
+lost or replaced phone, appear on every phone logged in, and the email is only used to log in
+(`diary_gate_*`) — then "Create account" and "Log in", which open `Screen.Account` in that mode. The
+ViewModel observes `SessionRepository.session` (whether it is `null`, not which session): a session
+appearing — the user registered from the gate and came back — runs the load below, and a session
+ending returns to `SignedOut`, dropping what was on screen. Retry, range and station changes load
+nothing while signed out (a range or station chosen then is the one loaded after logging in).
+
 `DiaryViewModel(selectedStationRepository, stationRepository, speciesRepository,
-stationHistoryRepository, diaryRepository, clock)` reads the stored home station **once** and never
+stationHistoryRepository, diaryRepository, sessionRepository, clock)` reads the stored home station **once** and never
 writes it, fetches the station list and the pollen types (in parallel, once — kept across reloads,
 and a Retry fetches only what has not arrived), then loads
 `GET /pollen/stations/{abbr}/history?range=…` through `StationHistoryRepository`: `Loading` →
@@ -1299,7 +1362,7 @@ The app is being translated into German, French and Italian; English is the defa
 every screen — the bottom bar's tab names, Home (feeling prompt included), All stations (the map's spoken
 description included), the reading composables in `core/ui/severity` they share, the Settings
 screen, onboarding, the change-station screen and the station picker they share, the Diary (chart
-description, axis words and the no-answers hint included), Alarms (permission gate, list, row
+description, axis words, the no-answers hint and the account gate included), the account screen, Alarms (permission gate, list, row
 summaries, limit hint, snackbars, the editor with its dialogs and time pickers, and every spoken
 label) — every error sentence (`error_*`, see "Error handling"), the Android notification channel
 names, and the vocabulary every screen shares — pollen-type, severity and feeling words, month and
@@ -1375,7 +1438,8 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
     language. Compile-verified only; needs `CFBundleLocalizations` (see "iOS wrapper configuration").
 - **Keys** are `<area>_<thing>`: `nav_*`, `settings_*`, `error_*`, `home_*`, `onboarding_*`,
   `change_station_*`, `station_picker_*`, `species_*`, `severity_*`, `feeling_*`, `date_*`,
-  `alarm_*`, `all_stations_*`, `diary_*`, `reading_*` (the reading composables of `core/ui/severity`:
+  `alarm_*`, `all_stations_*`, `diary_*` (the gate's `diary_gate_*` among them), `account_*` (the
+  account screen), `reading_*` (the reading composables of `core/ui/severity`:
   reading age, refresh caption, species list), and `common_*` for words several screens share ("Retry",
   "Back", "Cancel"). Keys starting with `example_` are reserved
   for the English-only reference feature and live in `values/` only.
@@ -1394,7 +1458,8 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
   `grep -rnE '"[A-Z][a-z]+( [a-z]+)+' composeApp/src/commonMain composeApp/src/androidMain composeApp/src/iosMain --include='*.kt'`
   (comment and KDoc lines and `feature/example` left out). Every hit must be on this reviewed
   allowlist — text that is never shown: exception messages (`HttpStatusException`, the alarm
-  failures in `AlarmFailures.kt`, `InvalidAlarmException`'s fallback in `AlarmApiService`, the
+  failures in `AlarmFailures.kt`, the account failures in `SessionFailures.kt`,
+  `InvalidAlarmException`'s fallback in `AlarmApiService`, the
   activity `error(...)` in `NotificationPermissionController.android.kt`, the iOS Documents
   `requireNotNull`), log lines (`PollenFirebaseMessagingService`) and the lake names in
   `SwissLakes.kt` (data labels). Screens never show an exception's `message`; they show
@@ -1426,10 +1491,11 @@ language too (`notification_*`, see "Firebase"); the backend sends no text.
 
 Ktor plugin configuration is split into `plugins/` extension functions on `Application`
 (`configureSerialization`, `configureLogging`, `configureSecurity`, `configureRouting`,
-`configureAlarmRouting`) and composed in `Application.module(config)`, which also builds the long-lived collaborators once — the
+`configureAlarmRouting`, `configureAccountRouting`) and composed in `Application.module(config)`, which also builds the long-lived collaborators once — the
 upstream `PollenService` (via `meteoSwissPollenService`), the `MeasurementService` and the
 `HistoryService` over it, the database and the stores — and passes them into `configureRouting(...)`
-(health and pollen, no database) and `configureAlarmRouting(devices, alarms)` (no defaults), then
+(health and pollen, no database), `configureAlarmRouting(devices, alarms)` and
+`configureAccountRouting(users, sessions, hasher, clock)` (no defaults), then
 starts the alarm scheduler with the same `MeasurementService` and alarm store. Routes are `fun Route.xRoutes(dependency)` extension functions grouped by
 feature package, taking their collaborators as parameters so tests can supply their own instances.
 
@@ -1437,7 +1503,8 @@ feature package, taking their collaborators as parameters so tests can supply th
 server/src/main/kotlin/.../server/
 ├── config/             ServerConfig (+ DatabaseConfig, ConfigException)
 ├── plugins/            configureSerialization / configureLogging / configureSecurity /
-│                       configureRouting / configureAlarmRouting (+ configureDeviceAuthentication)
+│                       configureRouting / configureAlarmRouting (+ configureDeviceAuthentication) /
+│                       configureAccountRouting
 ├── pollen/
 │   ├── domain/         PollenStation, PollenSpecies, PollenSeverity, PollenThresholds, SWISS_ZONE
 │   ├── upstream/       PollenService, MeteoSwissPollenService, PollenCsvParser
@@ -1457,6 +1524,12 @@ server/src/main/kotlin/.../server/
     ├── scheduler/      AlarmScheduler (tick) + launchAlarmScheduler (the minute loop)
     ├── model/          Wire DTOs incl. the polymorphic ScheduleDto
     └── AlarmRoutes.kt
+└── account/
+    ├── domain/         AccountValidation (+ AccountSpec, AccountValidationResult), PasswordHasher
+    │                   (Argon2PasswordHasher), SessionToken (+ newSessionToken, hash), UserId
+    ├── store/          UserStore, SessionStore (+ Exposed implementations), AccountTables
+    ├── model/          Wire DTOs (RegisterDto, SessionDto, ErrorDto)
+    └── AccountRoutes.kt
 ```
 
 `server/src/main/resources/db/migration/` holds the Flyway migrations (see "Persistence").
@@ -1487,6 +1560,7 @@ independently of the domain.
 | POST   | `/devices/me/alarms`                    | (auth) Alarm without `id` → `201 Alarm`; `400 {error}` invalid or malformed; `409 {error}` at 10 alarms |
 | PUT    | `/devices/me/alarms/{alarmId}`          | (auth) Alarm without `id` → `200 Alarm`; `400 {error}` invalid or malformed; `404` unknown alarm, another device's alarm or an id that is not a UUID |
 | DELETE | `/devices/me/alarms/{alarmId}`          | (auth) `204`; `404` as for `PUT` |
+| POST   | `/users`                                | `{ "email", "password", "consent": true }` → `201 { "sessionToken": "…" }`; `400 {error}` invalid, no consent or malformed; `409 {error}` email taken (in any capitals) |
 
 (auth) = `Authorization: Bearer <deviceToken>`; a missing, malformed or unknown token is `401` with
 `WWW-Authenticate: Bearer`, checked before the body is read (so an invalid body without a token is
@@ -1506,8 +1580,10 @@ Every route can also answer:
 installed **before** the routes, since `rateLimit(...)` looks its limiter up when a route is built
 (route tests call `configureSecurity()` with the defaults, or small limits of their own).
 
-- **Three limiters** (`ktor-server-rate-limit`, token buckets refilled per period), each wrapping
+- **Four limiters** (`ktor-server-rate-limit`, token buckets refilled per period), each wrapping
   its routes: `REGISTER_LIMIT` around `POST /devices`, per client address (5 an hour);
+  `ACCOUNT_LIMIT` around `POST /users` (and the login, once it exists — one bucket for both), per
+  client address (10 an hour);
   `DEVICE_LIMIT` around `/devices/me/…`, **inside** `authenticate("device")` and keyed on the
   `DevicePrincipal`, so random unknown tokens are a `401` and never get a bucket of their own (60 a
   minute per device); `POLLEN_LIMIT` around `/pollen/…`, per client address (120 a minute — eight
@@ -1531,7 +1607,8 @@ installed **before** the routes, since `rateLimit(...)` looks its limiter up whe
 
 #### Devices and alarms
 
-There are no accounts. An install registers once, anonymously, and gets a **device token**
+Alarms belong to the install, not to an account (see "Accounts (server)" below for those). An
+install registers once, anonymously, and gets a **device token**
 (`alarm/domain/DeviceToken.kt`): 256 bits from `SecureRandom`, base64url without padding, always 43
 characters, returned by `POST /devices` this once. **The token is the secret** and travels only in
 the `Authorization` header, never in a path, so it does not reach call logs; `DeviceToken.toString`
@@ -1599,9 +1676,40 @@ log alone**: it is keyed per type, so editing a threshold alert neither repeats 
 about today nor holds back a newly added one. Pausing is an update with `enabled = false`; the
 scheduler only ever loads enabled alarms.
 
+#### Accounts (server)
+
+Personal accounts hold the diary (the diary itself moves there in later steps). `POST /users`
+takes `{email, password, consent}` and answers `201 {sessionToken}`, logged in at once.
+`account/domain/AccountValidation` — pure, `AccountValidationResult.Valid(AccountSpec)` |
+`Invalid(message)` — trims and lowercases the email (≤ 254 characters, exactly one `@` with text on
+each side; nothing stricter, since there is no email delivery to prove an address), takes the
+password as typed (8–128 code points, never trimmed, no character-type rules) and requires
+`consent: true`; a missing `consent` reaches validation as `false`. Its messages never repeat a
+value. `AccountSpec` and `RegisterDto` print neither field.
+
+- **Passwords** are hashed by `PasswordHasher` / `Argon2PasswordHasher` — Argon2id through Bouncy
+  Castle (`bcprov-jdk18on`), a 16-byte salt from `SecureRandom`, OWASP's baseline (19 MiB, t = 2,
+  p = 1), stored as a PHC string (`$argon2id$v=19$m=19456,t=2,p=1$salt$hash`) so `verify` reads the
+  parameters from the hash and they can be raised later. `verify` compares in constant time and is
+  `false` for a hash it cannot read; `verifyDummy` (for the login's unknown emails) does the work of
+  one verify. Hashing runs on `Dispatchers.Default`. Tests pass cheap parameters (`cheapHasher()`).
+- **Sessions** are `SessionToken`s, the device token's shape (256 random bits, base64url, 43
+  characters, `parseOrNull`, `toString` hidden); `sessions` stores only the SHA-256, one row per
+  logged-in phone.
+- **Email taken** is `UserStore.register`'s `EmailTaken` — the unique index decides, not a lookup
+  first, so two concurrent registrations of one email cannot both succeed — and a `409`. That
+  registration reveals whether an address has an account is an accepted limitation without email
+  delivery.
+- The email and the token travel only in bodies and headers, never in a path or query, so call
+  logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow and
+  finds neither, nor the password.
+
+`AccountRoutesTest` and `ExposedAccountStoresTest` run on the test database; `AccountValidationTest`,
+`PasswordHasherTest` and `SessionTokenTest` need none.
+
 #### Persistence
 
-Devices and alarms are the first state the backend must not lose: **its database has to be kept
+Devices, alarms and accounts are state the backend must not lose: **its database has to be kept
 across restarts and deployments.** PostgreSQL 18 (`postgres:18.6`, the same tag in
 `deploy/compose.dev.yaml` and `TestPostgres.IMAGE`) through JetBrains Exposed's DSL
 (`exposed-core`, `exposed-jdbc`, `exposed-java-time`), the JDBC driver `org.postgresql:postgresql`
@@ -1621,7 +1729,8 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   the owner over a connection of its own (`flyway-core` + `flyway-database-postgresql`, one version),
   then opens a Hikari pool of `POOL_SIZE` = 5 as the app login, closed on `ApplicationStopped`.
   Migrations are `server/src/main/resources/db/migration/V<n>__<name>.sql`; nothing creates tables
-  from the Kotlin definitions in `Tables.kt`, which only mirror them. A schema change is a new
+  from the Kotlin definitions in `Tables.kt` and `account/store/AccountTables.kt`, which only
+  mirror them. A schema change is a new
   migration (an applied one is never edited — Flyway's checksum would refuse to start; during
   development reset the database instead).
 - Tables (`V1__init.sql`): `devices(id uuid PK, token_hash bytea UNIQUE, fcm_token NULL, created_at,
@@ -1632,7 +1741,10 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date date, PK(all
   three))` — which pollen types each threshold alert has notified about on a Swiss date — and
   `scheduler_state(id boolean PK CHECK (id), last_minute timestamptz)`, at most one row: the last
-  minute the alarm scheduler finished (see "Alarm delivery"). Arrays hold
+  minute the alarm scheduler finished (see "Alarm delivery"). The accounts: `users(id uuid PK, email
+  text UNIQUE — trimmed and lowercased, password_hash text — Argon2id PHC, consented_at, created_at
+  timestamptz)` and `sessions(token_hash bytea PK — SHA-256, user_id → users ON DELETE CASCADE,
+  created_at, last_used_at timestamptz)` with an index on `user_id`. Arrays hold
   enum names; instants are written at UTC (`toTimestamp()`). An alarm id that is not a UUID is
   simply not found (`toUuidOrNull()`), never an error.
 - Isolation is Postgres's default `READ COMMITTED`. **The ten-alarm limit locks the device row**
@@ -1659,6 +1771,7 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
 | `RATE_LIMIT_REGISTER_PER_HOUR` | `5` | optional; a whole number above 0 |
 | `RATE_LIMIT_DEVICE_PER_MINUTE` | `60` | optional; a whole number above 0 |
 | `RATE_LIMIT_POLLEN_PER_MINUTE` | `120` | optional; a whole number above 0 |
+| `RATE_LIMIT_ACCOUNT_PER_HOUR` | `10` | optional; a whole number above 0 — registrations and logins together, per client address |
 | `TRUSTED_PROXY` | `false` | `true` by default; `true` or `false` |
 
 Passwords are only ever read from files (trimmed), never from variables, and `DatabaseConfig`'s
@@ -1976,8 +2089,8 @@ rollback, backups), trying it locally, CI.
 Testcontainers container per test JVM (`IMAGE`, the production tag), started on first use and
 initialised by the same `deploy/postgres/init/01-roles.sh`, so the tests have the production
 roles. `TestPostgres.cleanDatabase()` is the shared `polleninfo` database, migrated once and
-truncated for every test, as the app login — what `ExposedStoresTest`, `AlarmRoutesTest` and
-`AlarmSchedulerTest` use; `unmigratedDatabase()` is a fresh copy of the database as the init script
+truncated for every test, as the app login — what `ExposedStoresTest`, `AlarmRoutesTest`,
+`AlarmSchedulerTest`, `ExposedAccountStoresTest` and `AccountRoutesTest` use; `unmigratedDatabase()` is a fresh copy of the database as the init script
 left it, for `MigrationTest` (V1 applies, a second migrate is a no-op, the app role can read and
 write every table and is refused `CREATE` / `ALTER` / `DROP` / `TRUNCATE`). Without Docker every
 such test fails at once with a message saying so; the others need no database.

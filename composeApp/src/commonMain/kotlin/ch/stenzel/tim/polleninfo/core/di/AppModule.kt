@@ -18,6 +18,11 @@ import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationReposi
 import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.push.PushTokenUpdater
+import ch.stenzel.tim.polleninfo.core.session.data.local.DataStoreSessionStorage
+import ch.stenzel.tim.polleninfo.core.session.data.local.SessionStorage
+import ch.stenzel.tim.polleninfo.core.session.data.remote.AccountApiService
+import ch.stenzel.tim.polleninfo.core.session.data.repository.SessionRepositoryImpl
+import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.species.data.remote.SpeciesApiService
 import ch.stenzel.tim.polleninfo.core.species.data.repository.SpeciesRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
@@ -26,6 +31,7 @@ import ch.stenzel.tim.polleninfo.core.station.data.remote.StationApiService
 import ch.stenzel.tim.polleninfo.core.station.data.repository.StationRepositoryImpl
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
 import ch.stenzel.tim.polleninfo.core.stationpicker.domain.usecase.FindNearestStationUseCase
+import ch.stenzel.tim.polleninfo.feature.account.presentation.AccountViewModel
 import ch.stenzel.tim.polleninfo.feature.alarms.data.remote.AlarmApiService
 import ch.stenzel.tim.polleninfo.feature.alarms.data.repository.AlarmRepositoryImpl
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.repository.AlarmRepository
@@ -73,6 +79,10 @@ val dataModule = module {
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
     single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
     single<DeviceRegistrationRepository> { DataStoreDeviceRegistrationRepository(get(DEVICE_DATA_STORE)) }
+    // The login, in a DataStore file of its own that backups leave out.
+    single<SessionStorage> { DataStoreSessionStorage(get(SESSION_DATA_STORE)) }
+    single { AccountApiService(get(), get(API_BASE_URL)) }
+    single<SessionRepository> { SessionRepositoryImpl(get(), get()) }
     // Device-only: no API service takes a diary entry.
     single<DiaryRepository> { DataStoreDiaryRepository(get()) }
 
@@ -98,7 +108,8 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get()) }
     viewModel { AllStationsViewModel(get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> AccountViewModel(params.get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
     // AppInfo comes from platformModule.

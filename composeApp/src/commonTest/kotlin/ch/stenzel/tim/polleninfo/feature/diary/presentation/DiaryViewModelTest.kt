@@ -11,6 +11,8 @@ import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.FakeSessionRepository
+import ch.stenzel.tim.polleninfo.core.session.testSession
 import ch.stenzel.tim.polleninfo.core.species.FakeSpeciesRepository
 import ch.stenzel.tim.polleninfo.core.species.allSpecies
 import ch.stenzel.tim.polleninfo.core.station.FakeStationRepository
@@ -47,6 +49,9 @@ class DiaryViewModelTest {
     private val historyRepository = FakeStationHistoryRepository()
     private val diaryRepository = FakeDiaryRepository()
 
+    /** Logged in unless a test says otherwise: the diary needs an account. */
+    private val sessionRepository = FakeSessionRepository(initial = testSession)
+
     /**
      * 4 October 2026, 00:30 in Zürich but still 3 October in UTC — so "today" must be the Swiss date.
      * The default `stationHistory()` covers 4 September to 3 October: the month ending yesterday.
@@ -66,13 +71,98 @@ class DiaryViewModelTest {
     }
 
     private fun viewModel(selected: FakeSelectedStationRepository = selectedStationRepository) =
-        DiaryViewModel(selected, stationRepository, speciesRepository, historyRepository, diaryRepository, clock)
+        DiaryViewModel(
+            selected,
+            stationRepository,
+            speciesRepository,
+            historyRepository,
+            diaryRepository,
+            sessionRepository,
+            clock,
+        )
 
     @Test
     fun `starts in Loading`() = runTest {
         val viewModel = viewModel()
 
         assertIs<DiaryUiState.Loading>(viewModel.uiState.value)
+    }
+
+    // --- The account gate ---
+
+    @Test
+    fun `signed out is SignedOut and fetches no station species or history`() = runTest {
+        sessionRepository.current = null
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.SignedOut, viewModel.uiState.value)
+        assertEquals(0, stationRepository.callCount)
+        assertEquals(0, speciesRepository.callCount)
+        assertEquals(emptyList(), historyRepository.requested)
+    }
+
+    @Test
+    fun `retry and the selectors fetch nothing while signed out`() = runTest {
+        sessionRepository.current = null
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.retry()
+        viewModel.onRangeSelected(HistoryRange.YEAR)
+        viewModel.onStationSelected("PBE")
+        advanceUntilIdle()
+
+        assertEquals(DiaryUiState.SignedOut, viewModel.uiState.value)
+        assertEquals(0, stationRepository.callCount)
+        assertEquals(emptyList(), historyRepository.requested)
+    }
+
+    @Test
+    fun `a session appearing loads the diary`() = runTest {
+        sessionRepository.current = null
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        historyRepository.gate = CompletableDeferred()
+        sessionRepository.current = testSession
+        runCurrent()
+
+        assertIs<DiaryUiState.Loading>(viewModel.uiState.value)
+        historyRepository.gate?.complete(Unit)
+        advanceUntilIdle()
+        val content = assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals("PZH", content.stationAbbr)
+        assertEquals(HistoryRange.MONTH, content.range)
+        assertEquals(listOf("PZH" to HistoryRange.MONTH), historyRepository.requested)
+        assertEquals(1, stationRepository.callCount)
+        assertEquals(1, speciesRepository.callCount)
+    }
+
+    @Test
+    fun `a range chosen at the gate is the one loaded after logging in`() = runTest {
+        sessionRepository.current = null
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onRangeSelected(HistoryRange.WEEK)
+
+        sessionRepository.current = testSession
+        advanceUntilIdle()
+
+        assertEquals(listOf("PZH" to HistoryRange.WEEK), historyRepository.requested)
+    }
+
+    @Test
+    fun `another session of the same login state does not reload`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        sessionRepository.current = testSession.copy(token = "another-token")
+        advanceUntilIdle()
+
+        assertIs<DiaryUiState.Content>(viewModel.uiState.value)
+        assertEquals(1, historyRepository.requested.size)
     }
 
     @Test

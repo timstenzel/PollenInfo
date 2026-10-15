@@ -1,5 +1,8 @@
 package ch.stenzel.tim.polleninfo.server
 
+import ch.stenzel.tim.polleninfo.server.account.domain.Argon2PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
 import ch.stenzel.tim.polleninfo.server.alarm.push.pushSender
 import ch.stenzel.tim.polleninfo.server.alarm.scheduler.AlarmScheduler
 import ch.stenzel.tim.polleninfo.server.alarm.scheduler.launchAlarmScheduler
@@ -10,6 +13,7 @@ import ch.stenzel.tim.polleninfo.server.alarm.store.ExposedSchedulerState
 import ch.stenzel.tim.polleninfo.server.alarm.store.PollenInfoDatabase
 import ch.stenzel.tim.polleninfo.server.config.ConfigException
 import ch.stenzel.tim.polleninfo.server.config.ServerConfig
+import ch.stenzel.tim.polleninfo.server.plugins.configureAccountRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureAlarmRouting
 import ch.stenzel.tim.polleninfo.server.plugins.configureLogging
 import ch.stenzel.tim.polleninfo.server.plugins.configureRouting
@@ -88,6 +92,13 @@ fun Application.module(config: ServerConfig) {
     configureAlarmRouting(devices = devices, alarms = alarms)
 
     val clock = Clock.systemUTC()
+    configureAccountRouting(
+        users = ExposedUserStore(database.database),
+        sessions = ExposedSessionStore(database.database),
+        hasher = Argon2PasswordHasher(),
+        clock = clock,
+    )
+
     launchAlarmScheduler(
         scheduler = AlarmScheduler(
             alarms = alarms,

@@ -256,4 +256,32 @@
     <string name="notification_no_current_reading_earlier">Nessun dato attuale per %1$s. Ultimi dati del giorno %2$s.</string>
     <string name="notification_unavailable">Nessun dato attuale per %1$s. Le misurazioni non sono al momento disponibili.</string>
     <string name="notification_generic">Apra PollenInfo per vedere il Suo allarme.</string>
+
+    <!-- Accounts: the account screen, the Diary gate -->
+    <string name="error_email_taken">Esiste già un account con questo indirizzo e-mail. Acceda invece.</string>
+    <string name="error_action_register">Impossibile creare l’account.</string>
+    <string name="account_title_login">Accedi</string>
+    <string name="account_title_register">Crea account</string>
+    <string name="account_email_label">Indirizzo e-mail</string>
+    <string name="account_password_label">Password</string>
+    <string name="account_confirmation_label">Ripeti la password</string>
+    <string name="account_password_hint">Almeno %1$d caratteri</string>
+    <string name="account_password_too_long">Al massimo %1$d caratteri</string>
+    <string name="account_passwords_mismatch">Le password non coincidono.</string>
+    <string name="account_show_password">Mostra la password</string>
+    <string name="account_hide_password">Nascondi la password</string>
+    <string name="account_show_confirmation">Mostra la password ripetuta</string>
+    <string name="account_hide_confirmation">Nascondi la password ripetuta</string>
+    <string name="account_password_shown">Password visibile</string>
+    <string name="account_password_hidden">Password nascosta</string>
+    <string name="account_no_recovery">Conservi bene la Sua password: una password dimenticata non può essere reimpostata, e l’account con il suo diario va perso.</string>
+    <string name="account_consent">Accetto che le mie risposte quotidiane sul mio stato siano salvate nel mio account PollenInfo.</string>
+    <string name="account_switch_to_login">Ha già un account? Acceda</string>
+    <string name="account_switch_to_register">Non ha ancora un account? Ne crei uno</string>
+    <string name="diary_gate_title">Il Suo diario richiede un account</string>
+    <string name="diary_gate_intro">PollenInfo conserva il Suo diario in un account personale anziché su questo telefono:</string>
+    <string name="diary_gate_point_health">Le Sue risposte sono dati sanitari, conservati in modo sicuro nel Suo account.</string>
+    <string name="diary_gate_point_phone">Restano disponibili se perde o sostituisce il telefono.</string>
+    <string name="diary_gate_point_devices">Compaiono su ogni telefono su cui accede.</string>
+    <string name="diary_gate_point_email">Il Suo indirizzo e-mail serve solo per accedere.</string>
 </resources>

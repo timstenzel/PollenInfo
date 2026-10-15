@@ -1,7 +1,7 @@
--- The alarm store: registered installs, their alarms and what each threshold alert has notified
--- about. Applied by Flyway as polleninfo_owner; the running server's polleninfo_app login receives
--- SELECT, INSERT, UPDATE and DELETE on these tables through the owner's default privileges
--- (deploy/postgres/init/01-roles.sh).
+-- The alarm store (registered installs, their alarms and what each threshold alert has notified
+-- about) and the accounts (users and their sessions). Applied by Flyway as polleninfo_owner; the
+-- running server's polleninfo_app login receives SELECT, INSERT, UPDATE and DELETE on these tables
+-- through the owner's default privileges (deploy/postgres/init/01-roles.sh).
 
 CREATE TABLE devices (
     id            uuid        PRIMARY KEY,          -- internal; never sent to the app
@@ -41,3 +41,22 @@ CREATE TABLE scheduler_state (
     id            boolean     PRIMARY KEY DEFAULT true CHECK (id),
     last_minute   timestamptz NOT NULL
 );
+
+-- Personal accounts: a user logs in with an email address and a password and holds sessions, one
+-- per logged-in phone. Nothing here is pruned for inactivity except expired sessions.
+CREATE TABLE users (
+    id            uuid        PRIMARY KEY,          -- internal; never sent to the app
+    email         text        NOT NULL UNIQUE,      -- trimmed and lowercased
+    password_hash text        NOT NULL,             -- Argon2id, PHC string with its parameters
+    consented_at  timestamptz NOT NULL,             -- when the user agreed to their answers being stored
+    created_at    timestamptz NOT NULL
+);
+
+CREATE TABLE sessions (
+    token_hash    bytea       PRIMARY KEY,          -- SHA-256 of the session token, never the token
+    user_id       uuid        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at    timestamptz NOT NULL,
+    last_used_at  timestamptz NOT NULL              -- refreshed at most once a day
+);
+
+CREATE INDEX sessions_user ON sessions(user_id);

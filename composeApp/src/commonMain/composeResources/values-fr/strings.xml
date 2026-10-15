@@ -259,4 +259,32 @@
     <string name="notification_no_current_reading_earlier">Aucune donnée actuelle pour %1$s. Dernières données du %2$s.</string>
     <string name="notification_unavailable">Aucune donnée actuelle pour %1$s. Les mesures sont actuellement indisponibles.</string>
     <string name="notification_generic">Ouvrez PollenInfo pour voir votre alarme.</string>
+
+    <!-- Accounts: the account screen, the Diary gate -->
+    <string name="error_email_taken">Un compte existe déjà avec cette adresse e-mail. Connectez-vous plutôt.</string>
+    <string name="error_action_register">Impossible de créer le compte.</string>
+    <string name="account_title_login">Se connecter</string>
+    <string name="account_title_register">Créer un compte</string>
+    <string name="account_email_label">Adresse e-mail</string>
+    <string name="account_password_label">Mot de passe</string>
+    <string name="account_confirmation_label">Répéter le mot de passe</string>
+    <string name="account_password_hint">Au moins %1$d caractères</string>
+    <string name="account_password_too_long">Au plus %1$d caractères</string>
+    <string name="account_passwords_mismatch">Les mots de passe ne correspondent pas.</string>
+    <string name="account_show_password">Afficher le mot de passe</string>
+    <string name="account_hide_password">Masquer le mot de passe</string>
+    <string name="account_show_confirmation">Afficher le mot de passe répété</string>
+    <string name="account_hide_confirmation">Masquer le mot de passe répété</string>
+    <string name="account_password_shown">Mot de passe affiché</string>
+    <string name="account_password_hidden">Mot de passe masqué</string>
+    <string name="account_no_recovery">Conservez bien votre mot de passe : un mot de passe oublié ne peut pas être réinitialisé, et le compte est alors perdu avec son journal.</string>
+    <string name="account_consent">J’accepte que mes réponses quotidiennes sur mon état soient enregistrées dans mon compte PollenInfo.</string>
+    <string name="account_switch_to_login">Vous avez déjà un compte ? Se connecter</string>
+    <string name="account_switch_to_register">Pas encore de compte ? En créer un</string>
+    <string name="diary_gate_title">Votre journal nécessite un compte</string>
+    <string name="diary_gate_intro">PollenInfo conserve votre journal dans un compte personnel plutôt que sur ce téléphone :</string>
+    <string name="diary_gate_point_health">Vos réponses sont des données de santé, conservées en sécurité dans votre compte.</string>
+    <string name="diary_gate_point_phone">Elles sont préservées si vous perdez ou remplacez votre téléphone.</string>
+    <string name="diary_gate_point_devices">Elles apparaissent sur chaque téléphone où vous vous connectez.</string>
+    <string name="diary_gate_point_email">Votre adresse e-mail sert uniquement à vous connecter.</string>
 </resources>

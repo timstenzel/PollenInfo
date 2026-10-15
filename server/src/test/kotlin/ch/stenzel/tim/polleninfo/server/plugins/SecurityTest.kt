@@ -3,6 +3,14 @@ package ch.stenzel.tim.polleninfo.server.plugins
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
+import ch.stenzel.tim.polleninfo.server.account.domain.SessionToken
+import ch.stenzel.tim.polleninfo.server.account.domain.UserId
+import ch.stenzel.tim.polleninfo.server.account.domain.cheapHasher
+import ch.stenzel.tim.polleninfo.server.account.domain.newSessionToken
+import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
+import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.UserStore
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmId
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSpec
@@ -40,6 +48,7 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.AfterTest
@@ -63,6 +72,7 @@ class SecurityTest {
 
     private val devices = RecordingDeviceStore()
     private val alarms = RecordingAlarmStore()
+    private val users = RecordingUserStore()
     private val pollenService = FakePollenService()
 
     private val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
@@ -95,7 +105,20 @@ class SecurityTest {
                 historyService = HistoryService(pollenService, thresholds),
             )
             configureAlarmRouting(devices = devices, alarms = alarms)
+            configureAccountRouting(
+                users = users,
+                sessions = InMemorySessionStore(),
+                hasher = cheapHasher(),
+                clock = Clock.systemUTC(),
+            )
         }
+    }
+
+    /** A valid registration under a fresh email, so only the limiter can refuse it. */
+    private suspend fun ApplicationTestBuilder.registerUser(from: String? = null) = client.post("/users") {
+        from?.let { header(HttpHeaders.XForwardedFor, it) }
+        contentType(ContentType.Application.Json)
+        setBody("""{"email":"user${users.registered.size}-${UUID.randomUUID()}@example.com","password":"correct horse","consent":true}""")
     }
 
     private suspend fun ApplicationTestBuilder.register(from: String? = null) = client.post("/devices") {
@@ -145,6 +168,38 @@ class SecurityTest {
 
         repeat(5) { assertEquals(HttpStatusCode.Created, register().status) }
         assertTooManyRequests(register())
+    }
+
+    // --- Account limiter ---
+
+    @Test
+    fun `the default account limit lets ten registrations through and answers the eleventh with 429`() =
+        testApplication {
+            installApp()
+
+            repeat(10) { assertEquals(HttpStatusCode.Created, registerUser().status, "registration ${it + 1}") }
+            assertTooManyRequests(registerUser())
+            assertEquals(10, users.registered.size)
+        }
+
+    @Test
+    fun `the account limiter counts two addresses independently`() = testApplication {
+        installApp(RateLimits(accountPerHour = 2), trustedProxy = true)
+
+        repeat(2) { assertEquals(HttpStatusCode.Created, registerUser(from = "203.0.113.1").status) }
+        assertTooManyRequests(registerUser(from = "203.0.113.1"))
+
+        assertEquals(HttpStatusCode.Created, registerUser(from = "203.0.113.2").status)
+    }
+
+    @Test
+    fun `the account and device registration limiters do not share a bucket`() = testApplication {
+        installApp(RateLimits(registerPerHour = 1, accountPerHour = 1))
+
+        assertEquals(HttpStatusCode.Created, register().status)
+        assertEquals(HttpStatusCode.Created, registerUser().status)
+        assertTooManyRequests(register())
+        assertTooManyRequests(registerUser())
     }
 
     // --- Device limiter ---
@@ -419,4 +474,22 @@ private class RecordingAlarmStore : AlarmStore {
     override suspend fun update(deviceId: DeviceId, alarmId: AlarmId, spec: AlarmSpec) = null
     override suspend fun delete(deviceId: DeviceId, alarmId: AlarmId) = false
     override suspend fun enabledWithDeliverableDevice() = emptyList<AlarmWithToken>()
+}
+
+/** Accounts in memory; records every registration so a test can see whether a handler ran. */
+private class RecordingUserStore : UserStore {
+    val registered = mutableListOf<String>()
+
+    override suspend fun register(spec: AccountSpec, passwordHash: String, now: Instant): RegisterResult {
+        if (spec.email in registered) return RegisterResult.EmailTaken
+        registered += spec.email
+        return RegisterResult.Registered(UserId(UUID.randomUUID()))
+    }
+}
+
+private class InMemorySessionStore : SessionStore {
+    private val sessions = mutableMapOf<String, UserId>()
+
+    override suspend fun create(userId: UserId, now: Instant): SessionToken =
+        newSessionToken().also { sessions[it.value] = userId }
 }

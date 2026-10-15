@@ -4,10 +4,12 @@ import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_save_alarm
 import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
+import ch.stenzel.tim.polleninfo.resources.error_email_taken
 import ch.stenzel.tim.polleninfo.resources.error_network
 import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
@@ -28,6 +30,7 @@ class AppErrorTextTest {
         AppError.PushUnavailable,
         AppError.AlarmLimitReached,
         AppError.InvalidAlarm,
+        AppError.EmailTaken,
         AppError.Unknown,
     )
 
@@ -74,5 +77,22 @@ class AppErrorTextTest {
         assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.LOAD).reason)
         assertEquals(Res.string.error_alarm_not_found, AppError.NotFound.text(ErrorContext.SAVE_ALARM).reason)
         assertEquals(Res.string.error_alarm_not_found, AppError.NotFound.text(ErrorContext.DELETE_ALARM).reason)
+    }
+
+    @Test
+    fun `a failed registration says the account could not be created before the reason`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_register, Res.string.error_email_taken),
+            AppError.EmailTaken.text(ErrorContext.REGISTER),
+        )
+        assertEquals(
+            ErrorText(Res.string.error_action_register, Res.string.error_network),
+            AppError.Network.text(ErrorContext.REGISTER),
+        )
+    }
+
+    @Test
+    fun `NotFound during registration is not about an alarm`() {
+        assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.REGISTER).reason)
     }
 }

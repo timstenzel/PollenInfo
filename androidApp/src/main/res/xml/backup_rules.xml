@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android 11 (API 30) and earlier: the same exclusion as data_extraction_rules.xml, for the same
-  reason — the device token never leaves this install.
+  Android 11 (API 30) and earlier: the same exclusions as data_extraction_rules.xml, for the same
+  reasons — neither the device token nor the login ever leaves this install.
 -->
 <full-backup-content>
     <exclude domain="file" path="datastore/polleninfo_device.preferences_pb" />
+    <exclude domain="file" path="datastore/polleninfo_session.preferences_pb" />
 </full-backup-content>

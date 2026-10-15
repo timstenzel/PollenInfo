@@ -40,6 +40,7 @@ data class ServerConfig(
         const val RATE_LIMIT_REGISTER_PER_HOUR = "RATE_LIMIT_REGISTER_PER_HOUR"
         const val RATE_LIMIT_DEVICE_PER_MINUTE = "RATE_LIMIT_DEVICE_PER_MINUTE"
         const val RATE_LIMIT_POLLEN_PER_MINUTE = "RATE_LIMIT_POLLEN_PER_MINUTE"
+        const val RATE_LIMIT_ACCOUNT_PER_HOUR = "RATE_LIMIT_ACCOUNT_PER_HOUR"
         const val TRUSTED_PROXY = "TRUSTED_PROXY"
 
         const val DEFAULT_PORT = 8080
@@ -138,6 +139,7 @@ data class ServerConfig(
                 registerPerHour = limit(RATE_LIMIT_REGISTER_PER_HOUR, RateLimits.DEFAULT_REGISTER_PER_HOUR),
                 devicePerMinute = limit(RATE_LIMIT_DEVICE_PER_MINUTE, RateLimits.DEFAULT_DEVICE_PER_MINUTE),
                 pollenPerMinute = limit(RATE_LIMIT_POLLEN_PER_MINUTE, RateLimits.DEFAULT_POLLEN_PER_MINUTE),
+                accountPerHour = limit(RATE_LIMIT_ACCOUNT_PER_HOUR, RateLimits.DEFAULT_ACCOUNT_PER_HOUR),
             )
 
             // In production the server sits behind Caddy, the only peer that can reach it; a
@@ -168,8 +170,9 @@ data class ServerConfig(
 }
 
 /**
- * How many requests a caller may make before it gets a `429`: registrations per client address and
- * hour, device calls per device and minute, pollen reads per client address and minute.
+ * How many requests a caller may make before it gets a `429`: device registrations per client
+ * address and hour, device calls per device and minute, pollen reads per client address and minute,
+ * and account registrations and logins together per client address and hour.
  *
  * The pollen limit leaves room for the All stations tab, which reads all fifteen stations at once:
  * eight full refreshes a minute from one address still pass.
@@ -178,11 +181,13 @@ data class RateLimits(
     val registerPerHour: Int = DEFAULT_REGISTER_PER_HOUR,
     val devicePerMinute: Int = DEFAULT_DEVICE_PER_MINUTE,
     val pollenPerMinute: Int = DEFAULT_POLLEN_PER_MINUTE,
+    val accountPerHour: Int = DEFAULT_ACCOUNT_PER_HOUR,
 ) {
     companion object {
         const val DEFAULT_REGISTER_PER_HOUR = 5
         const val DEFAULT_DEVICE_PER_MINUTE = 60
         const val DEFAULT_POLLEN_PER_MINUTE = 120
+        const val DEFAULT_ACCOUNT_PER_HOUR = 10
     }
 }
 

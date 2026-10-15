@@ -30,6 +30,9 @@ val REGISTER_LIMIT = RateLimitName("register")
 /** Everything under `/devices/me`, per authenticated device. */
 val DEVICE_LIMIT = RateLimitName("device")
 
+/** `POST /users` (and, later, the login), per client address — one bucket for both. */
+val ACCOUNT_LIMIT = RateLimitName("account")
+
 /** Everything under `/pollen`, per client address. */
 val POLLEN_LIMIT = RateLimitName("pollen")
 
@@ -37,7 +40,7 @@ val POLLEN_LIMIT = RateLimitName("pollen")
 const val MAX_BODY_BYTES = 16L * 1024
 
 /**
- * What protects the server from its callers: the client address behind the proxy, the three rate
+ * What protects the server from its callers: the client address behind the proxy, the rate
  * limiters the routes wrap themselves in, the body size cap and error answers that reveal nothing.
  *
  * Install it before the routes: [io.ktor.server.plugins.ratelimit.rateLimit] looks its limiter up
@@ -62,6 +65,12 @@ fun Application.configureSecurity(rateLimits: RateLimits = RateLimits(), trusted
         register(DEVICE_LIMIT) {
             rateLimiter(limit = rateLimits.devicePerMinute, refillPeriod = 1.minutes)
             requestKey { call -> call.principal<DevicePrincipal>()?.deviceId ?: call.clientAddress() }
+        }
+        // Registration and login share one bucket, so guessing passwords and probing for taken
+        // emails draw on the same allowance.
+        register(ACCOUNT_LIMIT) {
+            rateLimiter(limit = rateLimits.accountPerHour, refillPeriod = 1.hours)
+            requestKey { call -> call.clientAddress() }
         }
         register(POLLEN_LIMIT) {
             rateLimiter(limit = rateLimits.pollenPerMinute, refillPeriod = 1.minutes)

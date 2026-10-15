@@ -18,6 +18,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -44,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -57,8 +59,16 @@ import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.account_title_login
+import ch.stenzel.tim.polleninfo.resources.account_title_register
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.diary_disclaimer
+import ch.stenzel.tim.polleninfo.resources.diary_gate_intro
+import ch.stenzel.tim.polleninfo.resources.diary_gate_point_devices
+import ch.stenzel.tim.polleninfo.resources.diary_gate_point_email
+import ch.stenzel.tim.polleninfo.resources.diary_gate_point_health
+import ch.stenzel.tim.polleninfo.resources.diary_gate_point_phone
+import ch.stenzel.tim.polleninfo.resources.diary_gate_title
 import ch.stenzel.tim.polleninfo.resources.diary_intro
 import ch.stenzel.tim.polleninfo.resources.diary_load_failed
 import ch.stenzel.tim.polleninfo.resources.diary_no_entries_hint
@@ -83,9 +93,16 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Scrolls as a whole and has no pull-to-refresh. The note that the diary is no diagnosis is part of
  * every state with a graph, tied to the explanatory line by its asterisk.
+ *
+ * The diary needs an account: logged out, the tab is the gate — why an account is needed, and
+ * [onLogIn] / [onCreateAccount], which open the account screen in either mode.
  */
 @Composable
-fun DiaryScreen(viewModel: DiaryViewModel = koinViewModel()) {
+fun DiaryScreen(
+    onLogIn: () -> Unit,
+    onCreateAccount: () -> Unit,
+    viewModel: DiaryViewModel = koinViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     DiaryContent(
@@ -94,6 +111,8 @@ fun DiaryScreen(viewModel: DiaryViewModel = koinViewModel()) {
             onStationSelected = viewModel::onStationSelected,
             onRangeSelected = viewModel::onRangeSelected,
             onSpeciesToggled = viewModel::onSpeciesToggled,
+            onLogIn = onLogIn,
+            onCreateAccount = onCreateAccount,
         ),
         onRetry = viewModel::retry,
     )
@@ -103,6 +122,8 @@ private class DiaryActions(
     val onStationSelected: (String) -> Unit,
     val onRangeSelected: (HistoryRange) -> Unit,
     val onSpeciesToggled: (String) -> Unit,
+    val onLogIn: () -> Unit,
+    val onCreateAccount: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +137,7 @@ private fun DiaryContent(
         val modifier = Modifier.fillMaxSize().padding(padding)
         when (uiState) {
             is DiaryUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
+            is DiaryUiState.SignedOut -> DiaryGate(actions, modifier)
             is DiaryUiState.Content -> DiaryView(uiState, actions, modifier)
             is DiaryUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
         }
@@ -189,6 +211,46 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * The Diary without an account: a heading, why the diary needs one — the answers are health
+ * information kept in the account, survive a lost or replaced phone and appear on every phone logged
+ * in, and the email is only used to log in — and the two ways in. No chart.
+ */
+@Composable
+private fun DiaryGate(actions: DiaryActions, modifier: Modifier) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+        Text(
+            text = stringResource(Res.string.diary_gate_title),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(text = stringResource(Res.string.diary_gate_intro), style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        listOf(
+            Res.string.diary_gate_point_health,
+            Res.string.diary_gate_point_phone,
+            Res.string.diary_gate_point_devices,
+            Res.string.diary_gate_point_email,
+        ).forEach { point ->
+            Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                // Decoration: each point is its own sentence, so the bullet is not read out.
+                Text(text = "•", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clearAndSetSemantics { })
+                Spacer(Modifier.width(12.dp))
+                Text(text = stringResource(point), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = actions.onCreateAccount, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(Res.string.account_title_register))
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = actions.onLogIn, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(Res.string.account_title_login))
+        }
     }
 }
 

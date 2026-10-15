@@ -289,6 +289,34 @@
     <!-- A message the app does not fully understand: the title still names the station. -->
     <string name="notification_generic">Open PollenInfo to see your alarm.</string>
 
+    <!-- Accounts: the account screen, the Diary gate -->
+    <string name="error_email_taken">An account with this email address already exists. Log in instead.</string>
+    <string name="error_action_register">Couldn’t create the account.</string>
+    <string name="account_title_login">Log in</string>
+    <string name="account_title_register">Create account</string>
+    <string name="account_email_label">Email address</string>
+    <string name="account_password_label">Password</string>
+    <string name="account_confirmation_label">Repeat password</string>
+    <string name="account_password_hint">At least %1$d characters</string>
+    <string name="account_password_too_long">At most %1$d characters</string>
+    <string name="account_passwords_mismatch">The passwords don’t match.</string>
+    <string name="account_show_password">Show password</string>
+    <string name="account_hide_password">Hide password</string>
+    <string name="account_show_confirmation">Show repeated password</string>
+    <string name="account_hide_confirmation">Hide repeated password</string>
+    <string name="account_password_shown">Password shown</string>
+    <string name="account_password_hidden">Password hidden</string>
+    <string name="account_no_recovery">Keep your password safe: a forgotten password can’t be reset, and the account and its diary are then lost.</string>
+    <string name="account_consent">I agree that my daily answers on how I feel are stored in my PollenInfo account.</string>
+    <string name="account_switch_to_login">Already have an account? Log in</string>
+    <string name="account_switch_to_register">No account yet? Create one</string>
+    <string name="diary_gate_title">Your diary needs an account</string>
+    <string name="diary_gate_intro">PollenInfo keeps your diary in a personal account rather than on this phone:</string>
+    <string name="diary_gate_point_health">Your answers are health information, kept safely in your account.</string>
+    <string name="diary_gate_point_phone">They survive a lost or replaced phone.</string>
+    <string name="diary_gate_point_devices">They appear on every phone you log in on.</string>
+    <string name="diary_gate_point_email">Your email address is only used to log in.</string>
+
     <!-- The reference example feature (feature/example): English only, by decision, so the
          translation check ignores the example_ prefix. -->
     <string name="example_title">PollenInfo</string>

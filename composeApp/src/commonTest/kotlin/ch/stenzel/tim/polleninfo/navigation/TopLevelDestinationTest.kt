@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.navigation
 
+import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.nav_alarms
 import ch.stenzel.tim.polleninfo.resources.nav_all_stations
@@ -148,6 +149,12 @@ class TopLevelDestinationTest {
     @Test
     fun `the change-station screen is not a tab so the bar is hidden on it`() {
         assertNull(currentTabOn(Screen.ChangeStation))
+    }
+
+    @Test
+    fun `the account screen is not a tab so the bar is hidden on it`() {
+        assertNull(currentTabOn(Screen.Account()))
+        assertNull(currentTabOn(Screen.Account(AccountMode.REGISTER)))
     }
 
     @Test

@@ -1,0 +1,24 @@
+package ch.stenzel.tim.polleninfo.core.session.domain.repository
+
+import ch.stenzel.tim.polleninfo.core.result.Result
+import ch.stenzel.tim.polleninfo.core.session.domain.model.Session
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * Whether, and to which account, this phone is logged in. The app works without an account; only
+ * the diary needs one.
+ */
+interface SessionRepository {
+
+    /** `null` while nobody is logged in. */
+    val session: Flow<Session?>
+
+    /**
+     * Creates an account and logs in to it. Consent to storing the diary is implied by the form,
+     * which cannot be submitted without it, and is sent as `true`.
+     */
+    suspend fun register(email: String, password: String): Result<Unit>
+
+    /** Forgets the stored session on this phone, without asking the backend. */
+    suspend fun clear()
+}

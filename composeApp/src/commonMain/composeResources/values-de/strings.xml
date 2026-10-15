@@ -256,4 +256,32 @@
     <string name="notification_no_current_reading_earlier">Keine aktuellen Daten für %1$s. Letzte Daten vom %2$s.</string>
     <string name="notification_unavailable">Keine aktuellen Daten für %1$s. Die Messwerte sind zurzeit nicht verfügbar.</string>
     <string name="notification_generic">Öffne PollenInfo, um deinen Alarm zu sehen.</string>
+
+    <!-- Accounts: the account screen, the Diary gate -->
+    <string name="error_email_taken">Es gibt bereits ein Konto mit dieser E-Mail-Adresse. Melde dich stattdessen an.</string>
+    <string name="error_action_register">Das Konto konnte nicht erstellt werden.</string>
+    <string name="account_title_login">Anmelden</string>
+    <string name="account_title_register">Konto erstellen</string>
+    <string name="account_email_label">E-Mail-Adresse</string>
+    <string name="account_password_label">Passwort</string>
+    <string name="account_confirmation_label">Passwort wiederholen</string>
+    <string name="account_password_hint">Mindestens %1$d Zeichen</string>
+    <string name="account_password_too_long">Höchstens %1$d Zeichen</string>
+    <string name="account_passwords_mismatch">Die Passwörter stimmen nicht überein.</string>
+    <string name="account_show_password">Passwort anzeigen</string>
+    <string name="account_hide_password">Passwort verbergen</string>
+    <string name="account_show_confirmation">Wiederholtes Passwort anzeigen</string>
+    <string name="account_hide_confirmation">Wiederholtes Passwort verbergen</string>
+    <string name="account_password_shown">Passwort sichtbar</string>
+    <string name="account_password_hidden">Passwort verborgen</string>
+    <string name="account_no_recovery">Bewahre dein Passwort gut auf: Ein vergessenes Passwort lässt sich nicht zurücksetzen, und das Konto mit seinem Tagebuch ist dann verloren.</string>
+    <string name="account_consent">Ich bin einverstanden, dass meine täglichen Antworten zu meinem Befinden in meinem PollenInfo-Konto gespeichert werden.</string>
+    <string name="account_switch_to_login">Schon ein Konto? Anmelden</string>
+    <string name="account_switch_to_register">Noch kein Konto? Jetzt erstellen</string>
+    <string name="diary_gate_title">Dein Tagebuch braucht ein Konto</string>
+    <string name="diary_gate_intro">PollenInfo bewahrt dein Tagebuch in einem persönlichen Konto auf statt auf diesem Telefon:</string>
+    <string name="diary_gate_point_health">Deine Antworten sind Gesundheitsdaten und in deinem Konto sicher aufbewahrt.</string>
+    <string name="diary_gate_point_phone">Sie bleiben erhalten, wenn du dein Telefon verlierst oder ersetzt.</string>
+    <string name="diary_gate_point_devices">Sie erscheinen auf jedem Telefon, auf dem du dich anmeldest.</string>
+    <string name="diary_gate_point_email">Deine E-Mail-Adresse wird nur für die Anmeldung verwendet.</string>
 </resources>

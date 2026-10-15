@@ -11,6 +11,7 @@ import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.result.toAppError
+import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.species.domain.repository.SpeciesRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
@@ -21,7 +22,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -44,6 +47,10 @@ import kotlinx.coroutines.launch
  *
  * The answers are observed: one recorded while the Diary is open joins the graph at once if its day
  * is on it, with no history reload. Today's answer never is — "today" is [swissToday] of [clock].
+ *
+ * The diary needs an account. While nobody is logged in the state is [DiaryUiState.SignedOut] and
+ * nothing is fetched; a session appearing — the user logged in or registered from the gate — starts
+ * the load above, and a session ending returns to the gate.
  */
 class DiaryViewModel(
     private val selectedStationRepository: SelectedStationRepository,
@@ -51,6 +58,7 @@ class DiaryViewModel(
     private val speciesRepository: SpeciesRepository,
     private val stationHistoryRepository: StationHistoryRepository,
     private val diaryRepository: DiaryRepository,
+    private val sessionRepository: SessionRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
@@ -72,6 +80,9 @@ class DiaryViewModel(
     /** Every load starts by cancelling this, so an older answer can never replace a newer one. */
     private var loadJob: Job? = null
 
+    /** Whether an account is logged in; nothing loads until it is. */
+    private var signedIn = false
+
     /** Every answer the user has given, as last read; filtered per history in [withEntries]. */
     private var allEntries: List<DiaryEntry> = emptyList()
 
@@ -83,24 +94,36 @@ class DiaryViewModel(
                 _uiState.value = withEntries(current)
             }
         }
-        load()
+        viewModelScope.launch {
+            sessionRepository.session.map { it != null }.distinctUntilChanged().collect { signedIn ->
+                this@DiaryViewModel.signedIn = signedIn
+                if (signedIn) {
+                    load()
+                } else {
+                    loadJob?.cancel()
+                    _uiState.value = DiaryUiState.SignedOut
+                }
+            }
+        }
     }
 
     /** Leaves [DiaryUiState.Error] by loading the chosen station and range again. */
-    fun retry() = load()
+    fun retry() {
+        if (signedIn) load()
+    }
 
     /** Loads [range]'s history; the selected range again does nothing. */
     fun onRangeSelected(range: HistoryRange) {
         if (range == this.range) return
         this.range = range
-        load()
+        if (signedIn) load()
     }
 
     /** Loads the history of the station [abbr]; the station already chosen does nothing. */
     fun onStationSelected(abbr: String) {
         if (abbr == stationAbbr) return
         stationAbbr = abbr
-        load()
+        if (signedIn) load()
     }
 
     /** Checks or unchecks one pollen type. Only changes what is drawn; nothing is requested. */

@@ -5,10 +5,12 @@ import ch.stenzel.tim.polleninfo.core.result.AppError
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.error_action_delete_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_pause_alarm
+import ch.stenzel.tim.polleninfo.resources.error_action_register
 import ch.stenzel.tim.polleninfo.resources.error_action_resume_alarm
 import ch.stenzel.tim.polleninfo.resources.error_action_save_alarm
 import ch.stenzel.tim.polleninfo.resources.error_alarm_limit_reached
 import ch.stenzel.tim.polleninfo.resources.error_alarm_not_found
+import ch.stenzel.tim.polleninfo.resources.error_email_taken
 import ch.stenzel.tim.polleninfo.resources.error_invalid_alarm
 import ch.stenzel.tim.polleninfo.resources.error_network
 import ch.stenzel.tim.polleninfo.resources.error_no_readings
@@ -23,7 +25,18 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 /** What the user was doing when the error happened; it picks the wording around the reason. */
-enum class ErrorContext { LOAD, SAVE_ALARM, DELETE_ALARM, PAUSE_ALARM, RESUME_ALARM }
+enum class ErrorContext {
+    LOAD,
+    SAVE_ALARM,
+    DELETE_ALARM,
+    PAUSE_ALARM,
+    RESUME_ALARM,
+    REGISTER,
+}
+
+/** The contexts that act on one alarm, where the only thing that can be missing is that alarm. */
+private val ALARM_CONTEXTS =
+    setOf(ErrorContext.SAVE_ALARM, ErrorContext.DELETE_ALARM, ErrorContext.PAUSE_ALARM, ErrorContext.RESUME_ALARM)
 
 /**
  * The sentences an error is shown as: [action] says what failed ("Couldn't save the alarm.") and is
@@ -36,15 +49,16 @@ fun AppError.text(context: ErrorContext): ErrorText {
     val reason = when (this) {
         AppError.Network -> Res.string.error_network
         AppError.ServerUnavailable -> Res.string.error_server_unavailable
-        // Outside loading, the only thing an alarm action can fail to find is the alarm itself.
+        // The only thing an alarm action can fail to find is the alarm itself.
         AppError.NotFound ->
-            if (context == ErrorContext.LOAD) Res.string.error_not_found else Res.string.error_alarm_not_found
+            if (context in ALARM_CONTEXTS) Res.string.error_alarm_not_found else Res.string.error_not_found
         AppError.NoStationSelected -> Res.string.error_no_station_selected
         AppError.NoReadings -> Res.string.error_no_readings
         AppError.NoStations -> Res.string.error_no_stations
         AppError.PushUnavailable -> Res.string.error_push_unavailable
         AppError.AlarmLimitReached -> Res.string.error_alarm_limit_reached
         AppError.InvalidAlarm -> Res.string.error_invalid_alarm
+        AppError.EmailTaken -> Res.string.error_email_taken
         AppError.Unknown -> Res.string.error_unknown
     }
     val action = when (context) {
@@ -53,6 +67,7 @@ fun AppError.text(context: ErrorContext): ErrorText {
         ErrorContext.DELETE_ALARM -> Res.string.error_action_delete_alarm
         ErrorContext.PAUSE_ALARM -> Res.string.error_action_pause_alarm
         ErrorContext.RESUME_ALARM -> Res.string.error_action_resume_alarm
+        ErrorContext.REGISTER -> Res.string.error_action_register
     }
     return ErrorText(action, reason)
 }

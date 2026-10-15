@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.navigation
 
+import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
 import kotlinx.serialization.Serializable
 
 sealed interface Screen {
@@ -44,4 +45,11 @@ sealed interface Screen {
      */
     @Serializable
     data object ChangeStation : Screen
+
+    /**
+     * Logging in or creating an account, opening in [mode]; reached from the Diary's gate. Not a
+     * tab, so the bottom bar is hidden on it.
+     */
+    @Serializable
+    data class Account(val mode: AccountMode = AccountMode.LOGIN) : Screen
 }

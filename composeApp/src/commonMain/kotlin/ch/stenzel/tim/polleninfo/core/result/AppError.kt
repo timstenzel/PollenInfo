@@ -9,7 +9,8 @@ import kotlinx.io.IOException
  * turns it into a sentence in the app's language (`core/ui/error`).
  *
  * The first three come from [toAppError]; the next three are conditions the app itself finds; the
- * alarm kinds come from `feature/alarms`' own mapping, which delegates everything else here.
+ * alarm kinds come from `feature/alarms`' own mapping and the account kinds from `core/session`'s,
+ * both of which delegate everything else here.
  */
 sealed interface AppError {
     /** No connection, DNS failure or timeout — the user's network is the likely cause. */
@@ -38,6 +39,9 @@ sealed interface AppError {
 
     /** The backend refused an alarm as invalid; its reason stays in the exception. */
     data object InvalidAlarm : AppError
+
+    /** An account with this email address exists already. */
+    data object EmailTaken : AppError
 
     data object Unknown : AppError
 }

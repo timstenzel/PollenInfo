@@ -17,6 +17,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
+import ch.stenzel.tim.polleninfo.feature.account.presentation.AccountScreen
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorScreen
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmsScreen
 import ch.stenzel.tim.polleninfo.feature.allstations.presentation.AllStationsScreen
@@ -102,7 +104,17 @@ private fun AppNavHost(
         }
 
         composable<Screen.Diary> {
-            DiaryScreen()
+            DiaryScreen(
+                onLogIn = { navController.navigate(Screen.Account(AccountMode.LOGIN)) },
+                onCreateAccount = { navController.navigate(Screen.Account(AccountMode.REGISTER)) },
+            )
+        }
+
+        composable<Screen.Account> { entry ->
+            AccountScreen(
+                initialMode = entry.toRoute<Screen.Account>().mode,
+                onDone = { navController.popBackStack() },
+            )
         }
 
         composable<Screen.Alarms> {

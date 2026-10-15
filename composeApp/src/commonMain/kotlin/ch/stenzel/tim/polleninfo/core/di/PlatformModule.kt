@@ -4,9 +4,9 @@ import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 
 /**
- * Koin bindings that can only be built with platform APIs: the two `DataStore<Preferences>` — the
- * unqualified one backing the user's selections and the diary, and the [DEVICE_DATA_STORE] one
- * holding the device token alone — whose factory needs a file path and an IO dispatcher, and the
+ * Koin bindings that can only be built with platform APIs: the three `DataStore<Preferences>` — the
+ * unqualified one backing the user's selections and the diary, the [DEVICE_DATA_STORE] one holding
+ * the device token alone and the [SESSION_DATA_STORE] one holding the login alone — whose factory needs a file path and an IO dispatcher, and the
  * `CoarseLocationProvider`, `PushTokenProvider` and `AppInfo`, which are different platform classes
  * on each side.
  *
@@ -25,3 +25,12 @@ val DEVICE_DATA_STORE = named("deviceDataStore")
 
 /** The device token's DataStore file name, without the `.preferences_pb` extension. */
 const val DEVICE_DATA_STORE_NAME = "polleninfo_device"
+
+/**
+ * The qualifier of the DataStore that holds only the login (session token and email), in a file of
+ * its own ([SESSION_DATA_STORE_NAME]) so Android's backup rules can exclude it.
+ */
+val SESSION_DATA_STORE = named("sessionDataStore")
+
+/** The login's DataStore file name, without the `.preferences_pb` extension. */
+const val SESSION_DATA_STORE_NAME = "polleninfo_session"

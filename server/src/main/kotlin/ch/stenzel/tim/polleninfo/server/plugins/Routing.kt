@@ -1,5 +1,9 @@
 package ch.stenzel.tim.polleninfo.server.plugins
 
+import ch.stenzel.tim.polleninfo.server.account.accountRoutes
+import ch.stenzel.tim.polleninfo.server.account.domain.PasswordHasher
+import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.UserStore
 import ch.stenzel.tim.polleninfo.server.alarm.alarmRoutes
 import ch.stenzel.tim.polleninfo.server.alarm.store.AlarmStore
 import ch.stenzel.tim.polleninfo.server.alarm.store.DeviceStore
@@ -19,6 +23,7 @@ import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import java.time.Clock
 
 /**
  * The health and pollen routes. Collaborators are parameters with test-friendly defaults, so a test
@@ -51,6 +56,21 @@ fun Application.configureAlarmRouting(devices: DeviceStore, alarms: AlarmStore) 
     configureDeviceAuthentication(devices)
     routing {
         alarmRoutes(devices, alarms)
+    }
+}
+
+/**
+ * The account routes over stores the caller has built — there are no defaults. [clock] stamps
+ * accounts and sessions. [configureSecurity] must be installed first.
+ */
+fun Application.configureAccountRouting(
+    users: UserStore,
+    sessions: SessionStore,
+    hasher: PasswordHasher,
+    clock: Clock,
+) {
+    routing {
+        accountRoutes(users, sessions, hasher, clock)
     }
 }
 

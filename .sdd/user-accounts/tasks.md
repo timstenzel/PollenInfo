@@ -36,36 +36,36 @@ still plots the on-device answers (tasks 03–04 change that).
 
 ### Implementation steps
 
-- [ ] Extend `V1__init.sql` in place with `users` (incl. `consented_at`) and `sessions` as in the annex; mirror them in the Exposed table definitions.
-- [ ] Add `account/domain`: `AccountValidation` → `AccountValidationResult` (email trimmed + lowercased, ≤ 254, one `@` with text on each side; password 8–128 code points, never trimmed; consent required), `PasswordHasher` + `Argon2PasswordHasher` (Bouncy Castle via the version catalog, Argon2id, PHC string, constant-time verify, parameters injectable for tests, `verifyDummy`), `SessionToken` (same shape as `DeviceToken`), `UserId`.
-- [ ] Add `UserStore.register` (stores `consented_at`; unique violation → `EmailTaken`) and `SessionStore.create`, with Exposed implementations.
-- [ ] Add `POST /users` (`201 {sessionToken}`, `400 {error}`, `409 {error}`) via `configureAccountRouting(...)`, wired in `Application.module`; add `ACCOUNT_LIMIT` (per client address, `RATE_LIMIT_ACCOUNT_PER_HOUR`, default 10) to `RateLimits`, `ServerConfig.load` and `configureSecurity`.
-- [ ] Add `AccountFlowLoggingTest` (modelled on `DeviceFlowLoggingTest`) covering registration.
-- [ ] App: add `core/session` — `Session(token, email)`, `SessionRepository` (+`Impl`) with `session` flow, `register`, `clear`; `AccountApiService` mapping `409` → `EmailTakenException`; the logic-free session DataStore under a new `SESSION_DATA_STORE` qualifier (`polleninfo_session`) in both platform modules; add `datastore/polleninfo_session.preferences_pb` to `data_extraction_rules.xml` (cloud backup and device transfer) and `backup_rules.xml`; `FakeSessionRepository`.
-- [ ] App: add `AppError.EmailTaken`, `ErrorContext.REGISTER` and their `error_*` texts; the account exception mapping (`toSessionAppError()`).
-- [ ] App: add `feature/account` — pure `AccountFormState` (modes, fields, two independent visibility toggles, mismatch only once the confirmation has text, `canSubmit`, mode switch keeps the email), `AccountViewModel` (`isSubmitting`, `error` cleared by the next edit, `AccountEvent.Done`), `AccountScreen` (both password fields with eye buttons announced "Show/Hide password" with shown/hidden state, minimum-length hint, the line that a forgotten password cannot be recovered, consent row as one toggleable node, progress in the button, mode switch); register `Screen.Account(mode)` in `AppNavigation`, hidden from the bottom bar.
-- [ ] App: `DiaryViewModel` takes `SessionRepository`; `DiaryUiState.SignedOut` (nothing fetched while signed out; a session appearing loads the content); the gate screen with heading, explanation (answers are health information kept in the account, survive a lost or replaced phone, appear on every device logged in, email only used to log in) and both buttons.
-- [ ] All new strings in all four languages.
-- [ ] Docs: CLAUDE.md — REST API, Persistence (tables), Configuration, Abuse protection, `core/` table (`core/session`), Persisted user selections (session file, backup exclusion), Diary (gate), Navigation (`Screen.Account`), Localization keys (`account_*`, `diary_gate_*`).
+- [x] Extend `V1__init.sql` in place with `users` (incl. `consented_at`) and `sessions` as in the annex; mirror them in the Exposed table definitions.
+- [x] Add `account/domain`: `AccountValidation` → `AccountValidationResult` (email trimmed + lowercased, ≤ 254, one `@` with text on each side; password 8–128 code points, never trimmed; consent required), `PasswordHasher` + `Argon2PasswordHasher` (Bouncy Castle via the version catalog, Argon2id, PHC string, constant-time verify, parameters injectable for tests, `verifyDummy`), `SessionToken` (same shape as `DeviceToken`), `UserId`.
+- [x] Add `UserStore.register` (stores `consented_at`; unique violation → `EmailTaken`) and `SessionStore.create`, with Exposed implementations.
+- [x] Add `POST /users` (`201 {sessionToken}`, `400 {error}`, `409 {error}`) via `configureAccountRouting(...)`, wired in `Application.module`; add `ACCOUNT_LIMIT` (per client address, `RATE_LIMIT_ACCOUNT_PER_HOUR`, default 10) to `RateLimits`, `ServerConfig.load` and `configureSecurity`.
+- [x] Add `AccountFlowLoggingTest` (modelled on `DeviceFlowLoggingTest`) covering registration.
+- [x] App: add `core/session` — `Session(token, email)`, `SessionRepository` (+`Impl`) with `session` flow, `register`, `clear`; `AccountApiService` mapping `409` → `EmailTakenException`; the logic-free session DataStore under a new `SESSION_DATA_STORE` qualifier (`polleninfo_session`) in both platform modules; add `datastore/polleninfo_session.preferences_pb` to `data_extraction_rules.xml` (cloud backup and device transfer) and `backup_rules.xml`; `FakeSessionRepository`.
+- [x] App: add `AppError.EmailTaken`, `ErrorContext.REGISTER` and their `error_*` texts; the account exception mapping (`toSessionAppError()`).
+- [x] App: add `feature/account` — pure `AccountFormState` (modes, fields, two independent visibility toggles, mismatch only once the confirmation has text, `canSubmit`, mode switch keeps the email), `AccountViewModel` (`isSubmitting`, `error` cleared by the next edit, `AccountEvent.Done`), `AccountScreen` (both password fields with eye buttons announced "Show/Hide password" with shown/hidden state, minimum-length hint, the line that a forgotten password cannot be recovered, consent row as one toggleable node, progress in the button, mode switch); register `Screen.Account(mode)` in `AppNavigation`, hidden from the bottom bar.
+- [x] App: `DiaryViewModel` takes `SessionRepository`; `DiaryUiState.SignedOut` (nothing fetched while signed out; a session appearing loads the content); the gate screen with heading, explanation (answers are health information kept in the account, survive a lost or replaced phone, appear on every device logged in, email only used to log in) and both buttons.
+- [x] All new strings in all four languages.
+- [x] Docs: CLAUDE.md — REST API, Persistence (tables), Configuration, Abuse protection, `core/` table (`core/session`), Persisted user selections (session file, backup exclusion), Diary (gate), Navigation (`Screen.Account`), Localization keys (`account_*`, `diary_gate_*`).
 
 ### Acceptance criteria
 
-- [ ] `AccountValidationTest` pins email 254/255 characters, capitals and surrounding spaces normalised, password 7/8 and 128/129, missing consent; `AccountRoutesTest`: a valid `POST /users` is `201` with a 43-character token, each invalid case is `400 {error}`, and an email already registered in other capitals is `409`.
-- [ ] `ExposedAccountStoresTest` (Postgres): a registered user has `consented_at` set; two concurrent registrations of one email yield exactly one `Registered`. `PasswordHasherTest` (salted, verify right/wrong, parameters read from the string, malformed hash → false) and `SessionTokenTest` (shape, parse, hidden `toString`) pass. `MigrationTest` covers `users` and `sessions` for the app role.
-- [ ] `SecurityTest`: the eleventh `POST /users` from one address within an hour is `429` with `Retry-After`; `ServerConfigTest` covers `RATE_LIMIT_ACCOUNT_PER_HOUR` (default, valid, invalid); `AccountFlowLoggingTest` finds neither email, password nor token in the log.
-- [ ] App tests: `SessionRepositoryImplTest` (`MockEngine`) — `register` sends email, password and `consent: true`, stores token and email, maps `409` to `EmailTaken` and a transport failure to `Network`; `AccountFormStateTest` — every register rule of `canSubmit`, mismatch shown only with a non-empty confirmation, independent toggles, mode switch keeps the email; `AccountViewModelTest` — `isSubmitting` under a gate, `Done` exactly once, error cleared by the next edit; `AppErrorTextTest` — `EmailTaken` and `REGISTER`; `TopLevelDestinationTest` — no tab on `Screen.Account`.
-- [ ] `DiaryViewModelTest`: signed out → `SignedOut` with no station, species or history request; a session appearing → the existing load.
-- [ ] Both Android backup rule files name `datastore/polleninfo_session.preferences_pb`.
-- [ ] Manual (emulator against `:server:run`): the gate shows the four explanation points; Create account → valid form → back on the Diary with the chart loading; still logged in after an app restart; with the server stopped the form says the server could not be reached; TalkBack announces every field, both eye buttons with shown/hidden, the consent row and the buttons; "Log in" opens the interim login mode.
+- [x] `AccountValidationTest` pins email 254/255 characters, capitals and surrounding spaces normalised, password 7/8 and 128/129, missing consent; `AccountRoutesTest`: a valid `POST /users` is `201` with a 43-character token, each invalid case is `400 {error}`, and an email already registered in other capitals is `409`.
+- [x] `ExposedAccountStoresTest` (Postgres): a registered user has `consented_at` set; two concurrent registrations of one email yield exactly one `Registered`. `PasswordHasherTest` (salted, verify right/wrong, parameters read from the string, malformed hash → false) and `SessionTokenTest` (shape, parse, hidden `toString`) pass. `MigrationTest` covers `users` and `sessions` for the app role.
+- [x] `SecurityTest`: the eleventh `POST /users` from one address within an hour is `429` with `Retry-After`; `ServerConfigTest` covers `RATE_LIMIT_ACCOUNT_PER_HOUR` (default, valid, invalid); `AccountFlowLoggingTest` finds neither email, password nor token in the log.
+- [x] App tests: `SessionRepositoryImplTest` (`MockEngine`) — `register` sends email, password and `consent: true`, stores token and email, maps `409` to `EmailTaken` and a transport failure to `Network`; `AccountFormStateTest` — every register rule of `canSubmit`, mismatch shown only with a non-empty confirmation, independent toggles, mode switch keeps the email; `AccountViewModelTest` — `isSubmitting` under a gate, `Done` exactly once, error cleared by the next edit; `AppErrorTextTest` — `EmailTaken` and `REGISTER`; `TopLevelDestinationTest` — no tab on `Screen.Account`.
+- [x] `DiaryViewModelTest`: signed out → `SignedOut` with no station, species or history request; a session appearing → the existing load.
+- [x] Both Android backup rule files name `datastore/polleninfo_session.preferences_pb`.
+- [ ] ~~Manual (emulator against `:server:run`): the gate shows the four explanation points; Create account → valid form → back on the Diary with the chart loading; still logged in after an app restart; with the server stopped the form says the server could not be reached; TalkBack announces every field, both eye buttons with shown/hidden, the consent row and the buttons; "Log in" opens the interim login mode.~~ *(skipped: TalkBack could not be driven here. Everything else verified on the API 37 emulator against `:server:run` — gate with four points, interim login mode, mismatch hint and disabled button, independent eye toggles, offline message, registration back to the loaded Diary, still logged in after force-stop; the accessibility tree shows the field labels, "Show/Hide password" and "Show repeated password" names and the consent row as one checkable node, but the spoken shown/hidden state needs a TalkBack check by hand)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs
 
 ---
 

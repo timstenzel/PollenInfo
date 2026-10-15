@@ -51,6 +51,9 @@ dependencies {
     // service-account key into an access token.
     implementation(libs.google.auth.oauth2)
 
+    // Accounts: Argon2id for the passwords, from Bouncy Castle's pure-JVM provider.
+    implementation(libs.bouncycastle.bcprov)
+
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)
