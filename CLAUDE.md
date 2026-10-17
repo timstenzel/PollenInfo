@@ -1948,7 +1948,7 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   mirror them. A schema change is a new
   migration (an applied one is never edited — Flyway's checksum would refuse to start; during
   development reset the database instead).
-- Tables (`V1__init.sql`): `devices(id uuid PK, token_hash bytea UNIQUE, fcm_token NULL, created_at,
+- Tables (`V1__init.sql`, the schema production went live on): `devices(id uuid PK, token_hash bytea UNIQUE, fcm_token NULL, created_at,
   last_seen_at timestamptz)` — `fcm_token` is `NULL` once FCM reported it unregistered, which keeps the device and its alarms but stops their
   delivery until the app sends a new token (or, 90 days after its last call, the device is pruned) — `alarms(id uuid PK, device_id → devices ON DELETE
   CASCADE, enabled, station_abbr, species text[], min_severity, days text[], type, at_time /
@@ -1956,7 +1956,8 @@ functions, imported one by one) and statement builders come from `org.jetbrains.
   and `notification_log(alarm_id → alarms ON DELETE CASCADE, species, local_date date, PK(all
   three))` — which pollen types each threshold alert has notified about on a Swiss date — and
   `scheduler_state(id boolean PK CHECK (id), last_minute timestamptz)`, at most one row: the last
-  minute the alarm scheduler finished (see "Alarm delivery"). The accounts: `users(id uuid PK, email
+  minute the alarm scheduler finished (see "Alarm delivery"). The accounts (`V2__accounts.sql`, added
+  after the go-live, so an existing database keeps its devices and alarms): `users(id uuid PK, email
   text UNIQUE — trimmed and lowercased, password_hash text — Argon2id PHC, consented_at, created_at
   timestamptz)` and `sessions(token_hash bytea PK — SHA-256, user_id → users ON DELETE CASCADE,
   created_at, last_used_at timestamptz)` with an index on `user_id`, and
@@ -2318,7 +2319,8 @@ initialised by the same `deploy/postgres/init/01-roles.sh`, so the tests have th
 roles. `TestPostgres.cleanDatabase()` is the shared `polleninfo` database, migrated once and
 truncated for every test, as the app login — what `ExposedStoresTest`, `AlarmRoutesTest`,
 `AlarmSchedulerTest`, `ExposedAccountStoresTest` and `AccountRoutesTest` use; `unmigratedDatabase()` is a fresh copy of the database as the init script
-left it, for `MigrationTest` (V1 applies, a second migrate is a no-op, the app role can read and
+left it, for `MigrationTest` (V1 and V2 apply, V2 upgrades a database at V1 without touching its
+alarms, a second migrate is a no-op, the app role can read and
 write every table and is refused `CREATE` / `ALTER` / `DROP` / `TRUNCATE`). Without Docker every
 such test fails at once with a message saying so; the others need no database.
 `alarm/store/AlarmFixtures.kt` builds alarms and inserts them directly (`Database.insertAlarm`) when

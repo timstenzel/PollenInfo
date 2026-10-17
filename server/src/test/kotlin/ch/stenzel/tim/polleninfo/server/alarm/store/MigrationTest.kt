@@ -3,6 +3,7 @@ package ch.stenzel.tim.polleninfo.server.alarm.store
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
+import org.flywaydb.core.Flyway
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,10 +18,10 @@ class MigrationTest {
     private val config = TestPostgres.unmigratedDatabase()
 
     @Test
-    fun `V1 applies to an empty database and creates every table`() {
+    fun `V1 and V2 apply to an empty database and create every table`() {
         val result = PollenInfoDatabase.migrate(config)
 
-        assertEquals(listOf("1"), result.migrations.map { it.version })
+        assertEquals(listOf("1", "2"), result.migrations.map { it.version })
         assertEquals(
             listOf(
                 "alarms", "devices", "diary_entries", "flyway_schema_history", "notification_log", "scheduler_state",
@@ -32,6 +33,48 @@ class MigrationTest {
                 )
             },
         )
+    }
+
+    @Test
+    fun `V2 adds the account tables to a database at V1 and keeps its devices and alarms`() {
+        // Production went live on V1 alone, with devices and alarms already stored.
+        Flyway.configure()
+            .dataSource(config.url, config.ownerUser, config.ownerPassword)
+            .locations("classpath:db/migration")
+            .target("1")
+            .load()
+            .migrate()
+        asApp { connection ->
+            connection.execute(
+                """
+                INSERT INTO devices (id, token_hash, fcm_token, created_at, last_seen_at)
+                VALUES ('00000000-0000-0000-0000-0000000000d1', '\x00', 't', now(), now())
+                """,
+            )
+            connection.execute(
+                """
+                INSERT INTO alarms (id, device_id, enabled, station_abbr, species, min_severity, days, type,
+                                    at_time, created_at)
+                VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000d1', true, 'PZH', '{BIRCH}', 'NONE',
+                        '{MONDAY}', 'daily', '08:00', now())
+                """,
+            )
+        }
+
+        val result = PollenInfoDatabase.migrate(config)
+
+        assertEquals(listOf("2"), result.migrations.map { it.version })
+        asApp { connection ->
+            assertEquals(listOf("1"), connection.query("SELECT count(*) FROM alarms"))
+            // The app login received its privileges on V2's tables too.
+            connection.execute(
+                """
+                INSERT INTO users (id, email, password_hash, consented_at, created_at)
+                VALUES ('00000000-0000-0000-0000-0000000000a1', 'tim@example.com', 'h', now(), now())
+                """,
+            )
+            assertEquals(listOf("1"), connection.query("SELECT count(*) FROM users"))
+        }
     }
 
     @Test
