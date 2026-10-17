@@ -282,6 +282,7 @@
     <string name="error_action_save_feeling">Votre réponse n’a pas pu être enregistrée.</string>
     <string name="error_action_delete_account">Impossible de supprimer le compte.</string>
     <string name="error_wrong_password">Le mot de passe est incorrect.</string>
+    <string name="error_too_many_attempts">Trop de tentatives. Veuillez réessayer plus tard.</string>
     <string name="account_title_login">Se connecter</string>
     <string name="account_title_register">Créer un compte</string>
     <string name="account_email_label">Adresse e-mail</string>

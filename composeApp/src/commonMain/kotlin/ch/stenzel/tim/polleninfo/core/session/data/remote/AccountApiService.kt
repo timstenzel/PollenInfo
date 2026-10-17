@@ -8,6 +8,7 @@ import ch.stenzel.tim.polleninfo.core.session.data.remote.dto.SessionResponseDto
 import ch.stenzel.tim.polleninfo.core.session.domain.model.EmailTakenException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.InvalidCredentialsException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
+import ch.stenzel.tim.polleninfo.core.session.domain.model.TooManyAttemptsException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
@@ -24,7 +25,9 @@ import io.ktor.http.contentType
  *
  * Account statuses are mapped here before [checkSuccess]: a `409` on registration is
  * [EmailTakenException], a `401` on login and a `403` on deleting the account (a wrong password)
- * [InvalidCredentialsException], and a `401` on a call made with a session token [SignedOutException]. The token travels only in the `Authorization` header.
+ * [InvalidCredentialsException], a `401` on a call made with a session token [SignedOutException],
+ * and a `429` — the backend's rate limit — on registration, login or deletion
+ * [TooManyAttemptsException]. The token travels only in the `Authorization` header.
  */
 class AccountApiService(
     private val client: HttpClient,
@@ -36,7 +39,10 @@ class AccountApiService(
             contentType(ContentType.Application.Json)
             setBody(RegisterRequestDto(email = email, password = password, consent = true))
         }
-        if (response.status == HttpStatusCode.Conflict) throw EmailTakenException()
+        when (response.status) {
+            HttpStatusCode.Conflict -> throw EmailTakenException()
+            HttpStatusCode.TooManyRequests -> throw TooManyAttemptsException()
+        }
         return response.checkSuccess().body()
     }
 
@@ -45,7 +51,10 @@ class AccountApiService(
             contentType(ContentType.Application.Json)
             setBody(LoginRequestDto(email = email, password = password))
         }
-        if (response.status == HttpStatusCode.Unauthorized) throw InvalidCredentialsException()
+        when (response.status) {
+            HttpStatusCode.Unauthorized -> throw InvalidCredentialsException()
+            HttpStatusCode.TooManyRequests -> throw TooManyAttemptsException()
+        }
         return response.checkSuccess().body()
     }
 
@@ -69,6 +78,7 @@ class AccountApiService(
         when (response.status) {
             HttpStatusCode.Forbidden -> throw InvalidCredentialsException()
             HttpStatusCode.Unauthorized -> throw SignedOutException()
+            HttpStatusCode.TooManyRequests -> throw TooManyAttemptsException()
         }
         response.checkSuccess()
     }

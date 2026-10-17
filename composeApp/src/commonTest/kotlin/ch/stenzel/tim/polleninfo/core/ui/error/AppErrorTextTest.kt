@@ -18,6 +18,7 @@ import ch.stenzel.tim.polleninfo.resources.error_network
 import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_signed_out
+import ch.stenzel.tim.polleninfo.resources.error_too_many_attempts
 import ch.stenzel.tim.polleninfo.resources.error_unknown
 import ch.stenzel.tim.polleninfo.resources.error_wrong_password
 import kotlin.test.Test
@@ -39,6 +40,7 @@ class AppErrorTextTest {
         AppError.EmailTaken,
         AppError.InvalidCredentials,
         AppError.SignedOut,
+        AppError.TooManyAttempts,
         AppError.Unknown,
     )
 
@@ -115,6 +117,18 @@ class AppErrorTextTest {
             AppError.Network.text(ErrorContext.LOGIN),
         )
         assertEquals(Res.string.error_not_found, AppError.NotFound.text(ErrorContext.LOGIN).reason)
+    }
+
+    @Test
+    fun `a rate-limited login or registration says to try again later after its action`() {
+        assertEquals(
+            ErrorText(Res.string.error_action_login, Res.string.error_too_many_attempts),
+            AppError.TooManyAttempts.text(ErrorContext.LOGIN),
+        )
+        assertEquals(
+            ErrorText(Res.string.error_action_register, Res.string.error_too_many_attempts),
+            AppError.TooManyAttempts.text(ErrorContext.REGISTER),
+        )
     }
 
     @Test

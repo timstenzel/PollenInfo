@@ -387,7 +387,7 @@ them. Code moves to `core/` once a second feature needs it, keeping the same
 | `core/ui/severity` | The composables and wording every screen showing a reading uses, so they cannot drift apart: `SeverityBar` (+`SeverityBarSize`, `severityFillFraction`), `SeverityColors` (`PollenSeverity.color()`), `PollenSeverity.label()` (+`labelResource()`), `ReadingAge.label(dates)` + `refreshedLabel` (each a `ResourceText`), `ReadingAgeView` (fresh caption / stale warning), `SpeciesListHeading`, `SpeciesRow` |
 | `core/ui/format` | `DateWording` (month and weekday names, day-month pattern; `fullDate`, `shortDate`, `monthOnly`, `weekdayShort` / `weekdayFull`, `weekdays` ranges), `formatTime` (`HH:mm`), `rememberDateWording()` / `loadDateWording()` — dates in the app's language (see "Localization"); `ResourceText` (+`resolve()` / `load()`) — a translated sentence chosen by a pure function |
 | `core/push` | `PushTokenProvider` (+`PushTokenResult`), bound per platform, and `PushTokenUpdater`, which the alarm repository implements so the Android push service can report a rotated token without importing a feature; the pure `parseAlarmPayload` → `AlarmNotificationContent` (+`AlarmChannel`) and `notificationText(content, dates, clock, strings)` → `NotificationText` that turn an alarm's data payload into a notification; Android's channels and messaging service sit in `androidMain` (see "Firebase") |
-| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `login`, `logout`, `deleteAccount`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`, `POST /users/session`, `DELETE /users/me/session`, `DELETE /users/me`; `409` → `EmailTakenException`, `401` on login and `403` on deletion → `InvalidCredentialsException`, `401` with a session → `SignedOutException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
+| `core/session` | `Session(token, email)`, `SessionRepository` (`session: Flow<Session?>`, `register`, `login`, `logout`, `deleteAccount`, `clear`) + `SessionRepositoryImpl`, `AccountApiService` (`POST /users`, `POST /users/session`, `DELETE /users/me/session`, `DELETE /users/me`; `409` → `EmailTakenException`, `401` on login and `403` on deletion → `InvalidCredentialsException`, `401` with a session → `SignedOutException`, `429` on registration, login and deletion → `TooManyAttemptsException`), its DTOs, `SessionStorage` + the logic-free `DataStoreSessionStorage` (see "Persisted user selections") and `toSessionAppError()` — whether, and to which account, this phone is logged in (see "Accounts") |
 | `core/result` | `Result` (+`safeCall`, `map`, `onSuccess`, `onFailure`), `AppError` and `Throwable.toAppError()` (see "Error handling") |
 | `core/network` | `API_BASE_URL` (the Koin qualifier of the backend address), `createHttpClient`, the per-platform engine, and `HttpStatusException` + `HttpResponse.checkSuccess()`, which every API service calls before `body()` |
 | `core/ui/error` | `ErrorContext`, the pure `AppError.text(context)` → `ErrorText`, and `AppError.message(context)` / `loadMessage(context)` — every error sentence a screen shows |
@@ -500,7 +500,7 @@ that omits it binds to the stdlib type and fails to compile against `Success` / 
 interface of what went wrong *for the user*: `Network`, `ServerUnavailable`, `NotFound` (mapped from
 exceptions), `NoStationSelected`, `NoReadings`, `NoStations` (conditions a ViewModel finds itself),
 `PushUnavailable`, `AlarmLimitReached`, `InvalidAlarm` (alarm failures), `EmailTaken`,
-`InvalidCredentials`, `SignedOut` (account failures) and `Unknown`. A ViewModel
+`InvalidCredentials`, `SignedOut`, `TooManyAttempts` (account failures) and `Unknown`. A ViewModel
 turns a `Failure` into one with `exception.toAppError()`: any `kotlinx.io.IOException` — every
 engine's transport failures and Ktor's `HttpRequestTimeoutException` — is `Network`, an
 `HttpStatusException` 5xx `ServerUnavailable` and 404 `NotFound`, anything else (a payload that does
@@ -511,15 +511,18 @@ alarm exceptions stay in the feature because `core/` may not import one. The acc
 in `core/session` (`domain/model/SessionFailures.kt`), whose `toSessionAppError()` maps
 `EmailTakenException` to `EmailTaken`, `InvalidCredentialsException` (a wrong email or password —
 the backend never says which) to `InvalidCredentials` and `SignedOutException` (the backend no longer
-knows the session: expired or ended elsewhere) to `SignedOut`, and delegates the rest the same way.
+knows the session: expired or ended elsewhere) to `SignedOut` and `TooManyAttemptsException` (the
+backend's rate limit, `429`) to `TooManyAttempts` — "Too many attempts. Please try again later." —
+and delegates the rest the same way.
 
 **Every API service checks the status before `body()`** through `core/network`'s
 `HttpResponse.checkSuccess()`, which throws `HttpStatusException(status)` on a non-2xx — so an error
 body is never read as the expected payload and the mapping can tell a 502 from a 404.
 (`AlarmApiService` first turns its own statuses — 400, 401, 409, and 404 on a single alarm — into
 the alarm exceptions; `AccountApiService` turns a `409` on registration into `EmailTakenException`,
-a `401` on login into `InvalidCredentialsException` and a `401` on a call sent with the session token
-into `SignedOutException`.)
+a `401` on login into `InvalidCredentialsException`, a `401` on a call sent with the session token
+into `SignedOutException` and a `429` on registration, login or deletion into
+`TooManyAttemptsException`; a `429` anywhere else stays an `HttpStatusException`, `Unknown`.)
 
 **Screens turn an `AppError` into text** with `core/ui/error/AppErrorText.kt`:
 `AppError.message(context)` in composition, `loadMessage(context)` (suspending, `getString`) for a
@@ -799,7 +802,8 @@ sessionRepository, credentialStore)` holds `AccountUiState(form, isSubmitting, e
 ignored while submitting, every edit or submit clears `error`, a success sends `AccountEvent.Done`
 once on a buffered `Channel` and leaves `isSubmitting` set, a failure is `toSessionAppError()` shown
 in the `REGISTER` context ("An account with this email address already exists. Log in instead.") or
-the `LOGIN` one. `submit()` calls `login` or `register` by the form's mode at the tap.
+the `LOGIN` one — a `429` from the backend's `ACCOUNT_LIMIT` (see "Abuse protection") as "Couldn't
+log in. Too many attempts. Please try again later." `submit()` calls `login` or `register` by the form's mode at the tap.
 
 **The password manager.** After every successful registration or login, and before `Done`, the
 ViewModel offers the submitted email and password to `core/credentials/CredentialStore.save` —
@@ -1868,6 +1872,20 @@ value. `AccountSpec` and `RegisterDto` print neither field.
   logging never sees them; `AccountFlowLoggingTest` captures the log through the account flow
   (registration, logins, today's answer, a range read, logout, a refused and a successful account
   deletion) and finds neither, nor the password.
+- **Expired sessions are deleted once a day.** `SessionStore.pruneExpired(now)` deletes every session
+  last used more than `SESSION_EXPIRY` before `now` — exactly 90 days is kept, as `authenticate`
+  accepts it — and returns the count; the alarm scheduler runs it on a Swiss day's first tick (see
+  "Alarm delivery"). Since `authenticate` refuses an expired session anyway, the prune only frees
+  the rows. Users and diary answers are never pruned.
+
+**Accepted limitations.** There is no email delivery, so:
+
+- **No email verification and no password reset.** Any plausible address is accepted, and a
+  forgotten password means a lost account — the registration form says so. Reconsider both, with
+  changing the password, as soon as email delivery exists.
+- **Registration reveals whether an email address has an account** (`409`); the login does not.
+- In the app, **an answer tapped on Home's prompt while logged out is not kept through the login**:
+  the user taps again (see "The feeling prompt").
 
 **The diary.** `account/domain/Diary.kt` holds `DiaryFeeling` (`VERY_BAD`, `BAD`, `GOOD`,
 `VERY_GOOD` — exact names on the wire and in the table, the app's `Feeling` names) and
@@ -1898,7 +1916,8 @@ session and the login and frees the email — the `user` provider's `401`s and e
 and account routes installed together, the diary's `201` / `200`, both sides of Swiss midnight,
 `/today`, another user's answers, unknown feelings, `401` before the body, the range read's order,
 its 366/367-day edge and every refused query) and
-`ExposedAccountStoresTest` (incl. expiry at exactly 90 days, the daily `last_used_at` refresh and two
+`ExposedAccountStoresTest` (incl. expiry at exactly 90 days, `pruneExpired` keeping exactly 90 days and
+returning its count, the daily `last_used_at` refresh and two
 concurrent answers keeping exactly the first, and a deleted user's sessions and answers gone with it
 while another user's stay) run on the test database; `AccountValidationTest`,
 `PasswordHasherTest` and `SessionTokenTest` need none.
@@ -2061,6 +2080,11 @@ which must find nothing).
 step of its own with its own day marker and `try`, so either prune can fail without holding the
 other back; a failure is retried next tick and never costs that minute's alarms.
 
+**Expired sessions.** The third step of that first tick, `pruneExpiredSessions`, calls
+`SessionStore.pruneExpired(now)` (see "Accounts (server)") — the scheduler takes the
+`SessionStore` as a constructor parameter, the one `Application.module` also hands
+`configureAccountRouting` — again with its own day marker and `try`.
+
 **Sending** is `alarm/push/PushSender` → `PushResult` `Sent` | `Unregistered` | `Failed(cause)`; it
 never throws for a delivery failure.
 
@@ -2121,7 +2145,9 @@ It also pins token handling: an `Unregistered` result clears the token and the d
 skipped from the next tick, and a new token brings them back. The device prune is pinned too: it runs
 on a Swiss day's first tick and not again that day, a throwing prune (`FlakyPrune`, a delegating
 `DeviceStore`) still lets the minute's report through and is retried next tick, and a device whose
-token was dropped is kept at exactly 90 days and removed by the next day's prune.
+token was dropped is kept at exactly 90 days and removed by the next day's prune. The session prune
+is pinned the same way: on a Swiss day's first tick and not again that day, and a throwing one
+(`FlakySessionPrune`) still lets the minute's report through and is retried next tick.
 `AlarmRulesTest` pins timing (both minute edges, both 2026 DST changeovers, both window edges),
 each `PushKind` and the `levels` order, batching, the per-day exclusion and every staleness case
 (`measuredAt` only for `NO_CURRENT_READING`); `FcmPushSenderTest` pins the data-only request and its

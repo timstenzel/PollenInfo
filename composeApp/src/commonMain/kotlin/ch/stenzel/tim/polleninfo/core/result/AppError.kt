@@ -49,6 +49,9 @@ sealed interface AppError {
     /** The backend no longer knows this phone's session, so the user has to log in again. */
     data object SignedOut : AppError
 
+    /** The backend's rate limit refused a login or registration; trying again later will do. */
+    data object TooManyAttempts : AppError
+
     data object Unknown : AppError
 }
 

@@ -279,6 +279,7 @@
     <string name="error_action_save_feeling">Non è stato possibile salvare la Sua risposta.</string>
     <string name="error_action_delete_account">Impossibile eliminare l’account.</string>
     <string name="error_wrong_password">La password non è corretta.</string>
+    <string name="error_too_many_attempts">Troppi tentativi. Riprovi più tardi.</string>
     <string name="account_title_login">Accedi</string>
     <string name="account_title_register">Crea account</string>
     <string name="account_email_label">Indirizzo e-mail</string>

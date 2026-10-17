@@ -9,6 +9,7 @@ import ch.stenzel.tim.polleninfo.core.session.domain.model.EmailTakenException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.InvalidCredentialsException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.Session
+import ch.stenzel.tim.polleninfo.core.session.domain.model.TooManyAttemptsException
 import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -170,6 +171,51 @@ class SessionRepositoryImplTest {
         assertIs<InvalidCredentialsException>(failure.exception)
         assertEquals(AppError.InvalidCredentials, failure.exception.toSessionAppError())
         assertFalse(storage.everStored)
+    }
+
+    private val rateLimited: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData = {
+        respond(
+            """{"error":"Too many requests"}""",
+            HttpStatusCode.TooManyRequests,
+            headersOf(HttpHeaders.ContentType to listOf("application/json"), HttpHeaders.RetryAfter to listOf("360")),
+        )
+    }
+
+    @Test
+    fun `a 429 on register is TooManyAttempts and stores nothing`() = runTest {
+        val repository = repository(rateLimited)
+
+        val result = repository.register("tim@example.com", "correct horse")
+
+        val failure = assertIs<Result.Failure>(result)
+        assertIs<TooManyAttemptsException>(failure.exception)
+        assertEquals(AppError.TooManyAttempts, failure.exception.toSessionAppError())
+        assertFalse(storage.everStored)
+    }
+
+    @Test
+    fun `a 429 on login is TooManyAttempts and stores nothing`() = runTest {
+        val repository = repository(rateLimited)
+
+        val result = repository.login("tim@example.com", "correct horse")
+
+        val failure = assertIs<Result.Failure>(result)
+        assertIs<TooManyAttemptsException>(failure.exception)
+        assertEquals(AppError.TooManyAttempts, failure.exception.toSessionAppError())
+        assertFalse(storage.everStored)
+    }
+
+    @Test
+    fun `a 429 on deleteAccount is TooManyAttempts and keeps the session`() = runTest {
+        storage.store(signedIn)
+        val repository = repository(rateLimited)
+
+        val result = repository.deleteAccount("correct horse")
+
+        val failure = assertIs<Result.Failure>(result)
+        assertIs<TooManyAttemptsException>(failure.exception)
+        assertEquals(AppError.TooManyAttempts, failure.exception.toSessionAppError())
+        assertEquals(signedIn, repository.session.first())
     }
 
     @Test

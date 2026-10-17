@@ -311,6 +311,7 @@
     <string name="error_action_save_feeling">Your answer couldn’t be saved.</string>
     <string name="error_action_delete_account">Couldn’t delete the account.</string>
     <string name="error_wrong_password">The password is incorrect.</string>
+    <string name="error_too_many_attempts">Too many attempts. Please try again later.</string>
     <string name="account_title_login">Log in</string>
     <string name="account_title_register">Create account</string>
     <string name="account_email_label">Email address</string>

@@ -266,23 +266,23 @@ docs, and the final walk-through.
 
 ### Implementation steps
 
-- [ ] Server: `SessionStore.pruneExpired(now)`; `AlarmScheduler` takes the `SessionStore` and runs `pruneExpiredSessions` on a Swiss day's first tick with its own day marker and `try`, like `pruneInactiveDevices`; wire it in `Application.module`.
-- [ ] App: map `429` from the account calls to a too-many-attempts error (an `AppError` case or `ErrorText` reason) with texts in four languages.
-- [ ] Docs: CLAUDE.md — Alarm delivery (third prune), Testing, and the accepted limitations (no password reset or email verification; registration reveals whether an email has an account; a tapped answer is not kept through login).
+- [x] Server: `SessionStore.pruneExpired(now)`; `AlarmScheduler` takes the `SessionStore` and runs `pruneExpiredSessions` on a Swiss day's first tick with its own day marker and `try`, like `pruneInactiveDevices`; wire it in `Application.module`.
+- [x] App: map `429` from the account calls to a too-many-attempts error (an `AppError` case or `ErrorText` reason) with texts in four languages.
+- [x] Docs: CLAUDE.md — Alarm delivery (third prune), Testing, and the accepted limitations (no password reset or email verification; registration reveals whether an email has an account; a tapped answer is not kept through login).
 
 ### Acceptance criteria
 
-- [ ] `ExposedAccountStoresTest`: `pruneExpired` removes sessions unused for more than 90 days, keeps one at exactly 90 days, and returns the count.
-- [ ] `AlarmSchedulerTest`: the session prune runs on a Swiss day's first tick and not again that day; a throwing prune still lets the minute's report through and is retried on the next tick.
-- [ ] `SessionRepositoryImplTest` / `AppErrorTextTest`: a `429` on register and on login maps to the too-many-attempts error and its text.
-- [ ] Manual: eleven quick login attempts show the too-many-attempts message.
-- [ ] Manual release check: in German, French and Italian the gate, registration, login, Home's prompt error and Settings' account section are fully translated; a fresh install completes onboarding, Home, All stations and Alarms without an account, and a due alarm still arrives while signed out; after `adb shell bmgr backupnow` and a restore onto a fresh install the app is signed out.
+- [x] `ExposedAccountStoresTest`: `pruneExpired` removes sessions unused for more than 90 days, keeps one at exactly 90 days, and returns the count.
+- [x] `AlarmSchedulerTest`: the session prune runs on a Swiss day's first tick and not again that day; a throwing prune still lets the minute's report through and is retried on the next tick.
+- [x] `SessionRepositoryImplTest` / `AppErrorTextTest`: a `429` on register and on login maps to the too-many-attempts error and its text.
+- [x] Manual: eleven quick login attempts show the too-many-attempts message.
+- [ ] ~~Manual release check: in German, French and Italian the gate, registration, login, Home's prompt error and Settings' account section are fully translated; a fresh install completes onboarding, Home, All stations and Alarms without an account, and a due alarm still arrives while signed out; after `adb shell bmgr backupnow` and a restore onto a fresh install the app is signed out.~~ *(skipped: a multi-part walk-through for a person on a device — reviewing three translations by eye, push delivery needs `FCM_CREDENTIALS`, which is not configured here, and the backup/restore needs a second fresh install; not run in this session)*
 
 ### Quality gates
 
-- [ ] QG-server
-- [ ] QG-app
-- [ ] QG-build
-- [ ] QG-l10n
-- [ ] QG-docs
-- [ ] QG-logs
+- [x] QG-server
+- [x] QG-app
+- [x] QG-build
+- [x] QG-l10n
+- [x] QG-docs
+- [x] QG-logs

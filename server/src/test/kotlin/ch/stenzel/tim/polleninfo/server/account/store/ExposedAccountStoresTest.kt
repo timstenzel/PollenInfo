@@ -262,6 +262,26 @@ class ExposedAccountStoresTest {
         assertEquals(1L, transaction(database) { SessionsTable.selectAll().count() })
     }
 
+    @Test
+    fun `pruneExpired deletes the sessions unused for more than 90 days and keeps one at exactly 90 days`() = runTest {
+        val id = registered()
+        val atLimit = sessions.create(id, now)
+        val pastLimit = sessions.create(id, now.minusMillis(1))
+        val longGone = sessions.create(id, now.minus(Duration.ofDays(200)))
+        val recent = sessions.create(id, now.plus(Duration.ofDays(30)))
+        val pruneAt = now.plus(SESSION_EXPIRY.toJavaDuration())
+
+        assertEquals(2, sessions.pruneExpired(pruneAt))
+
+        val left = transaction(database) { SessionsTable.selectAll().map { it[SessionsTable.tokenHash] } }
+        assertEquals(setOf(atLimit.hash().toList(), recent.hash().toList()), left.map { it.toList() }.toSet())
+        assertEquals(id, sessions.authenticate(atLimit, pruneAt))
+        assertNull(sessions.authenticate(pastLimit, pruneAt))
+        assertNull(sessions.authenticate(longGone, pruneAt))
+        // Nothing more to prune.
+        assertEquals(0, sessions.pruneExpired(pruneAt))
+    }
+
     private fun lastUsedAt(): Instant =
         transaction(database) { SessionsTable.selectAll().single()[SessionsTable.lastUsedAt].toInstant() }
 

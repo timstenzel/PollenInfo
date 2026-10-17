@@ -601,6 +601,8 @@ private class InMemorySessionStore : SessionStore {
     override suspend fun delete(token: SessionToken) {
         deleted += token
     }
+
+    override suspend fun pruneExpired(now: Instant): Int = 0
 }
 
 /** A diary that keeps nothing; no security test reaches the diary routes. */

@@ -1,5 +1,13 @@
 package ch.stenzel.tim.polleninfo.server.alarm.scheduler
 
+import ch.stenzel.tim.polleninfo.server.account.domain.AccountSpec
+import ch.stenzel.tim.polleninfo.server.account.domain.SessionToken
+import ch.stenzel.tim.polleninfo.server.account.domain.hash
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedSessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.ExposedUserStore
+import ch.stenzel.tim.polleninfo.server.account.store.RegisterResult
+import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
+import ch.stenzel.tim.polleninfo.server.account.store.SessionsTable
 import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_ZONE
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmSchedule
@@ -37,6 +45,7 @@ import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.exposed.v1.core.eq
@@ -53,6 +62,8 @@ class AlarmSchedulerTest {
     private val alarms = ExposedAlarmStore(database)
     private val log = ExposedNotificationLog(database)
     private val state = ExposedSchedulerState(database)
+    private val users = ExposedUserStore(database)
+    private val sessions = ExposedSessionStore(database)
 
     /** One reading from 07:00 Swiss time: Birch MODERATE, Grasses HIGH. */
     private val pollen = FakePollenService(
@@ -72,9 +83,11 @@ class AlarmSchedulerTest {
     private fun scheduler(
         measurements: MeasurementService = measurementService(),
         devices: DeviceStore = this.devices,
+        sessions: SessionStore = this.sessions,
     ) = AlarmScheduler(
         alarms = alarms,
         devices = devices,
+        sessions = sessions,
         log = log,
         state = state,
         measurements = measurements,
@@ -594,5 +607,74 @@ class AlarmSchedulerTest {
         scheduler.tick()
         assertFalse(isStored(device))
         assertEquals(emptyList(), alarms.list(device))
+    }
+
+    // --- Expired sessions ---
+
+    private fun isStored(token: SessionToken): Boolean = transaction(database) {
+        SessionsTable.selectAll().where { SessionsTable.tokenHash eq token.hash() }.count() > 0
+    }
+
+    private var nextUser = 1
+
+    /** A session of a new user, created and last used at [at]. */
+    private suspend fun sessionUsedAt(at: Instant): SessionToken {
+        val registered = users.register(AccountSpec("user${nextUser++}@example.com", "correct horse"), "hash", at)
+        return sessions.create(assertIs<RegisterResult.Registered>(registered).userId, at)
+    }
+
+    /** Counts [pruneExpired] calls and fails the first [failures] of them. */
+    private class FlakySessionPrune(private val store: SessionStore, var failures: Int = 0) : SessionStore by store {
+        var attempts = 0
+
+        override suspend fun pruneExpired(now: Instant): Int {
+            attempts++
+            if (failures-- > 0) throw IOException("database unreachable")
+            return store.pruneExpired(now)
+        }
+    }
+
+    @Test
+    fun `the first tick of a Swiss day prunes expired sessions and a later tick that day does not`() = runTest {
+        // Sunday 1 November 2026, 07:01 in Zürich: 90 days and a minute after the first session's
+        // last use, 90 days less two hours after the second's.
+        val first = sessionUsedAt(Instant.parse("2026-08-03T06:00:00Z"))
+        val second = sessionUsedAt(Instant.parse("2026-08-03T08:00:00Z"))
+        clock.now = Instant.parse("2026-11-01T06:01:00Z")
+        val scheduler = scheduler()
+
+        scheduler.tick()
+        assertFalse(isStored(first))
+        assertTrue(isStored(second))
+
+        // The second is past 90 days too now, but the day's prune has run.
+        clock.now = Instant.parse("2026-11-01T22:59:00Z")
+        scheduler.tick()
+        assertTrue(isStored(second))
+
+        // Midnight in Zürich.
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertFalse(isStored(second))
+    }
+
+    @Test
+    fun `a failing session prune still sends the minute's alarms and is retried on the next tick`() = runTest {
+        dailyReport("token-1")
+        val expired = sessionUsedAt(Instant.parse("2026-05-01T06:00:00Z"))
+        val flaky = FlakySessionPrune(sessions, failures = 1)
+        val scheduler = scheduler(sessions = flaky)
+
+        scheduler.tick()
+        assertEquals(listOf("token-1"), push.sent.map { it.token })
+        assertTrue(isStored(expired))
+
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertFalse(isStored(expired))
+
+        clock.advanceBy(Duration.ofMinutes(1))
+        scheduler.tick()
+        assertEquals(2, flaky.attempts)
     }
 }

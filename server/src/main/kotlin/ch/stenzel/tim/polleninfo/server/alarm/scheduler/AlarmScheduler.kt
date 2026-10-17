@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.server.alarm.scheduler
 
+import ch.stenzel.tim.polleninfo.server.account.store.SessionStore
 import ch.stenzel.tim.polleninfo.server.alarm.domain.ALARM_ZONE
 import ch.stenzel.tim.polleninfo.server.alarm.domain.Alarm
 import ch.stenzel.tim.polleninfo.server.alarm.domain.AlarmRules
@@ -46,6 +47,7 @@ import org.slf4j.LoggerFactory
 class AlarmScheduler(
     private val alarms: AlarmStore,
     private val devices: DeviceStore,
+    private val sessions: SessionStore,
     private val log: NotificationLog,
     private val state: SchedulerState,
     private val measurements: MeasurementService,
@@ -65,6 +67,9 @@ class AlarmScheduler(
 
     /** The Swiss date inactive devices were last pruned on, tracked apart so each step retries alone. */
     private var devicesPrunedFor: LocalDate? = null
+
+    /** The Swiss date expired sessions were last pruned on, tracked apart like [devicesPrunedFor]. */
+    private var sessionsPrunedFor: LocalDate? = null
 
     /**
      * Processes the current minute, after the missed ones no older than [MAX_CATCH_UP]. A minute at or
@@ -94,6 +99,7 @@ class AlarmScheduler(
         lastMinute = now
         pruneLog(now.toLocalDate())
         pruneInactiveDevices(now)
+        pruneExpiredSessions(now)
 
         val due = alarms.enabledWithDeliverableDevice()
             .filter { AlarmRules.isDailyDue(it.alarm, now) || AlarmRules.isThresholdActive(it.alarm, now) }
@@ -160,6 +166,24 @@ class AlarmScheduler(
             throw e
         } catch (e: Exception) {
             logger.warn("Removing inactive devices on $today failed", e)
+        }
+    }
+
+    /**
+     * Removes the sessions unused for more than 90 days — already refused at login — on the first tick
+     * of each Swiss day. A failure is retried on the next tick and never costs this minute's alarms.
+     */
+    private suspend fun pruneExpiredSessions(now: ZonedDateTime) {
+        val today = now.toLocalDate()
+        if (sessionsPrunedFor == today) return
+        try {
+            val pruned = sessions.pruneExpired(clock.instant())
+            sessionsPrunedFor = today
+            if (pruned > 0) logger.info("Removed $pruned expired sessions")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Removing expired sessions on $today failed", e)
         }
     }
 

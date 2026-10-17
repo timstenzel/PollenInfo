@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -39,6 +40,12 @@ interface SessionStore {
 
     /** Ends the session [token] belongs to, and only that one; nothing happens for an unknown token. */
     suspend fun delete(token: SessionToken)
+
+    /**
+     * Deletes every session last used more than [SESSION_EXPIRY] before [now] — the ones
+     * [authenticate] already refuses. Exactly that long is kept. Returns how many were deleted.
+     */
+    suspend fun pruneExpired(now: Instant): Int
 }
 
 /** How long a session stays valid after its last use; exactly this long is still valid. */
@@ -86,6 +93,13 @@ class ExposedSessionStore(private val database: Database) : SessionStore {
             transaction(database) {
                 SessionsTable.deleteWhere { SessionsTable.tokenHash eq hash }
             }
+        }
+    }
+
+    override suspend fun pruneExpired(now: Instant): Int = withContext(Dispatchers.IO) {
+        val cutoff = now.minus(SESSION_EXPIRY.toJavaDuration()).toTimestamp()
+        transaction(database) {
+            SessionsTable.deleteWhere { SessionsTable.lastUsedAt less cutoff }
         }
     }
 }

@@ -93,9 +93,10 @@ fun Application.module(config: ServerConfig) {
     configureAlarmRouting(devices = devices, alarms = alarms)
 
     val clock = Clock.systemUTC()
+    val sessions = ExposedSessionStore(database.database)
     configureAccountRouting(
         users = ExposedUserStore(database.database),
-        sessions = ExposedSessionStore(database.database),
+        sessions = sessions,
         diary = ExposedDiaryStore(database.database),
         hasher = Argon2PasswordHasher(),
         clock = clock,
@@ -105,6 +106,7 @@ fun Application.module(config: ServerConfig) {
         scheduler = AlarmScheduler(
             alarms = alarms,
             devices = devices,
+            sessions = sessions,
             log = ExposedNotificationLog(database.database),
             state = ExposedSchedulerState(database.database),
             measurements = measurementService,

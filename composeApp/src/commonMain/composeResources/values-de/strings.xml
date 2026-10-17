@@ -279,6 +279,7 @@
     <string name="error_action_save_feeling">Deine Antwort konnte nicht gespeichert werden.</string>
     <string name="error_action_delete_account">Das Konto konnte nicht gelöscht werden.</string>
     <string name="error_wrong_password">Das Passwort ist falsch.</string>
+    <string name="error_too_many_attempts">Zu viele Versuche. Bitte versuche es später erneut.</string>
     <string name="account_title_login">Anmelden</string>
     <string name="account_title_register">Konto erstellen</string>
     <string name="account_email_label">E-Mail-Adresse</string>

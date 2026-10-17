@@ -24,6 +24,7 @@ import ch.stenzel.tim.polleninfo.resources.error_not_found
 import ch.stenzel.tim.polleninfo.resources.error_push_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_server_unavailable
 import ch.stenzel.tim.polleninfo.resources.error_signed_out
+import ch.stenzel.tim.polleninfo.resources.error_too_many_attempts
 import ch.stenzel.tim.polleninfo.resources.error_unknown
 import ch.stenzel.tim.polleninfo.resources.error_wrong_password
 import org.jetbrains.compose.resources.StringResource
@@ -72,6 +73,7 @@ fun AppError.text(context: ErrorContext): ErrorText {
         AppError.InvalidCredentials ->
             if (context == ErrorContext.DELETE_ACCOUNT) Res.string.error_wrong_password else Res.string.error_invalid_credentials
         AppError.SignedOut -> Res.string.error_signed_out
+        AppError.TooManyAttempts -> Res.string.error_too_many_attempts
         AppError.Unknown -> Res.string.error_unknown
     }
     val action = when (context) {
