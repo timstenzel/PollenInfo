@@ -14,9 +14,9 @@ import platform.CoreLocation.kCLAuthorizationStatusNotDetermined
 import platform.darwin.NSObject
 
 /**
- * Untested by construction: there is no iOS app wrapper in this project, so this is compile-verified
- * only. It also depends on `NSLocationWhenInUseUsageDescription` being present in the wrapper's
- * `Info.plist` — without it iOS silently never prompts. See `CLAUDE.md`.
+ * Not unit-tested; checked by hand on the simulator (`iosApp/CHECKLIST.md`). It depends on
+ * `NSLocationWhenInUseUsageDescription` in `iosApp`'s `Info.plist` — without it iOS silently never
+ * prompts. See `CLAUDE.md`.
  */
 @Composable
 actual fun rememberCoarseLocationPermissionRequester(

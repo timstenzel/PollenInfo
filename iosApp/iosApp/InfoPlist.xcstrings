@@ -1,0 +1,35 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSLocationWhenInUseUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PollenInfo verwendet deinen ungefähren Standort einmalig, um die nächstgelegene Pollenstation vorzuschlagen. Dein Standort verlässt dein iPhone nie."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PollenInfo uses your approximate location once to suggest the nearest pollen station. Your location never leaves your iPhone."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PollenInfo utilise une fois votre position approximative pour vous proposer la station pollinique la plus proche. Votre position ne quitte jamais votre iPhone."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PollenInfo utilizza una volta la Sua posizione approssimativa per proporLe la stazione pollinica più vicina. La Sua posizione non lascia mai il Suo iPhone."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

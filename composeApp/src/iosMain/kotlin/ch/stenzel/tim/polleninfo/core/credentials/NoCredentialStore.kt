@@ -2,7 +2,7 @@ package ch.stenzel.tim.polleninfo.core.credentials
 
 /**
  * iOS has no call to make here: its password autofill works from the text fields' content types
- * and the wrapper's Associated Domains (see CLAUDE.md, "iOS wrapper configuration"), so there is
+ * and the wrapper's Associated Domains (see CLAUDE.md, "iOS wrapper"), so there is
  * nothing to save or offer from code. Compile-verified only.
  */
 class NoCredentialStore : CredentialStore {

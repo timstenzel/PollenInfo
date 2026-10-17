@@ -5,14 +5,11 @@ import ch.stenzel.tim.polleninfo.core.di.appModules
 import org.koin.core.context.startKoin
 
 /**
- * The iOS simulator shares the host machine's network stack, so the development server is simply
- * on `localhost`. Reaching it over cleartext needs an App Transport Security exception
- * (`NSAllowsLocalNetworking`) in the future iOS wrapper's `Info.plist` — see `CLAUDE.md`.
+ * The app's root view controller, created once by the `iosApp` wrapper. [apiBaseUrl] (no trailing
+ * slash) is the wrapper's `API_BASE_URL` from its `Info.plist`, set per build configuration.
  */
-private const val API_BASE_URL = "http://localhost:8080"
-
-fun MainViewController() = ComposeUIViewController(
+fun MainViewController(apiBaseUrl: String) = ComposeUIViewController(
     configure = {
-        startKoin { modules(appModules(API_BASE_URL)) }
+        startKoin { modules(appModules(apiBaseUrl)) }
     },
 ) { App() }

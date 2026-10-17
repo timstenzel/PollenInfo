@@ -5,7 +5,8 @@ import platform.Foundation.NSBundle
 /**
  * `CFBundleShortVersionString` and `CFBundleVersion` from the main bundle's `Info.plist`. A build
  * number that is not a whole number (iOS allows "1.0.3") counts as missing, so the line is hidden
- * rather than showing half a version. Compile-verified only: there is no iOS app wrapper yet.
+ * rather than showing half a version. `iosApp` sets both from `MARKETING_VERSION` /
+ * `CURRENT_PROJECT_VERSION` in `Config/Base.xcconfig`.
  */
 class IosAppInfo : AppInfo {
 

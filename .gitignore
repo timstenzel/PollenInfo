@@ -31,6 +31,8 @@ DerivedData/
 *.dSYM
 Pods/
 .xcode.env.local
+# Per-machine overrides of the iOS development build (e.g. API_BASE_URL for a real iPhone).
+iosApp/Config/Local.xcconfig
 
 # Kotlin/Native
 *.klib

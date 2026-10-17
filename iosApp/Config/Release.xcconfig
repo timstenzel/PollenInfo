@@ -1,0 +1,6 @@
+#include "Base.xcconfig"
+
+// The release build: always the deployed backend over HTTPS, no cleartext exception, and no
+// Local.xcconfig override.
+PRODUCT_BUNDLE_IDENTIFIER = ch.stenzel.tim.polleninfo
+API_BASE_URL = https:/$()/api.polleninfo.ch

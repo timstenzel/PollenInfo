@@ -20,8 +20,8 @@ import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
 /**
- * Untested by construction: there is no iOS app wrapper in this project, so this is compile-verified
- * only. Unlike location, no `Info.plist` key is needed to prompt for notifications.
+ * Not unit-tested; checked by hand (`iosApp/CHECKLIST.md`). Unlike location, no `Info.plist` key is
+ * needed to prompt for notifications.
  */
 @Composable
 actual fun rememberNotificationPermissionController(): NotificationPermissionController =

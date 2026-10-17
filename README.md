@@ -101,6 +101,7 @@ what the server computed.
 | Module | Type | Contains |
 | --- | --- | --- |
 | [`androidApp`](androidApp) | Android application | The APK: `MainActivity`, the manifest, icons, build types and the backend address per build, Firebase config, R8 rules |
+| [`iosApp`](iosApp) | Xcode project (not Gradle) | The iPhone app: SwiftUI entry point hosting the shared UI, `Info.plist`, build configurations and the backend address per configuration, icon, privacy manifest |
 | [`composeApp`](composeApp) | KMP library (Android, iOS) | All app code: UI, ViewModels, repositories, REST client, push service, platform actuals, all app tests |
 | [`theme`](theme) | KMP library (Android, iOS) | Material 3 colours and typography, plus the severity, species and map palettes |
 | [`server`](server) | Kotlin/JVM (Ktor + Netty) | REST API, station / species / threshold domain, MeteoSwiss fetching, alarm scheduler, accounts and diary, PostgreSQL store |
@@ -174,7 +175,7 @@ The full contract, with every status code, is in [`CLAUDE.md`](CLAUDE.md#rest-ap
 - JDK 21 (Android Studio's bundled JBR works)
 - Android SDK (Android Studio)
 - Docker — Docker Desktop, OrbStack or Colima — for the development database and the server tests
-- Full Xcode only if you want to run the iOS tests (there is no iOS app project yet)
+- Full Xcode (27 or later) for the iOS app and the iOS simulator tests
 
 ### Run the backend
 
@@ -206,11 +207,28 @@ every request times out:
 adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK
 ```
 
-### iOS
+### Run the iOS app
 
-The shared code compiles for `iosArm64` and `iosSimulatorArm64`, but the Xcode wrapper does not
-exist yet. The `Info.plist` keys and entitlements it will need are listed in
-[`CLAUDE.md`](CLAUDE.md#ios-wrapper-configuration).
+Open [`iosApp/iosApp.xcodeproj`](iosApp) in Xcode and run the `iosApp` scheme on an iPhone
+simulator — its first build phase builds the shared Kotlin code with Gradle. From the command line:
+
+```sh
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' build
+```
+
+The Debug build (`ch.stenzel.tim.polleninfo.debug`) talks to `http://localhost:8080`, which the
+simulator shares with your Mac. To point it elsewhere — say, a real iPhone reaching your Mac over the
+local network — create the git-ignored `iosApp/Config/Local.xcconfig`:
+
+```
+API_BASE_URL = http:/$()/192.168.1.20:8080
+```
+
+(`//` starts a comment in an xcconfig; `$()` keeps the slashes apart.) The Release build
+(`ch.stenzel.tim.polleninfo`) always uses `https://api.polleninfo.ch`; both install side by side.
+Until an Apple Developer team is configured, archive with `CODE_SIGNING_ALLOWED=NO`. What the
+automated tests cannot reach is listed in the manual checklist [`iosApp/CHECKLIST.md`](iosApp/CHECKLIST.md).
 
 ---
 
@@ -222,6 +240,7 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 | Server tests (needs Docker) | `./gradlew :server:test` |
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
+| App unit tests (iOS simulator) | `./gradlew :composeApp:iosSimulatorArm64Test` |
 | Translations complete | `./gradlew :composeApp:checkTranslations` |
 
 - App tests live in `commonTest` only, so they run on every target. Repositories are tested through

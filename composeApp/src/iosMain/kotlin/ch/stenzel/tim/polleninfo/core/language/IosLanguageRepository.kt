@@ -10,7 +10,7 @@ import platform.Foundation.NSUserDefaults
  *
  * [current] reads the app's own domain only: `standardUserDefaults` would also answer from the
  * global domain, where `AppleLanguages` is the device's list, and "System default" would then read
- * back as the device language. Compile-verified only — there is no iOS app wrapper yet.
+ * back as the device language. Not unit-tested; checked by hand (`iosApp/CHECKLIST.md`).
  */
 class IosLanguageRepository : LanguageRepository {
     private val defaults = NSUserDefaults.standardUserDefaults

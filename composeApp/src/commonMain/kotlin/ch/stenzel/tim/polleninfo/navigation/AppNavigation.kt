@@ -110,7 +110,7 @@ private fun AppNavHost(
             )
         }
 
-        composable<Screen.Account> { entry ->
+        composable<Screen.Account>(typeMap = accountTypeMap) { entry ->
             AccountScreen(
                 initialMode = entry.toRoute<Screen.Account>().mode,
                 onDone = { navController.popBackStack() },

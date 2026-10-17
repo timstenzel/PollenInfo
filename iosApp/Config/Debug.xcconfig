@@ -1,0 +1,13 @@
+#include "Base.xcconfig"
+
+// The development build: installs beside the release build and talks to the server on this Mac
+// (the simulator shares its network stack). Cleartext to local addresses only
+// (NSAllowsLocalNetworking via POLLENINFO_LOCAL_NETWORKING in Info.plist).
+PRODUCT_BUNDLE_IDENTIFIER = ch.stenzel.tim.polleninfo.debug
+API_BASE_URL = http:/$()/localhost:8080
+INFOPLIST_PREPROCESSOR_DEFINITIONS = POLLENINFO_LOCAL_NETWORKING=1
+
+// Optional and git-ignored: overrides for this machine, e.g. a real iPhone reaching the Mac over
+// the local network:
+//   API_BASE_URL = http:/$()/192.168.1.20:8080
+#include? "Local.xcconfig"

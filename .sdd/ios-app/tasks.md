@@ -33,63 +33,63 @@ come later.
 
 ### Implementation steps
 
-- [ ] `MainViewController` takes `apiBaseUrl` from its caller; remove the hard-coded `localhost`
+- [x] `MainViewController` takes `apiBaseUrl` from its caller; remove the hard-coded `localhost`
       constant and its KDoc.
-- [ ] Create `iosApp/iosApp.xcodeproj` with the `iosApp` SwiftUI target hosting `MainViewController`
+- [x] Create `iosApp/iosApp.xcodeproj` with the `iosApp` SwiftUI target hosting `MainViewController`
       via `UIViewControllerRepresentable`; iPhone only (`TARGETED_DEVICE_FAMILY = 1`), orientation as
       on Android, Compose content respecting safe areas.
-- [ ] Run Script phase `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` (no CocoaPods), with
+- [x] Run Script phase `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` (no CocoaPods), with
       `ENABLE_USER_SCRIPT_SANDBOXING = NO` and a `JAVA_HOME` fallback to `/usr/libexec/java_home`
       (Xcode does not read `~/.zshrc`).
-- [ ] `Config/Base.xcconfig` (`DEVELOPMENT_TEAM` empty, "Sign to Run Locally" for the simulator),
+- [x] `Config/Base.xcconfig` (`DEVELOPMENT_TEAM` empty, "Sign to Run Locally" for the simulator),
       `Debug.xcconfig`, `Release.xcconfig`, optional untracked `Config/Local.xcconfig` (`#include?`)
       overriding `API_BASE_URL`, git-ignored. Bundle id, display name, `API_BASE_URL` and
       `NSAllowsLocalNetworking` (Debug only) per the annex table.
-- [ ] `Info.plist`: `API_BASE_URL` exposed to Swift, `NSLocationWhenInUseUsageDescription` (localized
+- [x] `Info.plist`: `API_BASE_URL` exposed to Swift, `NSLocationWhenInUseUsageDescription` (localized
       via `InfoPlist.strings` for en/de/fr/it in the project's language style),
       `NSLocationDefaultAccuracyReduced`, `CFBundleLocalizations` (en, de, fr, it),
       `CFBundleDevelopmentRegion` en, `CFBundleShortVersionString` / `CFBundleVersion`, `UILaunchScreen`
       with a colour asset equal to `:theme` `surfaceLight` / `surfaceDark`.
-- [ ] Assets: `AppIcon` 1024 px from the Android adaptive icon (dark/tinted variants if clean);
+- [x] Assets: `AppIcon` 1024 px from the Android adaptive icon (dark/tinted variants if clean);
       `PrivacyInfo.xcprivacy` declaring UserDefaults required-reason use and no tracking.
-- [ ] Make `./gradlew :composeApp:iosSimulatorArm64Test` run on Xcode 27 (configure the simulator
+- [x] Make `./gradlew :composeApp:iosSimulatorArm64Test` run on Xcode 27 (configure the simulator
       device if KGP's default is not installed) and pass, fixing any shared code or test that behaves
       differently on Kotlin/Native.
-- [ ] Create the iOS manual test checklist (`deploy/README.md` § iOS, or a file it links) listing every
+- [x] Create the iOS manual test checklist (`deploy/README.md` § iOS, or a file it links) listing every
       manual UAT 1–33 with a result column and noting which need a real iPhone.
-- [ ] Docs: CLAUDE.md iOS wrapper section replaces "There is no `iosApp` Xcode project yet"; commands
+- [x] Docs: CLAUDE.md iOS wrapper section replaces "There is no `iosApp` Xcode project yet"; commands
       table gains the iOS simulator test, Xcode build and archive commands; "only CLT here" removed;
       README build instructions.
 
 ### Acceptance criteria
 
-- [ ] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'generic/platform=iOS Simulator' build`
+- [x] `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'generic/platform=iOS Simulator' build`
       and the same with `-configuration Release` succeed from a clean checkout; launched in a simulator,
       the Debug app shows onboarding on first launch (UAT 1).
-- [ ] The built bundles have ids `ch.stenzel.tim.polleninfo.debug` / `ch.stenzel.tim.polleninfo` and
+- [ ] ~~The built bundles have ids `ch.stenzel.tim.polleninfo.debug` / `ch.stenzel.tim.polleninfo` and
       display name "PollenInfo"; both installed in one simulator keep separate station selections
       (UAT 2, station part). The Debug `Info.plist` has `API_BASE_URL` `http://localhost:8080` (or the
       `Local.xcconfig` value) and `NSAllowsLocalNetworking`; the Release one has
-      `https://api.polleninfo.ch` and no `NSAllowsLocalNetworking` (UAT 3).
-- [ ] The built bundle contains `PrivacyInfo.xcprivacy` with `NSPrivacyAccessedAPICategoryUserDefaults`
+      `https://api.polleninfo.ch` and no `NSAllowsLocalNetworking` (UAT 3).~~ *(skipped: bundle ids, display name and both Info.plist URL/ATS values verified in the built bundles, and both apps install side by side with separate data containers; choosing a station in each needs taps in the simulator, which this environment cannot drive — UAT 2 station part is open in iosApp/CHECKLIST.md)*
+- [x] The built bundle contains `PrivacyInfo.xcprivacy` with `NSPrivacyAccessedAPICategoryUserDefaults`
       (reason `CA92.1`) and `NSPrivacyTracking` false, and `AppIcon` in its asset catalog (story 2, 50).
-- [ ] `./gradlew :composeApp:iosSimulatorArm64Test :composeApp:testAndroidHostTest` passes.
-- [ ] `xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/PollenInfo.xcarchive`
+- [x] `./gradlew :composeApp:iosSimulatorArm64Test :composeApp:testAndroidHostTest` passes.
+- [x] `xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/PollenInfo.xcarchive`
       succeeds (with `CODE_SIGNING_ALLOWED=NO` until a Team ID exists).
-- [ ] Manual checklist run on the simulator and recorded: dark-mode launch without light flash
+- [ ] ~~Manual checklist run on the simulator and recorded: dark-mode launch without light flash
       (UAT 4); localized location explanation and approximate-only, nearest station preselected
       (UAT 5, 6); nothing under notch / Dynamic Island / home indicator (UAT 7); edge swipe in the alarm
       editor with an unsaved change shows the discard question (UAT 8); Home levels, All stations list +
-      map tap, registration, diary feeling on the chart (UAT 9–12).
+      map tap, registration, diary feeling on the chart (UAT 9–12).~~ *(skipped: UAT 1, 3 and 4 run and recorded in iosApp/CHECKLIST.md; UAT 5–12 need taps and swipes in the simulator, which this environment cannot drive (no Docker for the local backend either, and registration against production was not attempted) — to be run by hand)*
 
 ### Quality gates
 
-- [ ] Debug and Release simulator builds and `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64`
+- [x] Debug and Release simulator builds and `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64`
       produce no new warning.
-- [ ] After a Debug build, `git status --porcelain` is empty apart from intended source files and
+- [x] After a Debug build, `git status --porcelain` is empty apart from intended source files and
       `git check-ignore iosApp/Config/Local.xcconfig` succeeds.
-- [ ] `./gradlew :androidApp:assembleDebug :composeApp:checkTranslations` succeeds.
-- [ ] `grep -nE 'no .iosApp. Xcode project|only CLT' CLAUDE.md README.md` finds nothing.
+- [x] `./gradlew :androidApp:assembleDebug :composeApp:checkTranslations` succeeds.
+- [x] `grep -nE 'no .iosApp. Xcode project|only CLT' CLAUDE.md README.md` finds nothing.
 
 ## Task [02-devices-state-their-platform]
 

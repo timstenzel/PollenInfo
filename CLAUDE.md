@@ -29,7 +29,8 @@ holds the rules for implementing features and the technical facts the code alone
 `:androidApp` (APK: `MainActivity`, `PollenInfoApplication`, manifest, icons, `app_name`, locale
 config, debug manifest, `BuildConfig.API_BASE_URL`, `google-services.json`, R8 rules) ·
 `:composeApp` (KMP library: all app code and all app tests) · `:theme` (KMP library: Material 3
-theme and palettes) · `:server` (Ktor/Netty, PostgreSQL). Package root:
+theme and palettes) · `:server` (Ktor/Netty, PostgreSQL) · `iosApp/` (Xcode project, not a Gradle module;
+see "iOS wrapper"). Package root:
 `ch.stenzel.tim.polleninfo`. iOS targets: `iosArm64`, `iosSimulatorArm64` (no `iosX64` in CMP 1.12).
 
 AGP 9 rejects the application plugin in a KMP module, hence the separate `:androidApp` (AGP's
@@ -49,15 +50,18 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Server tests (needs Docker) | `./gradlew :server:test` |
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
+| App unit tests (iOS simulator) | `./gradlew :composeApp:iosSimulatorArm64Test` |
+| iOS app (simulator) | `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'generic/platform=iOS Simulator' build` (or `Release`) |
+| iOS archive | `xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/PollenInfo.xcarchive CODE_SIGNING_ALLOWED=NO` |
 | Translations | `./gradlew :composeApp:checkTranslations` (part of `check`) |
 | Dev database up / reset | `docker compose -f deploy/compose.dev.yaml up -d` / `… down -v` |
 | Backend on :8080 | `./gradlew :server:run` (push logged unless `FCM_CREDENTIALS`) |
 | Android debug / release | `./gradlew :androidApp:assembleDebug` / `:androidApp:assembleRelease` |
 | Server image | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` |
 
-- `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM.
-  `iosSimulatorArm64Test` needs full Xcode (only CLT here) — compile the iOS test sources instead.
-  Prefer targeted tasks over `./gradlew check`.
+- `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM,
+  `iosSimulatorArm64Test` on an iOS simulator (slow: links a native test binary). Run both after
+  touching `commonMain`. Prefer targeted tasks over `./gradlew check`.
 - Configuration cache is on; after odd build-script behaviour add `--no-configuration-cache`.
 - Without Docker, non-database server tests pass when run alone (`--tests '*PollenRoutesTest'`);
   database tests fail with "The database tests need Docker". Inspect the dev DB:
@@ -185,7 +189,8 @@ get(API_BASE_URL)) }`) so tests point them at a `MockEngine` host.
 | --- | --- |
 | Android release | `https://api.polleninfo.ch` always |
 | Android debug | `http://10.0.2.2:8080`, or Gradle property `polleninfo.apiBaseUrl` (set in `~/.gradle/gradle.properties`, never the project's) |
-| iOS | `http://localhost:8080` in `MainViewController` |
+| iOS Debug | `http://localhost:8080` (the simulator shares the Mac's network), or `API_BASE_URL` in the git-ignored `iosApp/Config/Local.xcconfig` |
+| iOS Release | `https://api.polleninfo.ch` always |
 
 - Cleartext (`usesCleartextTraffic`) and `ACCESS_LOCAL_NETWORK` are declared **only** in
   `androidApp/src/debug/AndroidManifest.xml`. Verify with `grep -l 'usesCleartextTraffic\|ACCESS_LOCAL_NETWORK'
@@ -194,21 +199,46 @@ get(API_BASE_URL)) }`) so tests point them at a `MockEngine` host.
   `adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK`,
   otherwise every request times out while `/health` answers from the host.
 
-### iOS wrapper configuration
+### iOS wrapper (`iosApp/`)
 
-There is no `iosApp` Xcode project yet. Whoever creates it must add:
+`iosApp/iosApp.xcodeproj` (Xcode 27, file-system-synchronized group `iosApp/iosApp/`, no CocoaPods):
+a SwiftUI `@main` (`PollenInfoApp.swift`) hosting `MainViewController(apiBaseUrl)` through a
+`UIViewControllerRepresentable` with `.ignoresSafeArea()` — Compose pads by the safe area and
+keyboard itself, as on Android. Its first build phase, **Compile Kotlin**, runs
+`./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` (static `ComposeApp.framework`; script
+sandboxing off; Xcode does not read `~/.zshrc`, so without `JAVA_HOME` it falls back to
+`/usr/libexec/java_home`, then Android Studio's JBR).
 
-| `Info.plist` key | Value | Needed by |
-| --- | --- | --- |
-| `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` (debug only) | Cleartext dev backend |
-| `NSLocationWhenInUseUsageDescription` | A sentence | **Mandatory** — without it `CLLocationManager` silently never prompts |
-| `NSLocationDefaultAccuracyReduced` | `true` | Coarse location only |
-| `CFBundleLocalizations` | `en`, `de`, `fr`, `it` | `IosLanguageRepository` |
-| `CFBundleDevelopmentRegion` | `en` | English fallback |
-| `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (whole number) | `IosAppInfo` (version line hidden otherwise) |
+- **Configuration lives in `iosApp/Config/`**: `Base.xcconfig` (shared), `Debug.xcconfig` /
+  `Release.xcconfig` (bundle id, `API_BASE_URL`), and an optional git-ignored `Local.xcconfig`
+  included **by Debug only**. In an xcconfig `//` starts a comment: write URLs as
+  `http:/$()/host:8080`.
 
-- Notifications need no key. A release build should pass `https://api.polleninfo.ch` to
-  `appModules(…)` in `MainViewController` (e.g. from a build setting).
+  | | Debug | Release |
+  | --- | --- | --- |
+  | Bundle id | `ch.stenzel.tim.polleninfo.debug` | `ch.stenzel.tim.polleninfo` |
+  | `API_BASE_URL` | `http://localhost:8080` (or `Local.xcconfig`) | `https://api.polleninfo.ch` |
+  | `NSAllowsLocalNetworking` | `true` | absent |
+
+  Display name "PollenInfo" for both, so they install side by side.
+- `iosApp/iosApp/Info.plist` is hand-written and **preprocessed** (`INFOPLIST_PREPROCESS`,
+  `-traditional`): the ATS exception sits in `#if POLLENINFO_LOCAL_NETWORKING`, defined by Debug.
+  No C comment opener (slash-star) may appear in it. Keys `IosAppInfo` / location / language rely
+  on: `CFBundleShortVersionString` / `CFBundleVersion` (`MARKETING_VERSION` /
+  `CURRENT_PROJECT_VERSION`, a whole number), `NSLocationWhenInUseUsageDescription` (localized in
+  `InfoPlist.xcstrings`; **without it `CLLocationManager` silently never prompts**),
+  `NSLocationDefaultAccuracyReduced`, `CFBundleLocalizations` (en, de, fr, it — `IosLanguageRepository`),
+  `CFBundleDevelopmentRegion` en, `CADisableMinimumFrameDurationOnPhone` (Compose at 120 Hz).
+- Deployment target **iOS 18.5** (Skiko's ICU data in the framework is built for 18.5; lower is a
+  linker warning). Simulator builds exclude `x86_64` (no `iosX64` target).
+- iPhone only (`TARGETED_DEVICE_FAMILY = 1`), portrait and landscape. `UILaunchScreen` colour
+  `LaunchBackground` = `:theme` `surfaceLight` / `surfaceDark` (the startup gate's empty `Surface`),
+  also behind the Compose view. `AppIcon` (default, dark, tinted) is rendered from the Android
+  foreground vector by `iosApp/scripts/render-app-icon.swift` — re-run it after changing the
+  drawable. `PrivacyInfo.xcprivacy`: UserDefaults (`CA92.1`), no tracking.
+- Signing: `DEVELOPMENT_TEAM` is empty until an Apple Developer membership exists; simulator builds
+  sign to run locally, archives need `CODE_SIGNING_ALLOWED=NO` until then.
+- Manual checks: `iosApp/CHECKLIST.md` (UAT 1–33, simulator vs. real iPhone).
 - **Password autofill:** Associated Domains entitlement `webcredentials:api.polleninfo.ch`
   (`?mode=developer` while testing) and `https://api.polleninfo.ch/.well-known/apple-app-site-association`
   serving `{"webcredentials":{"apps":["<TEAM_ID>.<bundle id>"]}}` as `application/json` — a Caddy
@@ -303,6 +333,9 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
 
 - Type-safe Compose Navigation: `@Serializable` destinations in `Screen`, registered in
   `AppNavigation`. `Screen.Example` stays registered but unreachable.
+- **A route argument of a non-primitive type (e.g. an enum) needs a `typeMap`** with its own
+  `NavType` (`AccountModeNavType` for `Screen.Account`). Android derives enum types by reflection;
+  iOS cannot, and the whole graph throws on launch — JVM tests do not catch it.
 - **Startup gate:** `App()` composes nothing until `StartupViewModel` reads the **first** value of
   the selection (`NeedsOnboarding` | `Ready`); `Loading` is an empty `Surface`, not a destination.
   First value only — following the flow would rebuild the graph when onboarding saves. Onboarding

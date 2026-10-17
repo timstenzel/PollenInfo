@@ -50,8 +50,8 @@ private fun createDataStore(name: String): DataStore<Preferences> =
 /**
  * The app's Documents directory — the iOS equivalent of Android's private files directory.
  *
- * Untested by construction: there is no iOS app wrapper in this project, so this path is
- * compile-verified only and will first run when the wrapper is created.
+ * Not unit-tested (a real test needs the platform path); exercised by every launch of `iosApp`,
+ * whose startup gate reads the stored station from here.
  */
 @OptIn(ExperimentalForeignApi::class)
 private fun dataStorePath(fileName: String): String {
