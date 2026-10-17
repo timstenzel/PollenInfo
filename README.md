@@ -344,7 +344,7 @@ The runbook covers the rest step by step:
 
 ## Further reading
 
-- [`CLAUDE.md`](CLAUDE.md) — the detailed design document: every module, convention, screen, API
-  contract and the reasoning behind them.
+- [`CLAUDE.md`](CLAUDE.md) — the implementation guide: conventions for building features, the full
+  REST API contract, server rules and the invariants to keep.
 - [`deploy/README.md`](deploy/README.md) — the operations runbook.
 - [MeteoSwiss pollen open data documentation](https://opendatadocs.meteoswiss.ch/a-data-groundbased/a7-pollen-stations)
