@@ -77,6 +77,13 @@ android {
     }
 }
 
+// AGP 9's built-in Kotlin. Any Kotlin compiler warning fails the build, locally and in CI.
+kotlin {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
 dependencies {
     // The app itself: every screen, the platform actuals, the push service and their resources.
     implementation(project(":composeApp"))

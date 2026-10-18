@@ -11,6 +11,11 @@ plugins {
 }
 
 kotlin {
+    // Any Kotlin compiler warning fails the build, locally and in CI, for every target.
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+
     android {
         namespace = "ch.stenzel.tim.polleninfo.theme"
         compileSdk = 37

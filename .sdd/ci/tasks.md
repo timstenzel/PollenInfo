@@ -137,22 +137,22 @@ the "no new warning" convention.
 
 ### Implementation steps
 
-- [ ] First list the existing warnings: run the compilations of all modules with `--rerun-tasks` without the flag (including generated code: Compose resources, serialization, `expect`/`actual`).
-- [ ] Enable `allWarningsAsErrors` in the shared module at the top-level `kotlin { compilerOptions { } }` (so it reaches the iOS targets, not only inside `android { }`), in the theme, in the app module (AGP 9 built-in Kotlin) and in the server.
-- [ ] Fix every warning this reveals; a warning that cannot be fixed in our code is reported to the maintainer before anything is suppressed.
-- [ ] Project instructions: the "no new deprecation or compiler warning" rule now says Kotlin warnings fail the build; the two accepted plugin messages (Gradle deprecations) stay listed.
+- [x] First list the existing warnings: run the compilations of all modules with `--rerun-tasks` without the flag (including generated code: Compose resources, serialization, `expect`/`actual`).
+- [x] Enable `allWarningsAsErrors` in the shared module at the top-level `kotlin { compilerOptions { } }` (so it reaches the iOS targets, not only inside `android { }`), in the theme, in the app module (AGP 9 built-in Kotlin) and in the server.
+- [x] Fix every warning this reveals; a warning that cannot be fixed in our code is reported to the maintainer before anything is suppressed.
+- [x] Project instructions: the "no new deprecation or compiler warning" rule now says Kotlin warnings fail the build; the two accepted plugin messages (Gradle deprecations) stay listed.
 
 ### Acceptance criteria
 
-- [ ] `./gradlew :theme:compileAndroidMain :composeApp:testAndroidHostTest :composeApp:compileTestKotlinIosSimulatorArm64 :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false :server:compileKotlin :server:compileTestKotlin` passes.
-- [ ] A temporary unused variable in shared `commonMain` code fails both the Android and the iOS compilation (checked, then removed).
-- [ ] A temporary unused variable in server main code fails `:server:compileKotlin`, and one in the app module fails its compilation (checked, then removed).
-- [ ] A temporary unused variable in the theme fails its compilation (checked, then removed).
+- [x] `./gradlew :theme:compileAndroidMain :composeApp:testAndroidHostTest :composeApp:compileTestKotlinIosSimulatorArm64 :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false :server:compileKotlin :server:compileTestKotlin` passes.
+- [x] A temporary unused variable in shared `commonMain` code fails both the Android and the iOS compilation (checked, then removed). *(K2 reports no unused-variable warning — an IDE-only check — so the probe used an unnecessary safe call, `probe?.length` on a `String`.)*
+- [x] A temporary unused variable in server main code fails `:server:compileKotlin`, and one in the app module fails its compilation (checked, then removed). *(K2 reports no unused-variable warning — an IDE-only check — so the probe used an unnecessary safe call, `probe?.length` on a `String`.)*
+- [x] A temporary unused variable in the theme fails its compilation (checked, then removed). *(K2 reports no unused-variable warning — an IDE-only check — so the probe used an unnecessary safe call, `probe?.length` on a `String`.)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest :server:test` passes (server database tests need Docker).
-- [ ] A second identical run reports "Reusing configuration cache".
+- [x] `./gradlew :composeApp:testAndroidHostTest :server:test` passes (server database tests need Docker).
+- [x] A second identical run reports "Reusing configuration cache".
 
 ## Task [07-signed-android-release-on-main]
 

@@ -64,8 +64,12 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 - Without Docker, non-database server tests pass when run alone (`--tests '*PollenRoutesTest'`);
   database tests fail with "The database tests need Docker". Inspect the dev DB:
   `docker compose -f deploy/compose.dev.yaml exec postgres psql -U postgres -d polleninfo`.
-- **No new deprecation or compiler warning.** The only accepted ones come from plugins: AGP 9.4's
-  `Configuration.setVisible` and KGP 2.4's `KotlinNativeBundleArtifactsTypes`.
+- **Kotlin compiler warnings fail the build** (`allWarningsAsErrors` in `kotlin { compilerOptions }`
+  of `:composeApp` — all targets, iOS included — `:theme`, `:androidApp` and `:server`; locally and
+  in CI). Fix the warning; never suppress one without asking the maintainer. K2 does not report
+  unused variables (an IDE-only check), so those don't fail it. No new Gradle deprecation either:
+  the only accepted ones come from plugins — AGP 9.4's `Configuration.setVisible` and KGP 2.4's
+  `KotlinNativeBundleArtifactsTypes`.
 - A release build uploads its R8 mapping to Crashlytics (`uploadCrashlyticsMappingFileRelease`,
   needs network). Gradle property `polleninfo.uploadCrashlyticsMapping` (default `true`) switches it
   off for offline/quick builds — their crashes stay obfuscated. Never set it in the project's

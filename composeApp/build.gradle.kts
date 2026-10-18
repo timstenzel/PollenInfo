@@ -12,6 +12,11 @@ plugins {
 }
 
 kotlin {
+    // Any Kotlin compiler warning fails the build, locally and in CI, for every target.
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+
     // The shared code as an Android library; the APK is :androidApp. The namespace differs from the
     // app's, so the library's own `R` (notification channel names, the notification icon) is
     // `ch.stenzel.tim.polleninfo.shared.R`.
