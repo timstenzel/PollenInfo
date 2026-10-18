@@ -408,19 +408,35 @@ is not blocked by the required checks.
 
 ## CI: `.github/workflows/server.yml`
 
-Runs on pull requests and on pushes to `main` that touch `server/`, `gradle/`, the root Gradle
-files, `deploy/`, `.github/actions/` or the workflow itself:
+Runs on **every** pull request into `develop` or `main` and on every push to `main`, without a path
+filter, so its gate always reports and can be a required check. A first job, `changes`, runs
+`.github/scripts/changed-components.sh` on the change: for a pull request everything since its base,
+for a push to `main` everything since the previous tip (a release pull request is therefore checked
+for everything changed since the last release). An unknown or all-zero base counts as "everything
+changed". The script is the one place that maps paths to components:
+
+| Paths | server | android | ios |
+| --- | --- | --- | --- |
+| `server/`, `deploy/`, `.github/workflows/server.yml` | yes | | |
+| `androidApp/` | | yes | |
+| `composeApp/`, `theme/`, `.github/workflows/android.yml` | | yes | yes |
+| `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `buildSrc/`, `.github/actions/`, `.github/scripts/` | yes | yes | yes |
+| anything else (`*.md`, `.sdd/`, `.github/dependabot.yml`, …) | | | |
+
+When `server` is false, the gate `Test, build and scan` is skipped — GitHub counts a skipped job as
+passed — and nothing is published. Otherwise the gate runs:
 
 1. `./gradlew :server:test :server:installDist` (the database tests use Testcontainers on the
    runner's Docker),
 2. `docker build`,
 3. a Trivy scan that fails the run on any **critical** vulnerability with a fix available,
-4. on `main` only, a separate job pushes the scanned image as
+4. on `main` only, a separate job (after a gate that ran and passed) pushes the scanned image as
    `ghcr.io/timstenzel/polleninfo-server:<commit sha>` and `:latest`. The package stays private.
 
 Rules every workflow in `.github/` follows:
 
-- **One workflow per shipped artifact**, each with its own `paths` filter. The app pipelines will be
+- **One workflow per shipped artifact**, always triggered; which gates run is decided by
+  `.github/scripts/changed-components.sh`, never by a `paths` filter. The app pipelines will be
   `android.yml` (AAB → Play internal testing) and `ios.yml` (TestFlight), triggered by a release tag
   (`android-v…` / `ios-v…`; the server's would be `server-v…`) or by hand (`workflow_dispatch`),
   never on every push.

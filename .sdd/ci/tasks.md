@@ -38,24 +38,24 @@ keeps working, now only after a gate that ran.
 
 ### Implementation steps
 
-- [ ] Add the change-detection script: takes base and head refs, diffs from their merge base, maps paths to `server` / `android` / `ios` exactly as the annex table (including `android.yml` → `android` and `ios`), writes `key=true|false` lines to `$GITHUB_OUTPUT` (stdout when unset), treats a missing or all-zero base as "everything changed".
-- [ ] Rework the server workflow: drop both `paths` filters; `pull_request` limited to `develop` and `main`; keep `push` to `main`; no `workflow_dispatch`. Add a `changes` job (checkout with `fetch-depth: 0`, base = PR base sha or `github.event.before`); the gate job `needs: changes` and runs only when `server` is true. The publish job keeps `needs: test-and-scan` and its `main` condition — a skipped gate therefore skips publishing; do not add `always()`.
-- [ ] Keep action pins, the `contents: read` default, concurrency, the job name `Test, build and scan` and the gate's steps unchanged; rewrite the header comment (no more "own path filters").
-- [ ] Update the runbook's CI section for the server pipeline (always triggered, change detection, path table) and the project instructions' CI line (server gate per component).
+- [x] Add the change-detection script: takes base and head refs, diffs from their merge base, maps paths to `server` / `android` / `ios` exactly as the annex table (including `android.yml` → `android` and `ios`), writes `key=true|false` lines to `$GITHUB_OUTPUT` (stdout when unset), treats a missing or all-zero base as "everything changed".
+- [x] Rework the server workflow: drop both `paths` filters; `pull_request` limited to `develop` and `main`; keep `push` to `main`; no `workflow_dispatch`. Add a `changes` job (checkout with `fetch-depth: 0`, base = PR base sha or `github.event.before`); the gate job `needs: changes` and runs only when `server` is true. The publish job keeps `needs: test-and-scan` and its `main` condition — a skipped gate therefore skips publishing; do not add `always()`.
+- [x] Keep action pins, the `contents: read` default, concurrency, the job name `Test, build and scan` and the gate's steps unchanged; rewrite the header comment (no more "own path filters").
+- [x] Update the runbook's CI section for the server pipeline (always triggered, change detection, path table) and the project instructions' CI line (server gate per component).
 
 ### Acceptance criteria
 
-- [ ] Run locally on a commit range touching only `server/`, the script outputs `server=true`, `android=false`, `ios=false`.
-- [ ] On a range touching only `*.md` / `.sdd/` it outputs all three `false`; on a range touching `gradle/libs.versions.toml` all three `true`; with base `0000000000000000000000000000000000000000` all three `true`.
-- [ ] Run with base `origin/main` and head `origin/develop`, it reports the components changed between the two (the release pull request case).
-- [ ] The server workflow has no `paths` filter and no `workflow_dispatch`, triggers on `pull_request` to `develop`/`main` and `push` to `main`, its `changes` checkout uses `fetch-depth: 0`, and the gate job's `if` reads the `changes` job's `server` output.
-- [ ] The publish job still runs only on `push` to `main` and `needs` the gate job, without `always()`.
+- [x] Run locally on a commit range touching only `server/`, the script outputs `server=true`, `android=false`, `ios=false`.
+- [x] On a range touching only `*.md` / `.sdd/` it outputs all three `false`; on a range touching `gradle/libs.versions.toml` all three `true`; with base `0000000000000000000000000000000000000000` all three `true`.
+- [x] Run with base `origin/main` and head `origin/develop`, it reports the components changed between the two (the release pull request case).
+- [x] The server workflow has no `paths` filter and no `workflow_dispatch`, triggers on `pull_request` to `develop`/`main` and `push` to `main`, its `changes` checkout uses `fetch-depth: 0`, and the gate job's `if` reads the `changes` job's `server` output.
+- [x] The publish job still runs only on `push` to `main` and `needs` the gate job, without `always()`.
 
 ### Quality gates
 
-- [ ] The script passes `bash -n` and, if `shellcheck` is installed, `shellcheck` without findings.
-- [ ] The workflow parses as YAML; every `uses:` is pinned by a 40-character SHA with a version comment.
-- [ ] `./gradlew :server:test` passes (needs Docker; without it the non-database tests pass alone).
+- [x] The script passes `bash -n` and, if `shellcheck` is installed, `shellcheck` without findings. *(`bash -n` passed; `shellcheck` not installed)*
+- [x] The workflow parses as YAML; every `uses:` is pinned by a 40-character SHA with a version comment.
+- [x] `./gradlew :server:test` passes (needs Docker; without it the non-database tests pass alone).
 
 ## Task [03-android-gate-on-pull-requests]
 

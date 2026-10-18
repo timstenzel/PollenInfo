@@ -70,8 +70,12 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   off for offline/quick builds — their crashes stay obfuscated. Never set it in the project's
   `gradle.properties`.
 - `gradle-wrapper.jar` is committed (CI validates it); regenerate only with `./gradlew wrapper`.
-- CI: `.github/workflows/server.yml`, shared setup in `.github/actions/setup-jvm`; every action
-  pinned by commit SHA. Rules in `deploy/README.md`.
+- CI: every pull request into `develop`/`main` and every push to `main` runs the gates of the
+  components it changed, decided by `.github/scripts/changed-components.sh` (the one path →
+  component mapping; docs-only changes run nothing, shared build files run everything). Server gate:
+  `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
+  `main`). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA. Rules in
+  `deploy/README.md`.
 
 ## Git workflow
 
