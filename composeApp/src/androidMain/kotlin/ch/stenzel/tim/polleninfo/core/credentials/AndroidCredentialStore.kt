@@ -10,6 +10,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetPasswordOption
 import androidx.credentials.PasswordCredential
+import androidx.credentials.exceptions.NoCredentialException
 import java.lang.ref.WeakReference
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -58,6 +59,9 @@ class AndroidCredentialStore(application: Application) : CredentialStore {
             (credential as? PasswordCredential)?.let { SavedCredential(it.id, it.password) }
         } catch (e: CancellationException) {
             throw e
+        } catch (_: NoCredentialException) {
+            // Nothing saved: the usual case, not worth a log line.
+            null
         } catch (e: Exception) {
             Log.i(TAG, "No saved login was offered: ${e.javaClass.simpleName}")
             null

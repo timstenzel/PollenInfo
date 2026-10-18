@@ -59,11 +59,13 @@ jobs:
         uses: ./.github/actions/setup-jvm
 
       # The release build stays unsigned here and uploads no R8 mapping (no network credentials).
-      - name: Test, check translations and build debug and release
+      # Lint fails on any finding, warnings included, across :androidApp, :composeApp and :theme.
+      - name: Test, check translations, lint and build debug and release
         run: >-
           ./gradlew
           :composeApp:testAndroidHostTest
           :composeApp:checkTranslations
+          :androidApp:lintRelease
           :androidApp:assembleDebug
           :androidApp:assembleRelease
           -Ppolleninfo.uploadCrashlyticsMapping=false
@@ -82,3 +84,13 @@ jobs:
             fi
           done
           exit "$status"
+
+      # The console names the first finding; the full report (all findings, explanations) is here.
+      - name: Upload the lint report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lint-report
+          path: androidApp/build/reports/lint-results-release.*
+          retention-days: 7
+          if-no-files-found: ignore

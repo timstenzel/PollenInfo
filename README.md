@@ -229,6 +229,7 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Translations complete | `./gradlew :composeApp:checkTranslations` |
+| Android Lint, warnings fail | `./gradlew :androidApp:lintRelease` |
 
 - App tests live in `commonTest` only, so they run on every target. Repositories are tested through
   a real `HttpClient` on Ktor's `MockEngine`; ViewModels under virtual time with hand-written fakes —
@@ -245,7 +246,7 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 CI is GitHub Actions, one workflow per shipped artifact: the backend's
 [`.github/workflows/server.yml`](.github/workflows/server.yml) (below) and the app's
 [`.github/workflows/android.yml`](.github/workflows/android.yml), whose gate `android-gate` runs the
-app tests, the translation check, a debug and an unsigned release build, and checks that cleartext,
+app tests, the translation check, Android Lint, a debug and an unsigned release build, and checks that cleartext,
 local-network access and "crash reports off" exist only in the debug build. Both run on every pull
 request into `develop` or `main` and every push to `main`; `.github/scripts/changed-components.sh`
 decides which gates actually run.

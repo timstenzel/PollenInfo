@@ -64,6 +64,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
+    // The Android gate runs :androidApp:lintRelease and fails on any finding, warnings included.
+    // checkDependencies analyses :composeApp's Android code and :theme from here. No baseline: a
+    // finding is fixed, not recorded. The two version checks are off because they depend on what
+    // was released overnight, and dependency updates have their own process (Dependabot).
+    lint {
+        warningsAsErrors = true
+        abortOnError = true
+        checkDependencies = true
+        disable += setOf("NewerVersionAvailable", "GradleDependency")
+    }
 }
 
 dependencies {

@@ -2,6 +2,9 @@
 <!--
   The application. Permissions and the push service are declared by :composeApp's library manifest
   and merged in from there.
+
+  CredManMissingDal is ignored: Credential Manager only saves and offers the app's own logins; there
+  is no website sign-in to share them with, so no Digital Asset Links statement to declare.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
@@ -16,7 +19,8 @@
         android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-        tools:targetApi="31">
+        tools:ignore="CredManMissingDal"
+        tools:targetApi="33">
 
         <activity
             android:name=".MainActivity"

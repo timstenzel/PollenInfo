@@ -50,6 +50,7 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Translations | `./gradlew :composeApp:checkTranslations` (part of `check`) |
+| Android Lint (all Android code) | `./gradlew :androidApp:lintRelease` (fails on any warning) |
 | Dev database up / reset | `docker compose -f deploy/compose.dev.yaml up -d` / `… down -v` |
 | Backend on :8080 | `./gradlew :server:run` (push logged unless `FCM_CREDENTIALS`) |
 | Android debug / release | `./gradlew :androidApp:assembleDebug` / `:androidApp:assembleRelease` |
@@ -69,14 +70,20 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   needs network). Gradle property `polleninfo.uploadCrashlyticsMapping` (default `true`) switches it
   off for offline/quick builds — their crashes stay obfuscated. Never set it in the project's
   `gradle.properties`.
+- **Lint:** `:androidApp:lintRelease` checks `:androidApp` and, through `checkDependencies`, the
+  Android code of `:composeApp` and `:theme` (both apply `com.android.lint`; without it the KMP
+  library plugin has no `androidMain` lint and the module is silently skipped). Warnings are errors;
+  only `NewerVersionAvailable` and `GradleDependency` are disabled. **No baseline** — fix a finding,
+  or suppress it at the spot with a comment saying why (`@SuppressLint`, `@Suppress` in common code,
+  `tools:ignore`).
 - `gradle-wrapper.jar` is committed (CI validates it); regenerate only with `./gradlew wrapper`.
 - CI: every pull request into `develop`/`main` and every push to `main` runs the gates of the
   components it changed, decided by `.github/scripts/changed-components.sh` (the one path →
   component mapping; docs-only changes run nothing, shared build files run everything). Server gate:
   `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
   `main`). Android gate: `.github/workflows/android.yml` (`android-gate`: app tests,
-  `checkTranslations`, debug and unsigned release build, the two debug-only merged-manifest `grep`s
-  of this file). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
+  `checkTranslations`, `:androidApp:lintRelease`, debug and unsigned release build, the two
+  debug-only merged-manifest `grep`s of this file). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
   Rules in `deploy/README.md`.
 
 ## Git workflow

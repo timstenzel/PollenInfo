@@ -90,24 +90,24 @@ off and the current findings fixed.
 
 ### Implementation steps
 
-- [ ] Configure lint in the app module: warnings as errors, abort on error, check dependencies, disable `NewerVersionAvailable` and `GradleDependency`, no baseline.
-- [ ] Make sure the shared module's `androidMain` and the theme are analysed — for the KMP library plugin, lint is configured in `kotlin { android { lint { } } }` if app-level `checkDependencies` does not reach them; prove coverage with a deliberate temporary finding in the shared module's Android code, then remove it.
-- [ ] Fix the current findings: merge `mipmap-anydpi-v26` into `mipmap-anydpi`, add a `<monochrome>` layer to both adaptive launcher icons, mark `localeConfig` as API 33 (`tools:targetApi`); fix any further findings the wider coverage reveals.
-- [ ] Amend the Android gate's Gradle invocation with `:androidApp:lintRelease` (six tasks); upload the lint report as an artifact when the job fails.
-- [ ] Add lint to the local gates in the project instructions' Commands table.
+- [x] Configure lint in the app module: warnings as errors, abort on error, check dependencies, disable `NewerVersionAvailable` and `GradleDependency`, no baseline.
+- [x] Make sure the shared module's `androidMain` and the theme are analysed — for the KMP library plugin, lint is configured in `kotlin { android { lint { } } }` if app-level `checkDependencies` does not reach them; prove coverage with a deliberate temporary finding in the shared module's Android code, then remove it.
+- [x] Fix the current findings: merge `mipmap-anydpi-v26` into `mipmap-anydpi`, add a `<monochrome>` layer to both adaptive launcher icons, mark `localeConfig` as API 33 (`tools:targetApi`); fix any further findings the wider coverage reveals.
+- [x] Amend the Android gate's Gradle invocation with `:androidApp:lintRelease` (six tasks); upload the lint report as an artifact when the job fails.
+- [x] Add lint to the local gates in the project instructions' Commands table.
 
 ### Acceptance criteria
 
-- [ ] `./gradlew :androidApp:lintRelease` passes with 0 errors and 0 warnings, and its report holds no `NewerVersionAvailable` or `GradleDependency` entry.
-- [ ] A temporary lint finding in the shared module's Android code makes `:androidApp:lintRelease` fail (checked, then removed).
-- [ ] A temporary lint warning (not an error) in the app module makes it fail (checked, then removed).
-- [ ] The Android gate's Gradle invocation contains `:androidApp:lintRelease`.
-- [ ] On an emulator with API 33 or higher, the installed debug build shows its launcher icon, and with themed icons switched on the icon is tinted.
+- [x] `./gradlew :androidApp:lintRelease` passes with 0 errors and 0 warnings, and its report holds no `NewerVersionAvailable` or `GradleDependency` entry.
+- [x] A temporary lint finding in the shared module's Android code makes `:androidApp:lintRelease` fail (checked, then removed).
+- [x] A temporary lint warning (not an error) in the app module makes it fail (checked, then removed).
+- [x] The Android gate's Gradle invocation contains `:androidApp:lintRelease`.
+- [x] On an emulator with API 33 or higher, the installed debug build shows its launcher icon, and with themed icons switched on the icon is tinted. *(API 37 emulator: icon on the home screen; the launcher's Icons → "Minimal" (themed) preview shows it tinted with the pores cut out; setting not applied)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` passes.
-- [ ] No lint baseline file exists in the repository.
+- [x] `./gradlew :composeApp:testAndroidHostTest :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` passes.
+- [x] No lint baseline file exists in the repository.
 
 ## Task [05-ios-compile-gate]
 

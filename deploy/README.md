@@ -441,9 +441,12 @@ passed — and nothing is published. Otherwise the gate runs:
 When `android` is false, the gate `android-gate` (Linux) is skipped and counts as passed. Otherwise
 it runs:
 
-1. `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:assembleDebug
-   :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` — the app tests, the
-   translation check and both builds; the release build is unsigned and uploads no R8 mapping,
+1. `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:lintRelease
+   :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`
+   — the app tests, the translation check, Android Lint and both builds; the release build is
+   unsigned and uploads no R8 mapping. Lint covers `:androidApp`, `:composeApp` and `:theme` and
+   fails on any warning (version checks `NewerVersionAvailable` / `GradleDependency` off, no
+   baseline); when the job fails, the lint report is uploaded as the artifact `lint-report`,
 2. a check of the merged manifests: `usesCleartextTraffic` / `ACCESS_LOCAL_NETWORK` and
    `firebase_crashlytics_collection_enabled` must appear in the **debug** merged manifest only, so a
    release can never talk to a server unencrypted or ship with crash reporting switched off.
