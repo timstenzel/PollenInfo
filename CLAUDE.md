@@ -73,6 +73,33 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 - CI: `.github/workflows/server.yml`, shared setup in `.github/actions/setup-jvm`; every action
   pinned by commit SHA. Rules in `deploy/README.md`.
 
+## Git workflow
+
+`develop` is the integration branch, `main` holds releases. Every feature is a pull request into
+`develop` (squash merge, one commit `feature: <name>`); a release is a pull request `develop` →
+`main` (merge commit). The maintainer opens, reviews and merges every pull request. Repository
+setup (rulesets, merge methods): `deploy/README.md`, "Repository setup".
+
+- **Branch:** at a feature's first task, `git fetch` and create `feature/<name>` from
+  `origin/develop`, where `<name>` is the feature's `.sdd/<name>/` folder. **Stop and ask** if the
+  working tree is not clean or `feature/<name>` already exists (locally or on `origin`).
+- **First commit:** the specification, `.sdd/<name>/` (`requirements.md`, `tasks.md`).
+- **One commit per finished task**, message `<name>: <task title>`, holding the task's code and its
+  ticked steps in `tasks.md`; never commit half-done work. Push the feature branch right after each
+  task commit.
+- **Never** push to `develop` or `main`, **never** force-push (the only exception: the own feature
+  branch after a rebase the maintainer asked for), **never** merge, and **never** open, edit or merge
+  a pull request (no `gh pr …`).
+- **Handover after the last task:** report the compare link
+  `https://github.com/timstenzel/PollenInfo/compare/develop...feature/<name>?expand=1`, the title
+  `feature: <name>` and a ready-to-paste Markdown description with the sections **Summary**,
+  **Changes** (per task), **Quality gates** (what ran locally and the results) and **For the
+  reviewer** (manual checks, settings to apply by hand). Only in the message — no file, and no
+  attribution line in the description.
+- **Releases** (`release: <versionName>`, `develop` → `main`) are opened and merged by the
+  maintainer, never by the assistant.
+- Dependabot pull requests target `develop` (`.github/dependabot.yml`).
+
 ## Data source: MeteoSwiss OGD pollen
 
 The **only** upstream. Base `https://data.geo.admin.ch/ch.meteoschweiz.ogd-pollen/`, public, no key.

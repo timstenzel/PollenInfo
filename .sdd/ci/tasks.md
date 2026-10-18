@@ -10,24 +10,24 @@ maintainer applies by hand.
 
 ### Implementation steps
 
-- [ ] Commit the `.sdd/ci/` specification as the branch's first commit.
-- [ ] Add a "Git workflow" section to the project instructions: branch `feature/<sdd-dir>` from freshly fetched `origin/develop` at the first task (stop and ask on a dirty tree or an existing branch); spec files as first commit; one commit per finished task named `<feature>: <task title>`, pushed right away; never push to `develop`/`main`, never force-push (except the own feature branch after a rebase the maintainer asked for), never merge, never open or edit pull requests; after the last task a handover message with the compare link, the title `feature: <name>` and a Markdown description (Summary, Changes, Quality gates, For the reviewer) — no file, no attribution line; release pull requests `release: <versionName>` (`develop` → `main`) belong to the maintainer.
-- [ ] Set `target-branch: develop` on every entry of the Dependabot configuration.
-- [ ] Add `*.jks` to `.gitignore` next to `*.keystore`.
-- [ ] Add a "Repository setup" section to the runbook: 1. back-merge `main` into `develop` (exact commands) before any ruleset; 2. ruleset `develop`: pull request required with 0 approvals, squash only, force push and deletion blocked, required checks `Test, build and scan`, `android-gate`, `ios-compile`, "require branches to be up to date" off; 3. ruleset `main`: the same with merge commits only; 4. "Automatically delete head branches" on. (The signing environment is added to this checklist by task 07.)
+- [x] Commit the `.sdd/ci/` specification as the branch's first commit.
+- [x] Add a "Git workflow" section to the project instructions: branch `feature/<sdd-dir>` from freshly fetched `origin/develop` at the first task (stop and ask on a dirty tree or an existing branch); spec files as first commit; one commit per finished task named `<feature>: <task title>`, pushed right away; never push to `develop`/`main`, never force-push (except the own feature branch after a rebase the maintainer asked for), never merge, never open or edit pull requests; after the last task a handover message with the compare link, the title `feature: <name>` and a Markdown description (Summary, Changes, Quality gates, For the reviewer) — no file, no attribution line; release pull requests `release: <versionName>` (`develop` → `main`) belong to the maintainer.
+- [x] Set `target-branch: develop` on every entry of the Dependabot configuration.
+- [x] Add `*.jks` to `.gitignore` next to `*.keystore`.
+- [x] Add a "Repository setup" section to the runbook: 1. back-merge `main` into `develop` (exact commands) before any ruleset; 2. ruleset `develop`: pull request required with 0 approvals, squash only, force push and deletion blocked, required checks `Test, build and scan`, `android-gate`, `ios-compile`, "require branches to be up to date" off; 3. ruleset `main`: the same with merge commits only; 4. "Automatically delete head branches" on. (The signing environment is added to this checklist by task 07.)
 
 ### Acceptance criteria
 
-- [ ] The project instructions contain every git rule listed in the requirements' Technical Annex "Documentation" part, and no rule elsewhere in them contradicts it.
-- [ ] Every entry under `updates` in the Dependabot configuration has `target-branch: develop` (4 of 4).
-- [ ] A file `x.jks` created anywhere in the working tree does not appear in `git status`.
-- [ ] The runbook's setup checklist names the back-merge as its first step, with the commands, before any ruleset.
-- [ ] The checklist states squash-only for `develop` and merge-commit-only for `main`, both with a pull request required, force push and deletion blocked, and the three required check names exactly as above.
+- [x] The project instructions contain every git rule listed in the requirements' Technical Annex "Documentation" part, and no rule elsewhere in them contradicts it.
+- [x] Every entry under `updates` in the Dependabot configuration has `target-branch: develop` (4 of 4).
+- [x] A file `x.jks` created anywhere in the working tree does not appear in `git status`.
+- [x] The runbook's setup checklist names the back-merge as its first step, with the commands, before any ruleset.
+- [x] The checklist states squash-only for `develop` and merge-commit-only for `main`, both with a pull request required, force push and deletion blocked, and the three required check names exactly as above.
 
 ### Quality gates
 
-- [ ] The Dependabot configuration parses as YAML (`ruby -ryaml -e 'YAML.load_file(ARGV[0])' <file>`).
-- [ ] No file other than documentation, `.gitignore`, the Dependabot configuration and `.sdd/ci/` changed.
+- [x] The Dependabot configuration parses as YAML (`ruby -ryaml -e 'YAML.load_file(ARGV[0])' <file>`).
+- [x] No file other than documentation, `.gitignore`, the Dependabot configuration and `.sdd/ci/` changed.
 
 ## Task [02-server-gate-on-every-pull-request]
 

@@ -371,6 +371,41 @@ c down                                        # stop; add -v to drop the databas
 A browser does not trust Caddy's local CA unless it is imported; the HSTS header then pins
 `localhost` to HTTPS in that browser, so prefer `curl`.
 
+## Repository setup
+
+A one-time checklist, applied by hand in the GitHub repository settings, in this order. The git
+rules it enforces are in `CLAUDE.md`, "Git workflow": features are squashed into `develop`, releases
+are merged from `develop` into `main` with a merge commit, nothing else lands on either branch.
+
+1. **Back-merge `main` into `develop` — before any ruleset.** `main` is ahead of `develop` by
+   commits `develop` does not contain; a squash merge carries no history, so without this the first
+   release pull request would carry them again. Once the ruleset on `develop` exists, a direct push
+   is refused, so this must come first:
+
+   ```bash
+   git fetch origin
+   git switch develop
+   git pull --ff-only origin develop
+   git merge origin/main
+   git push origin develop
+   ```
+
+2. **Ruleset `develop`** (Settings → Rules → Rulesets → New branch ruleset, target branch
+   `develop`, enforcement active):
+   - Restrict deletions: on.
+   - Block force pushes: on.
+   - Require a pull request before merging: on, **0** required approvals; allowed merge methods:
+     **Squash** only.
+   - Require status checks to pass: on, with the checks `Test, build and scan`, `android-gate` and
+     `ios-compile`; "Require branches to be up to date before merging": **off**.
+3. **Ruleset `main`** (target branch `main`): the same as `develop` — deletions restricted, force
+   pushes blocked, pull request required with 0 approvals, the same three required checks, branches
+   up to date off — but allowed merge methods: **Merge** only.
+4. **Automatically delete head branches:** Settings → General → Pull Requests → on.
+
+A skipped gate (its component did not change) reports success, so a documentation-only pull request
+is not blocked by the required checks.
+
 ## CI: `.github/workflows/server.yml`
 
 Runs on pull requests and on pushes to `main` that touch `server/`, `gradle/`, the root Gradle

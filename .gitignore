@@ -53,6 +53,7 @@ web/
 # Environment / secrets
 *.env
 *.keystore
+*.jks
 keystore.properties
 secrets.properties
 
