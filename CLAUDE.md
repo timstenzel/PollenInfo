@@ -74,8 +74,10 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   components it changed, decided by `.github/scripts/changed-components.sh` (the one path →
   component mapping; docs-only changes run nothing, shared build files run everything). Server gate:
   `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
-  `main`). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA. Rules in
-  `deploy/README.md`.
+  `main`). Android gate: `.github/workflows/android.yml` (`android-gate`: app tests,
+  `checkTranslations`, debug and unsigned release build, the two debug-only merged-manifest `grep`s
+  of this file). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
+  Rules in `deploy/README.md`.
 
 ## Git workflow
 

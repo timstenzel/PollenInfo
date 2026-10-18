@@ -1,0 +1,84 @@
+# The app's pipeline: the Android gate on every pull request that touches app code.
+#
+# Triggered by every pull request into develop or main and every push to main, with no path filter,
+# so its gate always reports and can be a required check. The `changes` job asks
+# .github/scripts/changed-components.sh (the one path -> component mapping, shared with
+# server.yml) whether the app changed; when it did not, the gate is skipped, which GitHub counts as
+# passed. See deploy/README.md.
+name: Android
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+
+# Least privilege: every job reads the repository and nothing more unless it says otherwise.
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.detect.outputs.android }}
+      ios: ${{ steps.detect.outputs.ios }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Pull request: everything since its base; push to main: everything since the previous tip.
+      - name: Detect the changed components
+        id: detect
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: .github/scripts/changed-components.sh "$BASE" HEAD
+
+  android-gate:
+    name: android-gate
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK and Gradle
+        uses: ./.github/actions/setup-jvm
+
+      # The release build stays unsigned here and uploads no R8 mapping (no network credentials).
+      - name: Test, check translations and build debug and release
+        run: >-
+          ./gradlew
+          :composeApp:testAndroidHostTest
+          :composeApp:checkTranslations
+          :androidApp:assembleDebug
+          :androidApp:assembleRelease
+          -Ppolleninfo.uploadCrashlyticsMapping=false
+
+      # Cleartext, local-network access and "crash reports off" belong to the debug build only.
+      - name: Check that debug-only manifest entries stay out of the release
+        run: |
+          manifests=androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml
+          status=0
+          for pattern in 'usesCleartextTraffic\|ACCESS_LOCAL_NETWORK' 'firebase_crashlytics_collection_enabled'; do
+            # shellcheck disable=SC2086 # the glob must expand
+            matches="$(grep -l "$pattern" $manifests || true)"
+            if [[ "$matches" != "androidApp/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml" ]]; then
+              echo "::error::'$pattern' must appear in the debug merged manifest only, found in: ${matches:-none}"
+              status=1
+            fi
+          done
+          exit "$status"

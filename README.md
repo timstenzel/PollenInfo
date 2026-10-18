@@ -242,8 +242,13 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 
 ## CI
 
-CI is GitHub Actions, one workflow per shipped artifact. Today that is the backend:
-[`.github/workflows/server.yml`](.github/workflows/server.yml).
+CI is GitHub Actions, one workflow per shipped artifact: the backend's
+[`.github/workflows/server.yml`](.github/workflows/server.yml) (below) and the app's
+[`.github/workflows/android.yml`](.github/workflows/android.yml), whose gate `android-gate` runs the
+app tests, the translation check, a debug and an unsigned release build, and checks that cleartext,
+local-network access and "crash reports off" exist only in the debug build. Both run on every pull
+request into `develop` or `main` and every push to `main`; `.github/scripts/changed-components.sh`
+decides which gates actually run.
 
 ```mermaid
 flowchart LR
@@ -272,11 +277,10 @@ Ground rules for every workflow:
   [`.github/actions/setup-jvm`](.github/actions/setup-jvm) (with Gradle wrapper validation).
 - **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)) proposes weekly updates for the
   Gradle catalog, the image's base, the action pins and the Caddy / Postgres tags in `deploy/`.
-- **No repository-wide secrets** — the server pipeline uses only the workflow's own `GITHUB_TOKEN`.
-  The planned `android.yml` (Play internal testing) and `ios.yml` (TestFlight) will run on release
-  tags and keep their store credentials in GitHub Environments with required reviewers.
+- **No repository-wide secrets** — the pipelines use only the workflow's own `GITHUB_TOKEN`.
+  Store credentials (Play, TestFlight, later) go into GitHub Environments with required reviewers.
 
-Details: [deploy/README.md → CI](deploy/README.md#ci-githubworkflowsserveryml).
+Details: [deploy/README.md → CI](deploy/README.md#ci).
 
 ---
 

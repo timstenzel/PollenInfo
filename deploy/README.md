@@ -406,11 +406,12 @@ are merged from `develop` into `main` with a merge commit, nothing else lands on
 A skipped gate (its component did not change) reports success, so a documentation-only pull request
 is not blocked by the required checks.
 
-## CI: `.github/workflows/server.yml`
+## CI
 
-Runs on **every** pull request into `develop` or `main` and on every push to `main`, without a path
-filter, so its gate always reports and can be a required check. A first job, `changes`, runs
-`.github/scripts/changed-components.sh` on the change: for a pull request everything since its base,
+Two workflows, `.github/workflows/server.yml` (backend) and `.github/workflows/android.yml` (app).
+Both run on **every** pull request into `develop` or `main` and on every push to `main`, without a
+path filter, so their gates always report and can be required checks. In each, a first job,
+`changes`, runs `.github/scripts/changed-components.sh` on the change: for a pull request everything since its base,
 for a push to `main` everything since the previous tip (a release pull request is therefore checked
 for everything changed since the last release). An unknown or all-zero base counts as "everything
 changed". The script is the one place that maps paths to components:
@@ -423,6 +424,8 @@ changed". The script is the one place that maps paths to components:
 | `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `buildSrc/`, `.github/actions/`, `.github/scripts/` | yes | yes | yes |
 | anything else (`*.md`, `.sdd/`, `.github/dependabot.yml`, …) | | | |
 
+### Server: `.github/workflows/server.yml`
+
 When `server` is false, the gate `Test, build and scan` is skipped — GitHub counts a skipped job as
 passed — and nothing is published. Otherwise the gate runs:
 
@@ -433,13 +436,27 @@ passed — and nothing is published. Otherwise the gate runs:
 4. on `main` only, a separate job (after a gate that ran and passed) pushes the scanned image as
    `ghcr.io/timstenzel/polleninfo-server:<commit sha>` and `:latest`. The package stays private.
 
+### Android: `.github/workflows/android.yml`
+
+When `android` is false, the gate `android-gate` (Linux) is skipped and counts as passed. Otherwise
+it runs:
+
+1. `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:assembleDebug
+   :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` — the app tests, the
+   translation check and both builds; the release build is unsigned and uploads no R8 mapping,
+2. a check of the merged manifests: `usesCleartextTraffic` / `ACCESS_LOCAL_NETWORK` and
+   `firebase_crashlytics_collection_enabled` must appear in the **debug** merged manifest only, so a
+   release can never talk to a server unencrypted or ship with crash reporting switched off.
+
+Concurrency group `android-<ref>`; a newer push cancels a running pull request run, never a run on
+`main`.
+
 Rules every workflow in `.github/` follows:
 
 - **One workflow per shipped artifact**, always triggered; which gates run is decided by
-  `.github/scripts/changed-components.sh`, never by a `paths` filter. The app pipelines will be
-  `android.yml` (AAB → Play internal testing) and `ios.yml` (TestFlight), triggered by a release tag
-  (`android-v…` / `ios-v…`; the server's would be `server-v…`) or by hand (`workflow_dispatch`),
-  never on every push.
+  `.github/scripts/changed-components.sh`, never by a `paths` filter. Pull requests into
+  `develop` and `main` run the gates; a push to `main` (a merged release) runs them again before
+  anything is published. No release-tag triggers, no `workflow_dispatch`.
 - **Shared setup** through the composite action `.github/actions/setup-jvm` (JDK 21, Gradle with
   caching and wrapper validation). `gradle/wrapper/gradle-wrapper.jar` is committed for it.
 - **Least privilege.** The workflow default is `permissions: contents: read`; only a job that

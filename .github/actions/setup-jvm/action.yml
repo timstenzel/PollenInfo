@@ -1,4 +1,4 @@
-# The JDK and Gradle setup every workflow shares (server.yml now, android.yml / ios.yml later), so
+# The JDK and Gradle setup every workflow shares (server.yml, android.yml), so
 # the toolchain is pinned in one place.
 name: Set up JDK and Gradle
 description: JDK 21 (Temurin) and Gradle with dependency caching and wrapper validation.

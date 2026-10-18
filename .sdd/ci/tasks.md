@@ -65,22 +65,22 @@ off" flag exist only in the debug manifest. A pure server or documentation chang
 
 ### Implementation steps
 
-- [ ] Add the Android workflow with the same triggers, `changes` job and change-detection script as the server workflow (no `workflow_dispatch`); concurrency `android-<ref>`, cancelled in progress on pull requests only; default `contents: read`; setup through the shared JVM action.
-- [ ] Add the gate job with `name: android-gate` (Linux), running only when `android` is true: `:composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`.
-- [ ] Add the two merged-manifest checks as one step: for `usesCleartextTraffic\|ACCESS_LOCAL_NETWORK` and for `firebase_crashlytics_collection_enabled`, `grep -l` over the merged manifests must list exactly the debug manifest; otherwise the step fails with a message naming the pattern.
-- [ ] Runbook: the CI section describes the Android pipeline; the rule "app pipelines triggered by a release tag … never on every push" is replaced. Project instructions: the CI line names the Android gate.
+- [x] Add the Android workflow with the same triggers, `changes` job and change-detection script as the server workflow (no `workflow_dispatch`); concurrency `android-<ref>`, cancelled in progress on pull requests only; default `contents: read`; setup through the shared JVM action.
+- [x] Add the gate job with `name: android-gate` (Linux), running only when `android` is true: `:composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`.
+- [x] Add the two merged-manifest checks as one step: for `usesCleartextTraffic\|ACCESS_LOCAL_NETWORK` and for `firebase_crashlytics_collection_enabled`, `grep -l` over the merged manifests must list exactly the debug manifest; otherwise the step fails with a message naming the pattern.
+- [x] Runbook: the CI section describes the Android pipeline; the rule "app pipelines triggered by a release tag … never on every push" is replaced. Project instructions: the CI line names the Android gate.
 
 ### Acceptance criteria
 
-- [ ] The manifest-check step's script, run locally after `assembleDebug assembleRelease`, passes on the current code.
-- [ ] The same script fails when `android:usesCleartextTraffic="true"` is temporarily added to the main manifest (checked locally, then reverted).
-- [ ] The gate job's `name` is exactly `android-gate`, its `if` reads the `changes` job's `android` output, and its Gradle invocation is the one above with the mapping upload disabled.
-- [ ] The runbook no longer contains the tag-triggered app pipeline rule and describes the Android pipeline's triggers and gate.
+- [x] The manifest-check step's script, run locally after `assembleDebug assembleRelease`, passes on the current code.
+- [x] The same script fails when `android:usesCleartextTraffic="true"` is temporarily added to the main manifest (checked locally, then reverted).
+- [x] The gate job's `name` is exactly `android-gate`, its `if` reads the `changes` job's `android` output, and its Gradle invocation is the one above with the mapping upload disabled.
+- [x] The runbook no longer contains the tag-triggered app pipeline rule and describes the Android pipeline's triggers and gate.
 
 ### Quality gates
 
-- [ ] The gate's Gradle invocation passes locally.
-- [ ] The workflow parses as YAML; every action pinned by SHA with a version comment; no job has more than `contents: read`.
+- [x] The gate's Gradle invocation passes locally.
+- [x] The workflow parses as YAML; every action pinned by SHA with a version comment; no job has more than `contents: read`.
 
 ## Task [04-lint-gate]
 
