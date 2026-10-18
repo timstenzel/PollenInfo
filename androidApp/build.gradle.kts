@@ -12,6 +12,34 @@ plugins {
     alias(libs.plugins.firebaseCrashlytics)
 }
 
+// Raised by hand when a release counts as a new version (see deploy/README.md, "Cutting a release").
+val appVersionName = "1.0.0"
+
+// The number of commits up to HEAD, so every release on main carries a higher version code than the
+// one before. A shallow checkout (pull request CI) counts only its own commits and gets 1; without
+// git at all the code is 1 too. Read through providers.exec, so it is a configuration-cache input:
+// a new commit invalidates the cache entry.
+val appVersionCode: Int = try {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toIntOrNull()?.takeIf { it > 0 } ?: 1
+} catch (_: Exception) {
+    1
+}
+
+// Release signing from the environment (the CI release job writes the keystore to a temporary file
+// and passes its path). Applied only when all four are set; otherwise the release stays unsigned.
+// Android Studio's signing wizard injects its own signing properties and works without them.
+val releaseSigning: Map<String, String>? = listOf(
+    "ANDROID_KEYSTORE_FILE",
+    "ANDROID_KEYSTORE_PASSWORD",
+    "ANDROID_KEY_ALIAS",
+    "ANDROID_KEY_PASSWORD",
+).associateWith { providers.environmentVariable(it).orNull.orEmpty() }
+    .takeIf { values -> values.values.all { it.isNotEmpty() } }
+
 android {
     namespace = "ch.stenzel.tim.polleninfo"
     compileSdk = 37
@@ -20,8 +48,19 @@ android {
         applicationId = "ch.stenzel.tim.polleninfo"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+
+    signingConfigs {
+        if (releaseSigning != null) {
+            create("release") {
+                storeFile = file(releaseSigning.getValue("ANDROID_KEYSTORE_FILE"))
+                storePassword = releaseSigning.getValue("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = releaseSigning.getValue("ANDROID_KEY_ALIAS")
+                keyPassword = releaseSigning.getValue("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildFeatures {
@@ -43,6 +82,9 @@ android {
         release {
             // Always the deployed backend over HTTPS; release builds have no cleartext exception.
             buildConfigField("String", "API_BASE_URL", "\"https://api.polleninfo.ch\"")
+            if (releaseSigning != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -81,6 +123,18 @@ android {
 kotlin {
     compilerOptions {
         allWarningsAsErrors.set(true)
+    }
+}
+
+// Prints the version the build uses, one `key=value` per line, for the CI release job
+// (`./gradlew -q :androidApp:printVersion`).
+tasks.register("printVersion") {
+    description = "Prints the app's versionName and versionCode."
+    val name = appVersionName
+    val code = appVersionCode
+    doLast {
+        println("versionName=$name")
+        println("versionCode=$code")
     }
 }
 

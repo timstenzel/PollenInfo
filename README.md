@@ -249,7 +249,10 @@ CI is GitHub Actions, one workflow per shipped artifact: the backend's
 app tests, the translation check, Android Lint, a debug and an unsigned release build, and checks that cleartext,
 local-network access and "crash reports off" exist only in the debug build. Both run on every pull
 request into `develop` or `main` and every push to `main`; `.github/scripts/changed-components.sh`
-decides which gates actually run.
+decides which gates actually run. A push to `main` that changed the app also builds a **signed**
+APK and app bundle (version code = commit count) and publishes them with the R8 mapping as a GitHub
+prerelease `android-v<versionName>-<versionCode>` ([signing](deploy/README.md#android-release-signing),
+[cutting a release](deploy/README.md#cutting-a-release)).
 
 ```mermaid
 flowchart LR
@@ -273,13 +276,14 @@ flowchart LR
 
 Ground rules for every workflow:
 
-- **Least privilege** — `contents: read` by default; only the publishing job gets more.
+- **Least privilege** — `contents: read` by default; only the publishing jobs get more.
 - **Every action pinned by full commit SHA**, shared JDK/Gradle setup in the composite action
   [`.github/actions/setup-jvm`](.github/actions/setup-jvm) (with Gradle wrapper validation).
 - **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)) proposes weekly updates for the
   Gradle catalog, the image's base, the action pins and the Caddy / Postgres tags in `deploy/`.
-- **No repository-wide secrets** — the pipelines use only the workflow's own `GITHUB_TOKEN`.
-  Store credentials (Play, TestFlight, later) go into GitHub Environments with required reviewers.
+- **No repository-wide secrets** — the signing key lives in the GitHub Environment
+  `android-release`, usable only from `main`; store credentials (Play, TestFlight, later) will
+  additionally need required reviewers.
 
 Details: [deploy/README.md → CI](deploy/README.md#ci).
 

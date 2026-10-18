@@ -55,6 +55,7 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Backend on :8080 | `./gradlew :server:run` (push logged unless `FCM_CREDENTIALS`) |
 | Android debug / release | `./gradlew :androidApp:assembleDebug` / `:androidApp:assembleRelease` |
 | Release without network | `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` |
+| App version name / code | `./gradlew -q :androidApp:printVersion` |
 | Server image | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` |
 
 - `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM.
@@ -89,8 +90,15 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   `checkTranslations`, `:androidApp:lintRelease`, debug and unsigned release build, the two
   debug-only merged-manifest `grep`s of this file). iOS compile gate: `ios-compile` in the same
   workflow (macOS, `:composeApp:compileTestKotlinIosSimulatorArm64`, when shared app code or shared
-  build files change). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
-  Rules in `deploy/README.md`.
+  build files change). Android release: job `Android release` on a push to `main` that changed the
+  app (environment `android-release`, the only job with `contents: write`): signed APK and bundle,
+  mapping uploaded, GitHub prerelease `android-v<versionName>-<versionCode>`. Shared setup in
+  `.github/actions/setup-jvm`; every action pinned by commit SHA. Rules in `deploy/README.md`.
+- **Release signing and version:** the release build is signed only when all four environment
+  variables `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD` are set (no Gradle property, no `keystore.properties`); otherwise unsigned.
+  `versionCode` = `git rev-list --count HEAD` (`providers.exec`, fallback 1; shallow checkouts get
+  1); `versionName` is a literal raised by hand. Never commit a keystore, password or alias.
 
 ## Git workflow
 

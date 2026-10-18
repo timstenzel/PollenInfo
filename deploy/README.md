@@ -402,6 +402,12 @@ are merged from `develop` into `main` with a merge commit, nothing else lands on
    pushes blocked, pull request required with 0 approvals, the same three required checks, branches
    up to date off — but allowed merge methods: **Merge** only.
 4. **Automatically delete head branches:** Settings → General → Pull Requests → on.
+5. **Environment `android-release`** (Settings → Environments → New environment):
+   - Deployment branches and tags: **Selected branches**, only `main`.
+   - Required reviewers: **none** (the job publishes nothing outward; see the secrets rule below).
+   - Environment secrets, as described in "Android release signing" below:
+     `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+     `ANDROID_KEY_PASSWORD`.
 
 A skipped gate (its component did not change) reports success, so a documentation-only pull request
 is not blocked by the required checks.
@@ -458,6 +464,23 @@ the iOS simulator, so JVM-only code in shared sources fails the pull request. It
 project (there is none yet) and runs no tests (those need full Xcode). Otherwise it is skipped and
 counts as passed. Publishing an iOS build (TestFlight) comes with the iOS feature.
 
+On a push to `main` (a merged release) that changed the app, the job `Android release` runs after
+`android-gate` passed, in the environment `android-release` (the only place the signing secrets
+exist):
+
+1. checks out the full history (the version code is the commit count), writes the keystore from
+   `ANDROID_KEYSTORE_BASE64` into the runner's temporary directory and fails with an error naming
+   the secret if any of the four is missing or empty,
+2. `./gradlew :androidApp:assembleRelease :androidApp:bundleRelease` — signed, with the R8 mapping
+   uploaded to Crashlytics,
+3. reads `versionName` / `versionCode` from `./gradlew -q :androidApp:printVersion`,
+4. creates a GitHub **prerelease** tagged `android-v<versionName>-<versionCode>` on the pushed commit,
+   with generated notes and the files `polleninfo-<versionName>-<versionCode>.apk`, `….aab` and
+   `mapping.txt`. A build that came out unsigned fails the job before anything is published.
+
+It is the only job with `contents: write`. A release that changed only the backend creates no Android
+release.
+
 Concurrency group `android-<ref>`; a newer push cancels a running pull request run, never a run on
 `main`.
 
@@ -470,11 +493,60 @@ Rules every workflow in `.github/` follows:
 - **Shared setup** through the composite action `.github/actions/setup-jvm` (JDK 21, Gradle with
   caching and wrapper validation). `gradle/wrapper/gradle-wrapper.jar` is committed for it.
 - **Least privilege.** The workflow default is `permissions: contents: read`; only a job that
-  publishes gets more (`packages: write` for the server's publish job).
+  publishes gets more (`packages: write` for the server's publish job, `contents: write` for the
+  Android release job).
 - **Every action is pinned by its full commit SHA**, with the version in a trailing comment.
   Dependabot (`.github/dependabot.yml`) updates the pins, the Gradle catalog and the image's base
   weekly.
 - **No repository-wide secrets.** The server pipeline needs only the workflow's own
-  `GITHUB_TOKEN`. Store credentials (Play service account, App Store Connect key) go into
-  **GitHub Environments with required reviewers**, so only an approved run of the job that uploads
-  can read them.
+  `GITHUB_TOKEN`. Every other credential is a secret of a **GitHub Environment whose deployment
+  branches are limited to `main`**, so no pull request or feature branch can read it (the signing
+  key: `android-release`). **Required reviewers only for jobs that publish outward** — store
+  uploads (Play service account, App Store Connect key) later; the Android release job publishes
+  only to this repository and runs without approval.
+
+## Android release signing
+
+The release job signs with the maintainer's own keystore (the one Android Studio's signing wizard
+uses). `androidApp/build.gradle.kts` signs the release build only when **all four** environment
+variables `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and
+`ANDROID_KEY_PASSWORD` are set; otherwise it stays unsigned, so pull requests and local builds need
+no key. Android Studio's wizard (Build → Generate Signed App Bundle or APK) injects its own signing
+properties and keeps working without them.
+
+The environment `android-release` holds four secrets:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | The keystore file, base64 on one line: `base64 -i upload.jks \| pbcopy` (macOS) or `base64 -w0 upload.jks` (Linux) |
+| `ANDROID_KEYSTORE_PASSWORD` | The keystore's password |
+| `ANDROID_KEY_ALIAS` | The key's alias |
+| `ANDROID_KEY_PASSWORD` | The key's password |
+
+The job writes the keystore to `$RUNNER_TEMP` and passes its path as `ANDROID_KEYSTORE_FILE`.
+
+- **Keep the keystore safe** outside the repository (`*.jks` and `*.keystore` are git-ignored), in a
+  password manager with its passwords, plus an offline backup. It becomes the **upload key** once
+  Play publishing exists; losing it then means a key reset through Play support, and losing it
+  before means every installed release must be uninstalled to install the next one.
+- **Signatures differ from Play builds:** with Play App Signing, Play re-signs with its own app
+  signing key, so a GitHub-release APK and a Play-delivered build of the same app cannot be
+  installed over each other — testers switching between the two must uninstall first.
+- **Version code** = `git rev-list --count HEAD`, so every release on `main` is higher than the one
+  before; `versionName` in `androidApp/build.gradle.kts` is raised by hand. Pull request checkouts
+  are shallow, so their (unsigned) builds get version code 1. The commit count is a
+  configuration-cache input: a new commit invalidates the cache entry, which is expected.
+- `./gradlew -q :androidApp:printVersion` prints the `versionName=` and `versionCode=` a build
+  uses.
+
+## Cutting a release
+
+1. Optionally raise `versionName` in `androidApp/build.gradle.kts` through a feature pull request
+   into `develop` (the version code rises by itself).
+2. Open a pull request `develop` → `main` titled `release: <versionName>`; its gates cover everything
+   changed since the last release.
+3. When the gates pass, merge it with a **merge commit** (the only method the `main` ruleset allows).
+4. Check the push run on `main`: if the app changed, a GitHub prerelease
+   `android-v<versionName>-<versionCode>` with the APK, the bundle and `mapping.txt`; if the backend
+   changed, the image `ghcr.io/timstenzel/polleninfo-server:<merge commit sha>`.
+5. Deploy the backend with `deploy/deploy.sh <merge commit sha>` (see "Deploying and rolling back").

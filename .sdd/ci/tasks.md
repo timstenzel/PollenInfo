@@ -163,22 +163,22 @@ release builds stay unsigned as today.
 
 ### Implementation steps
 
-- [ ] App build: a release signing config filled from `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (environment variables), applied only when all four are set.
-- [ ] Version code from `git rev-list --count HEAD` (configuration-cache safe value source, fallback `1`); version name stays a hand-set literal. A small Gradle task prints both for CI.
-- [ ] Add the `release` job to the Android workflow: only on `push` to `main`, `needs: [changes, android-gate]`, only when `android` is true; environment `android-release`; `contents: write` for this job only; full-history checkout; decode the keystore secret into the runner's temp directory; fail with a clear message if any secret is empty; build APK and bundle with the mapping upload on; read name and code from the printing task; copy the outputs to `polleninfo-<versionName>-<versionCode>.apk` / `.aab`; create a prerelease with generated notes, tagged `android-v<versionName>-<versionCode>` on the pushed commit, with APK, bundle and `mapping.txt`.
-- [ ] Runbook: "Android release signing" (the four secrets and how to produce the base64 value, keystore safe-keeping, signature difference to future Play builds, shallow PR builds get version code 1, a new commit invalidates the configuration cache); add the `android-release` environment (deployment branches limited to `main`, no required reviewers, the four secrets) to the Repository setup checklist; update the secrets rule (environments limited to `main`; required reviewers only for jobs that publish outward); add "Cutting a release" (optionally raise `versionName` on `develop`, open `develop` → `main` titled `release: <versionName>`, merge commit, check the GitHub release and the image, deploy with the deploy script).
-- [ ] In the handover's "For the reviewer": check once by hand that Android Studio's signing wizard still produces a signed build.
+- [x] App build: a release signing config filled from `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (environment variables), applied only when all four are set.
+- [x] Version code from `git rev-list --count HEAD` (configuration-cache safe value source, fallback `1`); version name stays a hand-set literal. A small Gradle task prints both for CI.
+- [x] Add the `release` job to the Android workflow: only on `push` to `main`, `needs: [changes, android-gate]`, only when `android` is true; environment `android-release`; `contents: write` for this job only; full-history checkout; decode the keystore secret into the runner's temp directory; fail with a clear message if any secret is empty; build APK and bundle with the mapping upload on; read name and code from the printing task; copy the outputs to `polleninfo-<versionName>-<versionCode>.apk` / `.aab`; create a prerelease with generated notes, tagged `android-v<versionName>-<versionCode>` on the pushed commit, with APK, bundle and `mapping.txt`.
+- [x] Runbook: "Android release signing" (the four secrets and how to produce the base64 value, keystore safe-keeping, signature difference to future Play builds, shallow PR builds get version code 1, a new commit invalidates the configuration cache); add the `android-release` environment (deployment branches limited to `main`, no required reviewers, the four secrets) to the Repository setup checklist; update the secrets rule (environments limited to `main`; required reviewers only for jobs that publish outward); add "Cutting a release" (optionally raise `versionName` on `develop`, open `develop` → `main` titled `release: <versionName>`, merge commit, check the GitHub release and the image, deploy with the deploy script).
+- [x] In the handover's "For the reviewer": check once by hand that Android Studio's signing wizard still produces a signed build.
 
 ### Acceptance criteria
 
-- [ ] Without the four variables, `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` produces an unsigned APK whose `versionCode` (`aapt2 dump badging`) equals `git rev-list --count HEAD`.
-- [ ] With the four variables pointing at a throwaway keystore, `assembleRelease bundleRelease` (mapping upload off) produces an APK that `apksigner verify` accepts and a bundle that `jarsigner -verify` reports as verified.
-- [ ] With only three of the four variables set, the release build stays unsigned.
-- [ ] The printing task outputs the version name and code matching the build.
-- [ ] The `release` job runs only on push to `main`, needs `changes` and `android-gate`, uses environment `android-release`, is the only job with `contents: write`, and creates a prerelease tagged `android-v<versionName>-<versionCode>` with the renamed APK, bundle and the mapping attached.
-- [ ] The runbook contains the signing section, the environment in the setup checklist, the updated secrets rule and the release checklist.
+- [x] Without the four variables, `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` produces an unsigned APK whose `versionCode` (`aapt2 dump badging`) equals `git rev-list --count HEAD`.
+- [x] With the four variables pointing at a throwaway keystore, `assembleRelease bundleRelease` (mapping upload off) produces an APK that `apksigner verify` accepts and a bundle that `jarsigner -verify` reports as verified.
+- [x] With only three of the four variables set, the release build stays unsigned.
+- [x] The printing task outputs the version name and code matching the build.
+- [x] The `release` job runs only on push to `main`, needs `changes` and `android-gate`, uses environment `android-release`, is the only job with `contents: write`, and creates a prerelease tagged `android-v<versionName>-<versionCode>` with the renamed APK, bundle and the mapping attached.
+- [x] The runbook contains the signing section, the environment in the setup checklist, the updated secrets rule and the release checklist.
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest :androidApp:lintRelease :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` passes; a second identical run reuses the configuration cache.
-- [ ] No keystore, password or alias is in the repository; the workflow parses as YAML with every action pinned by SHA.
+- [x] `./gradlew :composeApp:testAndroidHostTest :androidApp:lintRelease :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` passes; a second identical run reuses the configuration cache.
+- [x] No keystore, password or alias is in the repository; the workflow parses as YAML with every action pinned by SHA.
