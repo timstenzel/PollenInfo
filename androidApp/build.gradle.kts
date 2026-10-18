@@ -72,8 +72,9 @@ dependencies {
     implementation(project(":theme"))
 
     // Used directly by MainActivity (setContent, AppCompatActivity) and PollenInfoApplication
-    // (startKoin with androidContext).
+    // (startKoin with androidContext, the process-lifetime scope of the crash-reporting sync).
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.koin.android)
+    implementation(libs.kotlinx.coroutines.android)
 }

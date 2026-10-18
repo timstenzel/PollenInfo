@@ -302,7 +302,7 @@ Release builds report crashes to Firebase Crashlytics, so with the first release
 
 ### Crash reporting manual check
 
-Crashlytics is configured by Gradle and manifest alone, so it is checked by hand before a release
+Crashlytics is configured by Gradle, manifest and a platform class, so it is checked by hand before a release
 that touches it. The app has no test-crash button by design; the crash lives in a scratch commit
 that never leaves the machine.
 
@@ -318,9 +318,13 @@ that never leaves the machine.
    `ch.stenzel.tim.polleninfo` with real class and method names, the app version, the device model
    and the Android version. Repeat with the ANR handler, tap again while it blocks, choose *Close
    app*, reopen: the ANR appears too.
-4. Install a debug build of the same commit (`./gradlew :androidApp:assembleDebug`), provoke the
-   crash, reopen: nothing new appears for `ch.stenzel.tim.polleninfo.debug`.
-5. Delete the scratch branch; nothing of it is pushed.
+4. Opt-out: on a fresh install, Settings → Privacy shows "Send crash reports" on. Switch it off,
+   provoke the crash, reopen: nothing new appears. Force-stop and reopen the app: the switch is still
+   off. With it off, use Home, All stations, Diary, Alarms and Settings: all work as before. Switch it
+   on again, provoke the crash, reopen: it is reported again.
+5. Install a debug build of the same commit (`./gradlew :androidApp:assembleDebug`), leave the switch
+   on, provoke the crash, reopen: nothing new appears for `ch.stenzel.tim.polleninfo.debug`.
+6. Delete the scratch branch; nothing of it is pushed.
 
 ## Try the production stack locally
 

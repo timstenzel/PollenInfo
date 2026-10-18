@@ -3,9 +3,12 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
 import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.appinfo.FakeAppInfo
+import ch.stenzel.tim.polleninfo.core.crashreporting.CrashReporter
+import ch.stenzel.tim.polleninfo.core.crashreporting.FakeCrashReporter
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.language.FakeLanguageRepository
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
+import ch.stenzel.tim.polleninfo.core.preferences.FakeCrashReportingPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.FakeSelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStation
 import ch.stenzel.tim.polleninfo.core.result.AppError
@@ -57,9 +60,20 @@ class SettingsViewModelTest {
         stationRepository: StationRepository = FakeStationRepository(),
         appInfo: AppInfo = FakeAppInfo(AppVersion(name = "1.0.0-debug", code = 1)),
         languageRepository: LanguageRepository = FakeLanguageRepository(),
-    ) = SettingsViewModel(selectedStationRepository, stationRepository, languageRepository, appInfo, sessions)
+        crashReporter: CrashReporter = this.crashReporter,
+    ) = SettingsViewModel(
+        selectedStationRepository,
+        stationRepository,
+        languageRepository,
+        appInfo,
+        sessions,
+        crashReportingPreferences,
+        crashReporter,
+    )
 
     private val sessions = FakeSessionRepository()
+    private val crashReportingPreferences = FakeCrashReportingPreferences()
+    private val crashReporter = FakeCrashReporter()
 
     // --- Account ---
 
@@ -395,6 +409,8 @@ class SettingsViewModelTest {
             FakeLanguageRepository(),
             FakeAppInfo(version = null),
             sessions,
+            crashReportingPreferences,
+            crashReporter,
         )
         advanceUntilIdle()
 
@@ -473,6 +489,94 @@ class SettingsViewModelTest {
         viewModel.onResume()
 
         assertEquals(AppLanguage.DE, viewModel.uiState.value.language)
+    }
+
+    // --- Crash reports ---
+
+    @Test
+    fun `an available reporter shows the crash-report switch`() {
+        val viewModel = viewModel(crashReporter = FakeCrashReporter(isAvailable = true))
+
+        assertTrue(viewModel.uiState.value.crashReportsAvailable)
+    }
+
+    @Test
+    fun `an unavailable reporter hides the crash-report switch`() {
+        val viewModel = viewModel(crashReporter = FakeCrashReporter(isAvailable = false))
+
+        assertFalse(viewModel.uiState.value.crashReportsAvailable)
+    }
+
+    @Test
+    fun `crash reports show as on while nothing is stored`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `the crash-report switch follows the stored choice`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        crashReportingPreferences.setEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `switching crash reports off stores the choice and shows it`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onCrashReportsToggled(false)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+        advanceUntilIdle()
+
+        assertEquals(listOf(false), crashReportingPreferences.writes)
+        assertFalse(crashReportingPreferences.stored)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `switching crash reports back on stores the choice and shows it`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+        viewModel.onCrashReportsToggled(true)
+        advanceUntilIdle()
+
+        assertEquals(listOf(false, true), crashReportingPreferences.writes)
+        assertTrue(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `crash reports can be switched while signed in`() = runTest {
+        sessions.current = testSession
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+
+        assertFalse(crashReportingPreferences.stored)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `the view model never applies the choice to the reporter itself`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onCrashReportsToggled(false)
+        viewModel.onCrashReportsToggled(true)
+        advanceUntilIdle()
+
+        assertTrue(crashReporter.applied.isEmpty())
     }
 }
 

@@ -57,32 +57,32 @@ class CrashReportingSync(preferences, reporter) { suspend fun run() } // applies
 
 ### Implementation steps
 
-- [ ] Add `CrashReporter` in a new `core/crashreporting` package; Android `FirebaseCrashReporter(collectionAllowed)` (always disables when `collectionAllowed` is false, derived from the app's debuggable flag in `platformModule`); iOS `NoCrashReporter` (`isAvailable = false`, no-op); bind both in the platform modules
-- [ ] Add `CrashReportingPreferences` and a logic-free `DataStoreCrashReportingPreferences` on the default preferences DataStore (key `crash_reports_enabled`, write in `safeCall`); bind it in DI
-- [ ] Add `CrashReportingSync`: returns at once if the reporter is unavailable, otherwise collects the distinct preference values into `setEnabled`, catching flow failures; bind it as a single
-- [ ] Start the sync once per process from `PollenInfoApplication.onCreate` after Koin, on an application-lifetime scope
-- [ ] Extend `SettingsUiState` with `crashReportsAvailable` and `crashReportsEnabled`; `SettingsViewModel` observes the preference and gets `onCrashReportsToggled(enabled)` which updates the state and writes the preference (never calling the reporter)
-- [ ] Add the Privacy section to `SettingsScreen`: title, a toggleable row (`Role.Switch`) with label, one-sentence explanation as supporting text and a `Switch`; hidden when `crashReportsAvailable` is false
-- [ ] Add `settings_privacy_title`, `settings_crash_reports_label`, `settings_crash_reports_description` in English, German (Swiss, "du", no "ß"), French ("vous", U+202F) and Italian ("Lei"); the description names Google Firebase and states that no location, account or diary data is included
-- [ ] Add `FakeCrashReporter` and `FakeCrashReportingPreferences` to `commonTest`; write `CrashReportingSyncTest` and extend `SettingsViewModelTest`
-- [ ] Update `CLAUDE.md`: `core/` table gains `crashreporting`; the opt-out rule (preference is the source of truth applied by `CrashReportingSync`; Crashlytics identifies the install by the same FID as push; the preference is not a secret and stays in backup); Settings behaviour. Extend the manual check in `deploy/README.md` with the switch-off case
+- [x] Add `CrashReporter` in a new `core/crashreporting` package; Android `FirebaseCrashReporter(collectionAllowed)` (always disables when `collectionAllowed` is false, derived from the app's debuggable flag in `platformModule`); iOS `NoCrashReporter` (`isAvailable = false`, no-op); bind both in the platform modules
+- [x] Add `CrashReportingPreferences` and a logic-free `DataStoreCrashReportingPreferences` on the default preferences DataStore (key `crash_reports_enabled`, write in `safeCall`); bind it in DI
+- [x] Add `CrashReportingSync`: returns at once if the reporter is unavailable, otherwise collects the distinct preference values into `setEnabled`, catching flow failures; bind it as a single
+- [x] Start the sync once per process from `PollenInfoApplication.onCreate` after Koin, on an application-lifetime scope
+- [x] Extend `SettingsUiState` with `crashReportsAvailable` and `crashReportsEnabled`; `SettingsViewModel` observes the preference and gets `onCrashReportsToggled(enabled)` which updates the state and writes the preference (never calling the reporter)
+- [x] Add the Privacy section to `SettingsScreen`: title, a toggleable row (`Role.Switch`) with label, one-sentence explanation as supporting text and a `Switch`; hidden when `crashReportsAvailable` is false
+- [x] Add `settings_privacy_title`, `settings_crash_reports_label`, `settings_crash_reports_description` in English, German (Swiss, "du", no "ß"), French ("vous", U+202F) and Italian ("Lei"); the description names Google Firebase and states that no location, account or diary data is included
+- [x] Add `FakeCrashReporter` and `FakeCrashReportingPreferences` to `commonTest`; write `CrashReportingSyncTest` and extend `SettingsViewModelTest`
+- [x] Update `CLAUDE.md`: `core/` table gains `crashreporting`; the opt-out rule (preference is the source of truth applied by `CrashReportingSync`; Crashlytics identifies the install by the same FID as push; the preference is not a secret and stays in backup); Settings behaviour. Extend the manual check in `deploy/README.md` with the switch-off case
 
 ### Acceptance criteria
 
-- [ ] `CrashReportingSyncTest`: nothing stored → reporter enabled; stored `false` → disabled at start; every change reaches the reporter, equal consecutive values once; unavailable reporter never called; a failing preference flow neither crashes nor calls the reporter
-- [ ] `SettingsViewModelTest`: `crashReportsEnabled` follows the stored value; toggling writes the preference and shows the new value — also while signed out; the ViewModel never calls the reporter's `setEnabled`
-- [ ] `SettingsViewModelTest`: an available reporter gives `crashReportsAvailable == true`, an unavailable one `false`
-- [ ] `compileTestKotlinIosSimulatorArm64` passes and the iOS `platformModule` binds `NoCrashReporter` (runtime check on iOS deferred — there is no `iosApp` yet)
-- [ ] Manual (Android release): fresh install shows the switch on; switching it off and provoking a crash sends nothing; the switch is still off after force-stopping and reopening the app; switching it on again reports the next crash; with the switch off, Home, All stations, Diary, Alarms and Settings work as before
-- [ ] Manual (Android debug, switch on): a provoked crash does not appear in the console, and the merged-manifest grep still matches the debug manifest only
+- [x] `CrashReportingSyncTest`: nothing stored → reporter enabled; stored `false` → disabled at start; every change reaches the reporter, equal consecutive values once; unavailable reporter never called; a failing preference flow neither crashes nor calls the reporter
+- [x] `SettingsViewModelTest`: `crashReportsEnabled` follows the stored value; toggling writes the preference and shows the new value — also while signed out; the ViewModel never calls the reporter's `setEnabled`
+- [x] `SettingsViewModelTest`: an available reporter gives `crashReportsAvailable == true`, an unavailable one `false`
+- [x] `compileTestKotlinIosSimulatorArm64` passes and the iOS `platformModule` binds `NoCrashReporter` (runtime check on iOS deferred — there is no `iosApp` yet)
+- [ ] ~~Manual (Android release): fresh install shows the switch on; switching it off and provoking a crash sends nothing; the switch is still off after force-stopping and reopening the app; switching it on again reports the next crash; with the switch off, Home, All stations, Diary, Alarms and Settings work as before~~ *(skipped: needs a device, a signed release install and the Firebase console; procedure in deploy/README.md "Crash reporting manual check" steps 4–5. The merged-manifest grep part was run: only the debug manifest matches)*
+- [ ] ~~Manual (Android debug, switch on): a provoked crash does not appear in the console, and the merged-manifest grep still matches the debug manifest only~~ *(skipped: needs a device, a signed release install and the Firebase console; procedure in deploy/README.md "Crash reporting manual check" steps 4–5. The merged-manifest grep part was run: only the debug manifest matches)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes
-- [ ] `./gradlew :composeApp:checkTranslations` passes
-- [ ] The hard-coded-text grep from `CLAUDE.md` finds no new hit
-- [ ] No new deprecation or compiler warning
-- [ ] Test names are backtick sentences without commas; no mocking framework; `Result` imported explicitly from `core.result`
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes
+- [x] `./gradlew :composeApp:checkTranslations` passes
+- [x] The hard-coded-text grep from `CLAUDE.md` finds no new hit
+- [x] No new deprecation or compiler warning
+- [x] Test names are backtick sentences without commas; no mocking framework; `Result` imported explicitly from `core.result`
 
 ## Task [03-opt-out-save-failure-and-polish]
 

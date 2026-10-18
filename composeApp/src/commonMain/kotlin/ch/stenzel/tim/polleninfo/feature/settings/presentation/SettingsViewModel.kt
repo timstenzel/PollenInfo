@@ -3,8 +3,10 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
+import ch.stenzel.tim.polleninfo.core.crashreporting.CrashReporter
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
+import ch.stenzel.tim.polleninfo.core.preferences.CrashReportingPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
@@ -34,6 +36,10 @@ import kotlinx.coroutines.launch
  * The account is **observed** too, from the login stored on the phone — no request: logging in or
  * out anywhere in the app shows here at once. Logging out asks for confirmation first; deleting the
  * account asks for the password, and a wrong one keeps the dialog open with its error.
+ *
+ * The crash-report switch is **observed** from [CrashReportingPreferences] and only ever written
+ * there: `CrashReportingSync` hands every stored value to the platform, so this never calls
+ * [CrashReporter.setEnabled] — it asks the reporter only whether the platform reports at all.
  */
 class SettingsViewModel(
     selectedStationRepository: SelectedStationRepository,
@@ -41,10 +47,16 @@ class SettingsViewModel(
     private val languageRepository: LanguageRepository,
     appInfo: AppInfo,
     private val sessionRepository: SessionRepository,
+    private val crashReportingPreferences: CrashReportingPreferences,
+    crashReporter: CrashReporter,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        SettingsUiState(language = languageRepository.current, version = appInfo.version),
+        SettingsUiState(
+            language = languageRepository.current,
+            version = appInfo.version,
+            crashReportsAvailable = crashReporter.isAvailable,
+        ),
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -73,6 +85,17 @@ class SettingsViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            crashReportingPreferences.enabled.collect { enabled ->
+                _uiState.update { it.copy(crashReportsEnabled = enabled) }
+            }
+        }
+    }
+
+    /** Shows the new position at once and stores it; the sync then applies it to the platform. */
+    fun onCrashReportsToggled(enabled: Boolean) {
+        _uiState.update { it.copy(crashReportsEnabled = enabled) }
+        viewModelScope.launch { crashReportingPreferences.setEnabled(enabled) }
     }
 
     fun onLogoutClicked() {

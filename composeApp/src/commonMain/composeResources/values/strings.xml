@@ -19,6 +19,9 @@
     <!-- The other choices are each named in their own language, in code. -->
     <string name="settings_language_system">System default</string>
     <string name="settings_language_restart_note">The new language applies the next time you open the app.</string>
+    <string name="settings_privacy_title">Privacy</string>
+    <string name="settings_crash_reports_label">Send crash reports</string>
+    <string name="settings_crash_reports_description">If the app crashes, a technical report goes to Google Firebase so the developer can fix it. It contains no location, station, account or diary data.</string>
     <string name="settings_section_impressum">Impressum</string>
     <!-- %1$s is the developer's name. -->
     <string name="settings_developed_by">Developed by %1$s</string>

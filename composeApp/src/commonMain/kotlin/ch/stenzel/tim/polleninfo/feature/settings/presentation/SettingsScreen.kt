@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -33,6 +34,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,6 +77,8 @@ import ch.stenzel.tim.polleninfo.resources.settings_account_log_out_text
 import ch.stenzel.tim.polleninfo.resources.settings_account_log_out_title
 import ch.stenzel.tim.polleninfo.resources.settings_account_logged_in_as
 import ch.stenzel.tim.polleninfo.resources.settings_account_not_logged_in
+import ch.stenzel.tim.polleninfo.resources.settings_crash_reports_description
+import ch.stenzel.tim.polleninfo.resources.settings_crash_reports_label
 import ch.stenzel.tim.polleninfo.resources.settings_data_source_attribution
 import ch.stenzel.tim.polleninfo.resources.settings_data_source_disclaimer
 import ch.stenzel.tim.polleninfo.resources.settings_developed_by
@@ -84,6 +88,7 @@ import ch.stenzel.tim.polleninfo.resources.settings_language_restart_note
 import ch.stenzel.tim.polleninfo.resources.settings_language_system
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_link_action
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_url
+import ch.stenzel.tim.polleninfo.resources.settings_privacy_title
 import ch.stenzel.tim.polleninfo.resources.settings_section_account
 import ch.stenzel.tim.polleninfo.resources.settings_section_data_source
 import ch.stenzel.tim.polleninfo.resources.settings_section_impressum
@@ -103,8 +108,9 @@ private const val DEVELOPER_EMAIL = "developer.mobile.t3s@gmail.com"
 private const val CONTACT_URI = "mailto:$DEVELOPER_EMAIL?subject=PollenInfo"
 
 /**
- * The Settings tab: one scrolling screen of sections — Default station, Account, Language,
- * Impressum, Data source — and the version line at the bottom. Tapping the default station calls
+ * The Settings tab: one scrolling screen of sections — Default station, Account, Language, Privacy
+ * (only where the platform reports crashes), Impressum, Data source — and the version line at the
+ * bottom. Tapping the default station calls
  * [onChangeStation], "Log in" (while nobody is logged in) [onLogIn].
  *
  * The scroll state is saveable, so it survives a tab switch through `navigateToTab`'s saved state.
@@ -132,6 +138,7 @@ fun SettingsScreen(
         onLogOut = viewModel::onLogoutClicked,
         onDeleteAccount = viewModel::onDeleteAccountClicked,
         onLanguageRowClicked = viewModel::onLanguageRowClicked,
+        onCrashReportsToggled = viewModel::onCrashReportsToggled,
     )
 
     if (uiState.showLogoutDialog) {
@@ -166,6 +173,7 @@ private fun SettingsContent(
     onLogOut: () -> Unit,
     onDeleteAccount: () -> Unit,
     onLanguageRowClicked: () -> Unit,
+    onCrashReportsToggled: (Boolean) -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) }) { padding ->
         Column(
@@ -181,6 +189,10 @@ private fun SettingsContent(
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             LanguageSection(uiState.language, uiState.languageAppliesOnRestart, onLanguageRowClicked)
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            if (uiState.crashReportsAvailable) {
+                PrivacySection(uiState.crashReportsEnabled, onCrashReportsToggled)
+                HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            }
             ImpressumSection()
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             DataSourceSection()
@@ -340,6 +352,35 @@ private fun LanguageSection(language: AppLanguage, appliesOnRestart: Boolean, on
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
+    }
+}
+
+/**
+ * The crash-report switch with one sentence on what is sent and to whom. The whole row is the
+ * toggle, so a screen reader announces label, explanation and state as one switch; the [Switch]
+ * itself takes no clicks of its own.
+ */
+@Composable
+private fun PrivacySection(enabled: Boolean, onToggled: (Boolean) -> Unit) {
+    SectionTitle(stringResource(Res.string.settings_privacy_title))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = enabled, role = Role.Switch, onValueChange = onToggled)
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(Res.string.settings_crash_reports_label), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = stringResource(Res.string.settings_crash_reports_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 

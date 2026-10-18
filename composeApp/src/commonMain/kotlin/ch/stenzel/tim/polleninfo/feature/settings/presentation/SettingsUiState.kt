@@ -27,6 +27,9 @@ import ch.stenzel.tim.polleninfo.core.result.AppError
  * ([deletePassword], shown in clear text while [deletePasswordVisible]); [isDeleting] while the
  * deletion runs, and [deleteError] why the last attempt failed — a wrong password among them — until
  * the next edit or attempt.
+ *
+ * [crashReportsAvailable] is whether this platform reports crashes at all (the Privacy section is
+ * hidden otherwise); [crashReportsEnabled] the stored choice, on until switched off.
  */
 data class SettingsUiState(
     val stationName: String? = null,
@@ -41,6 +44,8 @@ data class SettingsUiState(
     val language: AppLanguage = AppLanguage.SYSTEM,
     val showLanguageDialog: Boolean = false,
     val languageAppliesOnRestart: Boolean = false,
+    val crashReportsAvailable: Boolean = false,
+    val crashReportsEnabled: Boolean = true,
     val version: AppVersion?,
 ) {
     /** A password has been typed and no deletion is running. */
