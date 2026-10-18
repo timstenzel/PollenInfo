@@ -371,32 +371,182 @@ c down                                        # stop; add -v to drop the databas
 A browser does not trust Caddy's local CA unless it is imported; the HSTS header then pins
 `localhost` to HTTPS in that browser, so prefer `curl`.
 
-## CI: `.github/workflows/server.yml`
+## Repository setup
 
-Runs on pull requests and on pushes to `main` that touch `server/`, `gradle/`, the root Gradle
-files, `deploy/`, `.github/actions/` or the workflow itself:
+A one-time checklist, applied by hand in the GitHub repository settings, in this order. The git
+rules it enforces are in `CLAUDE.md`, "Git workflow": features are squashed into `develop`, releases
+are merged from `develop` into `main` with a merge commit, nothing else lands on either branch.
+
+1. **Back-merge `main` into `develop` — before any ruleset.** `main` is ahead of `develop` by
+   commits `develop` does not contain; a squash merge carries no history, so without this the first
+   release pull request would carry them again. Once the ruleset on `develop` exists, a direct push
+   is refused, so this must come first:
+
+   ```bash
+   git fetch origin
+   git switch develop
+   git pull --ff-only origin develop
+   git merge origin/main
+   git push origin develop
+   ```
+
+2. **Ruleset `develop`** (Settings → Rules → Rulesets → New branch ruleset, target branch
+   `develop`, enforcement active):
+   - Restrict deletions: on.
+   - Block force pushes: on.
+   - Require a pull request before merging: on, **0** required approvals; allowed merge methods:
+     **Squash** only.
+   - Require status checks to pass: on, with the checks `Test, build and scan`, `android-gate` and
+     `ios-compile`; "Require branches to be up to date before merging": **off**.
+3. **Ruleset `main`** (target branch `main`): the same as `develop` — deletions restricted, force
+   pushes blocked, pull request required with 0 approvals, the same three required checks, branches
+   up to date off — but allowed merge methods: **Merge** only.
+4. **Automatically delete head branches:** Settings → General → Pull Requests → on.
+5. **Environment `android-release`** (Settings → Environments → New environment):
+   - Deployment branches and tags: **Selected branches**, only `main`.
+   - Required reviewers: **none** (the job publishes nothing outward; see the secrets rule below).
+   - Environment secrets, as described in "Android release signing" below:
+     `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+     `ANDROID_KEY_PASSWORD`.
+
+A skipped gate (its component did not change) reports success, so a documentation-only pull request
+is not blocked by the required checks.
+
+## CI
+
+Two workflows, `.github/workflows/server.yml` (backend) and `.github/workflows/android.yml` (app).
+Both run on **every** pull request into `develop` or `main` and on every push to `main`, without a
+path filter, so their gates always report and can be required checks. In each, a first job,
+`changes`, runs `.github/scripts/changed-components.sh` on the change: for a pull request everything since its base,
+for a push to `main` everything since the previous tip (a release pull request is therefore checked
+for everything changed since the last release). An unknown or all-zero base counts as "everything
+changed". The script is the one place that maps paths to components:
+
+| Paths | server | android | ios |
+| --- | --- | --- | --- |
+| `server/`, `deploy/`, `.github/workflows/server.yml` | yes | | |
+| `androidApp/` | | yes | |
+| `composeApp/`, `theme/`, `.github/workflows/android.yml` | | yes | yes |
+| `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `buildSrc/`, `.github/actions/`, `.github/scripts/` | yes | yes | yes |
+| anything else (`*.md`, `.sdd/`, `.github/dependabot.yml`, …) | | | |
+
+### Server: `.github/workflows/server.yml`
+
+When `server` is false, the gate `Test, build and scan` is skipped — GitHub counts a skipped job as
+passed — and nothing is published. Otherwise the gate runs:
 
 1. `./gradlew :server:test :server:installDist` (the database tests use Testcontainers on the
    runner's Docker),
 2. `docker build`,
 3. a Trivy scan that fails the run on any **critical** vulnerability with a fix available,
-4. on `main` only, a separate job pushes the scanned image as
+4. on `main` only, a separate job (after a gate that ran and passed) pushes the scanned image as
    `ghcr.io/timstenzel/polleninfo-server:<commit sha>` and `:latest`. The package stays private.
+
+### Android: `.github/workflows/android.yml`
+
+When `android` is false, the gate `android-gate` (Linux) is skipped and counts as passed. Otherwise
+it runs:
+
+1. `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:lintRelease
+   :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`
+   — the app tests, the translation check, Android Lint and both builds; the release build is
+   unsigned and uploads no R8 mapping. Lint covers `:androidApp`, `:composeApp` and `:theme` and
+   fails on any warning (version checks `NewerVersionAvailable` / `GradleDependency` off, no
+   baseline); when the job fails, the lint report is uploaded as the artifact `lint-report`,
+2. a check of the merged manifests: `usesCleartextTraffic` / `ACCESS_LOCAL_NETWORK` and
+   `firebase_crashlytics_collection_enabled` must appear in the **debug** merged manifest only, so a
+   release can never talk to a server unencrypted or ship with crash reporting switched off.
+
+When `ios` is true (shared app code in `composeApp/` or `theme/`, the Android workflow itself or
+shared build configuration changed), the job `ios-compile` runs on a macOS runner:
+`./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` compiles the shared code and its tests for
+the iOS simulator, so JVM-only code in shared sources fails the pull request. It needs no Xcode
+project (there is none yet) and runs no tests (those need full Xcode). Otherwise it is skipped and
+counts as passed. Publishing an iOS build (TestFlight) comes with the iOS feature.
+
+On a push to `main` (a merged release) that changed the app, the job `Android release` runs after
+`android-gate` passed, in the environment `android-release` (the only place the signing secrets
+exist):
+
+1. checks out the full history (the version code is the commit count), writes the keystore from
+   `ANDROID_KEYSTORE_BASE64` into the runner's temporary directory and fails with an error naming
+   the secret if any of the four is missing or empty,
+2. `./gradlew :androidApp:assembleRelease :androidApp:bundleRelease` — signed, with the R8 mapping
+   uploaded to Crashlytics,
+3. reads `versionName` / `versionCode` from `./gradlew -q :androidApp:printVersion`,
+4. creates a GitHub **prerelease** tagged `android-v<versionName>-<versionCode>` on the pushed commit,
+   with generated notes and the files `polleninfo-<versionName>-<versionCode>.apk`, `….aab` and
+   `mapping.txt`. A build that came out unsigned fails the job before anything is published.
+
+It is the only job with `contents: write`. A release that changed only the backend creates no Android
+release.
+
+Concurrency group `android-<ref>`; a newer push cancels a running pull request run, never a run on
+`main`.
 
 Rules every workflow in `.github/` follows:
 
-- **One workflow per shipped artifact**, each with its own `paths` filter. The app pipelines will be
-  `android.yml` (AAB → Play internal testing) and `ios.yml` (TestFlight), triggered by a release tag
-  (`android-v…` / `ios-v…`; the server's would be `server-v…`) or by hand (`workflow_dispatch`),
-  never on every push.
+- **One workflow per shipped artifact**, always triggered; which gates run is decided by
+  `.github/scripts/changed-components.sh`, never by a `paths` filter. Pull requests into
+  `develop` and `main` run the gates; a push to `main` (a merged release) runs them again before
+  anything is published. No release-tag triggers, no `workflow_dispatch`.
 - **Shared setup** through the composite action `.github/actions/setup-jvm` (JDK 21, Gradle with
   caching and wrapper validation). `gradle/wrapper/gradle-wrapper.jar` is committed for it.
 - **Least privilege.** The workflow default is `permissions: contents: read`; only a job that
-  publishes gets more (`packages: write` for the server's publish job).
+  publishes gets more (`packages: write` for the server's publish job, `contents: write` for the
+  Android release job).
 - **Every action is pinned by its full commit SHA**, with the version in a trailing comment.
   Dependabot (`.github/dependabot.yml`) updates the pins, the Gradle catalog and the image's base
   weekly.
 - **No repository-wide secrets.** The server pipeline needs only the workflow's own
-  `GITHUB_TOKEN`. Store credentials (Play service account, App Store Connect key) go into
-  **GitHub Environments with required reviewers**, so only an approved run of the job that uploads
-  can read them.
+  `GITHUB_TOKEN`. Every other credential is a secret of a **GitHub Environment whose deployment
+  branches are limited to `main`**, so no pull request or feature branch can read it (the signing
+  key: `android-release`). **Required reviewers only for jobs that publish outward** — store
+  uploads (Play service account, App Store Connect key) later; the Android release job publishes
+  only to this repository and runs without approval.
+
+## Android release signing
+
+The release job signs with the maintainer's own keystore (the one Android Studio's signing wizard
+uses). `androidApp/build.gradle.kts` signs the release build only when **all four** environment
+variables `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and
+`ANDROID_KEY_PASSWORD` are set; otherwise it stays unsigned, so pull requests and local builds need
+no key. Android Studio's wizard (Build → Generate Signed App Bundle or APK) injects its own signing
+properties and keeps working without them.
+
+The environment `android-release` holds four secrets:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | The keystore file, base64 on one line: `base64 -i upload.jks \| pbcopy` (macOS) or `base64 -w0 upload.jks` (Linux) |
+| `ANDROID_KEYSTORE_PASSWORD` | The keystore's password |
+| `ANDROID_KEY_ALIAS` | The key's alias |
+| `ANDROID_KEY_PASSWORD` | The key's password |
+
+The job writes the keystore to `$RUNNER_TEMP` and passes its path as `ANDROID_KEYSTORE_FILE`.
+
+- **Keep the keystore safe** outside the repository (`*.jks` and `*.keystore` are git-ignored), in a
+  password manager with its passwords, plus an offline backup. It becomes the **upload key** once
+  Play publishing exists; losing it then means a key reset through Play support, and losing it
+  before means every installed release must be uninstalled to install the next one.
+- **Signatures differ from Play builds:** with Play App Signing, Play re-signs with its own app
+  signing key, so a GitHub-release APK and a Play-delivered build of the same app cannot be
+  installed over each other — testers switching between the two must uninstall first.
+- **Version code** = `git rev-list --count HEAD`, so every release on `main` is higher than the one
+  before; `versionName` in `androidApp/build.gradle.kts` is raised by hand. Pull request checkouts
+  are shallow, so their (unsigned) builds get version code 1. The commit count is a
+  configuration-cache input: a new commit invalidates the cache entry, which is expected.
+- `./gradlew -q :androidApp:printVersion` prints the `versionName=` and `versionCode=` a build
+  uses.
+
+## Cutting a release
+
+1. Optionally raise `versionName` in `androidApp/build.gradle.kts` through a feature pull request
+   into `develop` (the version code rises by itself).
+2. Open a pull request `develop` → `main` titled `release: <versionName>`; its gates cover everything
+   changed since the last release.
+3. When the gates pass, merge it with a **merge commit** (the only method the `main` ruleset allows).
+4. Check the push run on `main`: if the app changed, a GitHub prerelease
+   `android-v<versionName>-<versionCode>` with the APK, the bundle and `mapping.txt`; if the backend
+   changed, the image `ghcr.io/timstenzel/polleninfo-server:<merge commit sha>`.
+5. Deploy the backend with `deploy/deploy.sh <merge commit sha>` (see "Deploying and rolling back").

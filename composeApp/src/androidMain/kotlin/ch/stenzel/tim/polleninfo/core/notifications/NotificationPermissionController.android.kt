@@ -1,6 +1,7 @@
 package ch.stenzel.tim.polleninfo.core.notifications
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -75,7 +76,9 @@ private class AndroidNotificationPermissionController(
     }
 
     private companion object {
-        // Only referenced on API 33+; the constant itself is inlined at compile time.
+        // Only referenced on API 33+ (both uses sit behind the TIRAMISU check); the constant itself
+        // is inlined at compile time, which is exactly what lint's InlinedApi warns about.
+        @SuppressLint("InlinedApi")
         const val PERMISSION = Manifest.permission.POST_NOTIFICATIONS
     }
 }

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed-icon layer (API 33+): the launcher tints it and uses only its alpha. Same grain as
+  ic_launcher_foreground, with the three aperture pores cut out of the body (evenOdd) instead of
+  painted in a second colour, which a single-tone layer could not show.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:pivotX="54" android:pivotY="54" android:rotation="0">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="60">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="120">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="180">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="240">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="300">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
+    </group>
+
+    <!-- Body (centre 54,54, r=19) with the pores at (69,54), (46.5,67), (46.5,41), r=3, as holes -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,35 A19,19 0 1,0 54,73 A19,19 0 1,0 54,35 Z
+            M69,51 A3,3 0 1,0 69,57 A3,3 0 1,0 69,51 Z
+            M46.5,64 A3,3 0 1,0 46.5,70 A3,3 0 1,0 46.5,64 Z
+            M46.5,38 A3,3 0 1,0 46.5,44 A3,3 0 1,0 46.5,38 Z" />
+
+</vector>

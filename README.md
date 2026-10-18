@@ -229,6 +229,7 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Translations complete | `./gradlew :composeApp:checkTranslations` |
+| Android Lint, warnings fail | `./gradlew :androidApp:lintRelease` |
 
 - App tests live in `commonTest` only, so they run on every target. Repositories are tested through
   a real `HttpClient` on Ktor's `MockEngine`; ViewModels under virtual time with hand-written fakes —
@@ -242,8 +243,16 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 
 ## CI
 
-CI is GitHub Actions, one workflow per shipped artifact. Today that is the backend:
-[`.github/workflows/server.yml`](.github/workflows/server.yml).
+CI is GitHub Actions, one workflow per shipped artifact: the backend's
+[`.github/workflows/server.yml`](.github/workflows/server.yml) (below) and the app's
+[`.github/workflows/android.yml`](.github/workflows/android.yml), whose gate `android-gate` runs the
+app tests, the translation check, Android Lint, a debug and an unsigned release build, and checks that cleartext,
+local-network access and "crash reports off" exist only in the debug build. Both run on every pull
+request into `develop` or `main` and every push to `main`; `.github/scripts/changed-components.sh`
+decides which gates actually run. A push to `main` that changed the app also builds a **signed**
+APK and app bundle (version code = commit count) and publishes them with the R8 mapping as a GitHub
+prerelease `android-v<versionName>-<versionCode>` ([signing](deploy/README.md#android-release-signing),
+[cutting a release](deploy/README.md#cutting-a-release)).
 
 ```mermaid
 flowchart LR
@@ -267,16 +276,16 @@ flowchart LR
 
 Ground rules for every workflow:
 
-- **Least privilege** — `contents: read` by default; only the publishing job gets more.
+- **Least privilege** — `contents: read` by default; only the publishing jobs get more.
 - **Every action pinned by full commit SHA**, shared JDK/Gradle setup in the composite action
   [`.github/actions/setup-jvm`](.github/actions/setup-jvm) (with Gradle wrapper validation).
 - **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)) proposes weekly updates for the
   Gradle catalog, the image's base, the action pins and the Caddy / Postgres tags in `deploy/`.
-- **No repository-wide secrets** — the server pipeline uses only the workflow's own `GITHUB_TOKEN`.
-  The planned `android.yml` (Play internal testing) and `ios.yml` (TestFlight) will run on release
-  tags and keep their store credentials in GitHub Environments with required reviewers.
+- **No repository-wide secrets** — the signing key lives in the GitHub Environment
+  `android-release`, usable only from `main`; store credentials (Play, TestFlight, later) will
+  additionally need required reviewers.
 
-Details: [deploy/README.md → CI](deploy/README.md#ci-githubworkflowsserveryml).
+Details: [deploy/README.md → CI](deploy/README.md#ci).
 
 ---
 

@@ -50,10 +50,12 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
 | Translations | `./gradlew :composeApp:checkTranslations` (part of `check`) |
+| Android Lint (all Android code) | `./gradlew :androidApp:lintRelease` (fails on any warning) |
 | Dev database up / reset | `docker compose -f deploy/compose.dev.yaml up -d` / `… down -v` |
 | Backend on :8080 | `./gradlew :server:run` (push logged unless `FCM_CREDENTIALS`) |
 | Android debug / release | `./gradlew :androidApp:assembleDebug` / `:androidApp:assembleRelease` |
 | Release without network | `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` |
+| App version name / code | `./gradlew -q :androidApp:printVersion` |
 | Server image | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` |
 
 - `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM.
@@ -63,15 +65,67 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 - Without Docker, non-database server tests pass when run alone (`--tests '*PollenRoutesTest'`);
   database tests fail with "The database tests need Docker". Inspect the dev DB:
   `docker compose -f deploy/compose.dev.yaml exec postgres psql -U postgres -d polleninfo`.
-- **No new deprecation or compiler warning.** The only accepted ones come from plugins: AGP 9.4's
-  `Configuration.setVisible` and KGP 2.4's `KotlinNativeBundleArtifactsTypes`.
+- **Kotlin compiler warnings fail the build** (`allWarningsAsErrors` in `kotlin { compilerOptions }`
+  of `:composeApp` — all targets, iOS included — `:theme`, `:androidApp` and `:server`; locally and
+  in CI). Fix the warning; never suppress one without asking the maintainer. K2 does not report
+  unused variables (an IDE-only check), so those don't fail it. No new Gradle deprecation either:
+  the only accepted ones come from plugins — AGP 9.4's `Configuration.setVisible` and KGP 2.4's
+  `KotlinNativeBundleArtifactsTypes`.
 - A release build uploads its R8 mapping to Crashlytics (`uploadCrashlyticsMappingFileRelease`,
   needs network). Gradle property `polleninfo.uploadCrashlyticsMapping` (default `true`) switches it
   off for offline/quick builds — their crashes stay obfuscated. Never set it in the project's
   `gradle.properties`.
+- **Lint:** `:androidApp:lintRelease` checks `:androidApp` and, through `checkDependencies`, the
+  Android code of `:composeApp` and `:theme` (both apply `com.android.lint`; without it the KMP
+  library plugin has no `androidMain` lint and the module is silently skipped). Warnings are errors;
+  only `NewerVersionAvailable` and `GradleDependency` are disabled. **No baseline** — fix a finding,
+  or suppress it at the spot with a comment saying why (`@SuppressLint`, `@Suppress` in common code,
+  `tools:ignore`).
 - `gradle-wrapper.jar` is committed (CI validates it); regenerate only with `./gradlew wrapper`.
-- CI: `.github/workflows/server.yml`, shared setup in `.github/actions/setup-jvm`; every action
-  pinned by commit SHA. Rules in `deploy/README.md`.
+- CI: every pull request into `develop`/`main` and every push to `main` runs the gates of the
+  components it changed, decided by `.github/scripts/changed-components.sh` (the one path →
+  component mapping; docs-only changes run nothing, shared build files run everything). Server gate:
+  `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
+  `main`). Android gate: `.github/workflows/android.yml` (`android-gate`: app tests,
+  `checkTranslations`, `:androidApp:lintRelease`, debug and unsigned release build, the two
+  debug-only merged-manifest `grep`s of this file). iOS compile gate: `ios-compile` in the same
+  workflow (macOS, `:composeApp:compileTestKotlinIosSimulatorArm64`, when shared app code or shared
+  build files change). Android release: job `Android release` on a push to `main` that changed the
+  app (environment `android-release`, the only job with `contents: write`): signed APK and bundle,
+  mapping uploaded, GitHub prerelease `android-v<versionName>-<versionCode>`. Shared setup in
+  `.github/actions/setup-jvm`; every action pinned by commit SHA. Rules in `deploy/README.md`.
+- **Release signing and version:** the release build is signed only when all four environment
+  variables `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD` are set (no Gradle property, no `keystore.properties`); otherwise unsigned.
+  `versionCode` = `git rev-list --count HEAD` (`providers.exec`, fallback 1; shallow checkouts get
+  1); `versionName` is a literal raised by hand. Never commit a keystore, password or alias.
+
+## Git workflow
+
+`develop` is the integration branch, `main` holds releases. Every feature is a pull request into
+`develop` (squash merge, one commit `feature: <name>`); a release is a pull request `develop` →
+`main` (merge commit). The maintainer opens, reviews and merges every pull request. Repository
+setup (rulesets, merge methods): `deploy/README.md`, "Repository setup".
+
+- **Branch:** at a feature's first task, `git fetch` and create `feature/<name>` from
+  `origin/develop`, where `<name>` is the feature's `.sdd/<name>/` folder. **Stop and ask** if the
+  working tree is not clean or `feature/<name>` already exists (locally or on `origin`).
+- **First commit:** the specification, `.sdd/<name>/` (`requirements.md`, `tasks.md`).
+- **One commit per finished task**, message `<name>: <task title>`, holding the task's code and its
+  ticked steps in `tasks.md`; never commit half-done work. Push the feature branch right after each
+  task commit.
+- **Never** push to `develop` or `main`, **never** force-push (the only exception: the own feature
+  branch after a rebase the maintainer asked for), **never** merge, and **never** open, edit or merge
+  a pull request (no `gh pr …`).
+- **Handover after the last task:** report the compare link
+  `https://github.com/timstenzel/PollenInfo/compare/develop...feature/<name>?expand=1`, the title
+  `feature: <name>` and a ready-to-paste Markdown description with the sections **Summary**,
+  **Changes** (per task), **Quality gates** (what ran locally and the results) and **For the
+  reviewer** (manual checks, settings to apply by hand). Only in the message — no file, and no
+  attribution line in the description.
+- **Releases** (`release: <versionName>`, `develop` → `main`) are opened and merged by the
+  maintainer, never by the assistant.
+- Dependabot pull requests target `develop` (`.github/dependabot.yml`).
 
 ## Data source: MeteoSwiss OGD pollen
 

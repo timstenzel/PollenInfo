@@ -6,6 +6,11 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
+
+    // Any Kotlin compiler warning fails the build, locally and in CI.
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
 }
 
 application {

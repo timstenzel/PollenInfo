@@ -2,7 +2,12 @@ package ch.stenzel.tim.polleninfo.feature.account.domain.model
 
 import kotlinx.serialization.Serializable
 
-/** Which form the account screen shows. Part of its route, so it is serializable. */
+/**
+ * Which form the account screen shows. Part of its route, so it is serializable. R8 keeps it through
+ * the `@Serializable` rule in androidApp/proguard-rules.pro; `@Keep` (lint `MissingKeepAnnotation`)
+ * is not available in common code, hence the suppression.
+ */
+@Suppress("MissingKeepAnnotation")
 @Serializable
 enum class AccountMode { LOGIN, REGISTER }
 

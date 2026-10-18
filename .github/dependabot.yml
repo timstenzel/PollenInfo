@@ -1,13 +1,16 @@
-# Weekly update pull requests for the Gradle catalog, the server image's base and the CI actions.
+# Weekly update pull requests for the Gradle catalog, the server image's base and the CI actions,
+# all into develop (they reach main with the next release).
 version: 2
 updates:
   - package-ecosystem: gradle
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
 
   - package-ecosystem: docker
     directory: /server
+    target-branch: develop
     schedule:
       interval: weekly
 
@@ -16,11 +19,13 @@ updates:
     directories:
       - /
       - /.github/actions/setup-jvm
+    target-branch: develop
     schedule:
       interval: weekly
 
   - package-ecosystem: docker-compose
     # The Caddy and Postgres tags of the production and development stacks.
     directory: /deploy
+    target-branch: develop
     schedule:
       interval: weekly

@@ -3,12 +3,20 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidKotlinMultiplatformLibrary)
+    // Gives the KMP library plugin lint tasks for androidMain, so :androidApp:lintRelease
+    // (checkDependencies) analyses this module too — without it the module is silently skipped.
+    alias(libs.plugins.androidLint)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
+    // Any Kotlin compiler warning fails the build, locally and in CI, for every target.
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+
     // The shared code as an Android library; the APK is :androidApp. The namespace differs from the
     // app's, so the library's own `R` (notification channel names, the notification icon) is
     // `ch.stenzel.tim.polleninfo.shared.R`.

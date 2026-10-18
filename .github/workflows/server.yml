@@ -1,33 +1,17 @@
 # The server's pipeline: test, package, scan and — on main only — publish the container image.
 #
-# One workflow per shipped artifact: android.yml and ios.yml will sit next to this one with their
-# own path filters, so a change to one target never runs another's pipeline. See deploy/README.md.
+# Triggered by every pull request into develop or main and every push to main, with no path filter,
+# so its gate always reports and can be a required check. The `changes` job asks
+# .github/scripts/changed-components.sh (the one path -> component mapping, shared with
+# android.yml) whether the server changed; when it did not, the gate is skipped, which GitHub counts
+# as passed, and nothing is published. See deploy/README.md.
 name: Server
 
 on:
+  pull_request:
+    branches: [develop, main]
   push:
     branches: [main]
-    paths:
-      - server/**
-      - gradle/**
-      - build.gradle.kts
-      - settings.gradle.kts
-      - gradle.properties
-      - gradlew
-      - deploy/**
-      - .github/actions/**
-      - .github/workflows/server.yml
-  pull_request:
-    paths:
-      - server/**
-      - gradle/**
-      - build.gradle.kts
-      - settings.gradle.kts
-      - gradle.properties
-      - gradlew
-      - deploy/**
-      - .github/actions/**
-      - .github/workflows/server.yml
 
 # Least privilege: every job reads the repository and nothing more unless it says otherwise.
 permissions:
@@ -41,8 +25,30 @@ env:
   IMAGE: ghcr.io/timstenzel/polleninfo-server
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.detect.outputs.server }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Pull request: everything since its base; push to main: everything since the previous tip.
+      - name: Detect the changed components
+        id: detect
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: .github/scripts/changed-components.sh "$BASE" HEAD
+
   test-and-scan:
     name: Test, build and scan
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.push
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
@@ -30,7 +31,11 @@ import org.koin.android.ext.android.inject
  * The install's push address — its Firebase Installation ID, reported by [onRegistered] whenever
  * FCM (re)registers it — is sent on through [PushTokenUpdater], only for an install that has
  * registered with the backend; one that has not sends whichever id is current when it first does.
+ *
+ * No `onNewToken`: with `firebase_messaging_installation_id_enabled` the app has no registration
+ * token to observe — [onRegistered] is the FID's counterpart, hence the lint suppression.
  */
+@SuppressLint("MissingFirebaseInstanceTokenRefresh")
 class PollenFirebaseMessagingService : FirebaseMessagingService() {
 
     private val tokenUpdater: PushTokenUpdater by inject()
