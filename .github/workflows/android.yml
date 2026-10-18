@@ -1,10 +1,11 @@
-# The app's pipeline: the Android gate on every pull request that touches app code.
+# The app's pipeline: the Android gate on every pull request that touches app code, and the iOS
+# compile gate on every pull request that touches shared app code or shared build configuration.
 #
 # Triggered by every pull request into develop or main and every push to main, with no path filter,
-# so its gate always reports and can be a required check. The `changes` job asks
+# so its gates always report and can be required checks. The `changes` job asks
 # .github/scripts/changed-components.sh (the one path -> component mapping, shared with
-# server.yml) whether the app changed; when it did not, the gate is skipped, which GitHub counts as
-# passed. See deploy/README.md.
+# server.yml) whether the app (android) and the shared code (ios) changed; a gate whose component did
+# not change is skipped, which GitHub counts as passed. See deploy/README.md.
 name: Android
 
 on:
@@ -94,3 +95,24 @@ jobs:
           path: androidApp/build/reports/lint-results-release.*
           retention-days: 7
           if-no-files-found: ignore
+
+  # Compiles the shared code and its tests for the iOS simulator, so JVM-only code in commonMain
+  # fails the pull request. No Xcode project is involved (there is none yet); publishing to
+  # TestFlight comes with the iOS feature.
+  ios-compile:
+    name: ios-compile
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK and Gradle
+        uses: ./.github/actions/setup-jvm
+
+      - name: Compile the shared code and its tests for the iOS simulator
+        run: ./gradlew :composeApp:compileTestKotlinIosSimulatorArm64

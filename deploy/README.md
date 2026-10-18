@@ -451,6 +451,13 @@ it runs:
    `firebase_crashlytics_collection_enabled` must appear in the **debug** merged manifest only, so a
    release can never talk to a server unencrypted or ship with crash reporting switched off.
 
+When `ios` is true (shared app code in `composeApp/` or `theme/`, the Android workflow itself or
+shared build configuration changed), the job `ios-compile` runs on a macOS runner:
+`./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` compiles the shared code and its tests for
+the iOS simulator, so JVM-only code in shared sources fails the pull request. It needs no Xcode
+project (there is none yet) and runs no tests (those need full Xcode). Otherwise it is skipped and
+counts as passed. Publishing an iOS build (TestFlight) comes with the iOS feature.
+
 Concurrency group `android-<ref>`; a newer push cancels a running pull request run, never a run on
 `main`.
 

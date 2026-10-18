@@ -117,18 +117,18 @@ the pull request.
 
 ### Implementation steps
 
-- [ ] Add the job with `name: ios-compile` to the Android workflow (macOS runner), running only when `ios` is true: shared JVM setup, then `:composeApp:compileTestKotlinIosSimulatorArm64`.
-- [ ] Runbook: describe the job in the CI section and note that iOS publishing comes with the iOS feature. Project instructions: the CI line names the iOS compile gate.
+- [x] Add the job with `name: ios-compile` to the Android workflow (macOS runner), running only when `ios` is true: shared JVM setup, then `:composeApp:compileTestKotlinIosSimulatorArm64`.
+- [x] Runbook: describe the job in the CI section and note that iOS publishing comes with the iOS feature. Project instructions: the CI line names the iOS compile gate.
 
 ### Acceptance criteria
 
-- [ ] Run locally, the change-detection script reports `ios=true` for ranges touching `composeApp/`, `theme/`, `gradle/libs.versions.toml` or the Android workflow file, and `ios=false` for a range touching only `androidApp/`.
-- [ ] The job's `name` is exactly `ios-compile`, its `if` reads the `changes` job's `ios` output, and it runs only `:composeApp:compileTestKotlinIosSimulatorArm64` (nothing that needs an Xcode project).
+- [x] Run locally, the change-detection script reports `ios=true` for ranges touching `composeApp/`, `theme/`, `gradle/libs.versions.toml` or the Android workflow file, and `ios=false` for a range touching only `androidApp/`.
+- [x] The job's `name` is exactly `ios-compile`, its `if` reads the `changes` job's `ios` output, and it runs only `:composeApp:compileTestKotlinIosSimulatorArm64` (nothing that needs an Xcode project).
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes locally.
-- [ ] The workflow parses as YAML; actions pinned by SHA with a version comment.
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes locally.
+- [x] The workflow parses as YAML; actions pinned by SHA with a version comment.
 
 ## Task [06-kotlin-warnings-fail-the-build]
 

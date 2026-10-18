@@ -83,7 +83,9 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
   `main`). Android gate: `.github/workflows/android.yml` (`android-gate`: app tests,
   `checkTranslations`, `:androidApp:lintRelease`, debug and unsigned release build, the two
-  debug-only merged-manifest `grep`s of this file). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
+  debug-only merged-manifest `grep`s of this file). iOS compile gate: `ios-compile` in the same
+  workflow (macOS, `:composeApp:compileTestKotlinIosSimulatorArm64`, when shared app code or shared
+  build files change). Shared setup in `.github/actions/setup-jvm`; every action pinned by commit SHA.
   Rules in `deploy/README.md`.
 
 ## Git workflow
