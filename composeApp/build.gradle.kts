@@ -111,6 +111,9 @@ kotlin {
             implementation(libs.firebase.messaging)
             // The Firebase Installation ID that FCM addresses this install by.
             implementation(libs.firebase.installations)
+            // Crash reports of release builds (fatal crashes and ANRs only); debug builds stay
+            // silent through the debug manifest of :androidApp.
+            implementation(libs.firebase.crashlytics)
         }
 
         iosMain.dependencies {

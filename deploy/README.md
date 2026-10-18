@@ -26,8 +26,8 @@ curl http://localhost:8080/health   # OK
 ```
 
 The development passwords are `ServerConfig`'s defaults, so nothing else is needed. If the server
-stops at a Flyway checksum mismatch, the development database predates the current `V1` migration:
-reset it with `docker compose -f deploy/compose.dev.yaml down -v`.
+stops at a Flyway checksum mismatch, the development database was migrated by an earlier version of
+a migration (`server/src/main/resources/db/migration/`): reset it with `docker compose -f deploy/compose.dev.yaml down -v`.
 
 What the image is:
 
@@ -130,11 +130,19 @@ SELECT id, device_id, enabled, station_abbr, type, at_time, from_time, until_tim
   FROM alarms ORDER BY created_at;
 SELECT * FROM notification_log ORDER BY local_date DESC;
 SELECT * FROM scheduler_state;         -- the last minute the alarm scheduler finished
+SELECT id, email, consented_at, created_at FROM users ORDER BY created_at;   -- never the password_hash
+SELECT user_id, created_at, last_used_at FROM sessions ORDER BY last_used_at DESC;
+SELECT user_id, count(*) AS answers, max(date) AS latest
+  FROM diary_entries GROUP BY user_id;  -- counts only; the answers themselves are health data
 ```
 
+The account tables hold personal data — emails, and in `diary_entries` how a person felt on each
+day — so look only at what a task needs, and prefer counts to rows.
+
 What it cannot tell you: which phone a device is (only the token's SHA-256 is stored, and devices
-are anonymous), anything from the diary (it never leaves the phone), or whether a push arrived —
-for what was sent and FCM's answer, see `docker compose logs server`.
+are anonymous and not linked to accounts), a password or a session token (only Argon2id and SHA-256
+hashes are stored), or whether a push arrived — for what was sent and FCM's answer, see
+`docker compose logs server`.
 
 ## Running it on the VPS
 
@@ -215,11 +223,12 @@ and `docker-compose-v2` packages until it does.
 2. **Registry login** as `tim` (see "Pulling the image"): `ssh tim@api.polleninfo.ch`, then
    `docker login ghcr.io -u timstenzel --password-stdin`.
 3. **DNS** resolves on every name server (above).
-4. **Deploy** a tag CI published (below). The first start creates the database, runs `V1` and
-   obtains the certificate; then `https://api.polleninfo.ch/health` answers `OK`.
+4. **Deploy** a tag CI published (below). The first start creates the database, runs the Flyway
+   migrations (`V1__init.sql`, `V2__accounts.sql`, …) and obtains the certificate; then `https://api.polleninfo.ch/health` answers `OK`.
 
-**`V1__init.sql` is frozen from the first production start on.** Every schema change is a new
-migration; editing an applied one makes Flyway refuse to start.
+**Every migration production has run is frozen** — `V1__init.sql` from the first start on,
+`V2__accounts.sql` since the accounts went live. Every schema change is a new migration, applied
+automatically when the new server starts; editing an applied one makes Flyway refuse to start.
 
 ### Deploying and rolling back
 
@@ -255,7 +264,8 @@ ssh tim@api.polleninfo.ch 'cd /opt/polleninfo/deploy && docker compose exec -T -
 ```
 
 Restore into an empty database with `pg_restore -d polleninfo` (as the superuser, inside the
-container). The file holds the device table (token hashes and push addresses), so keep it private.
+container). The file holds the device table (token hashes and push addresses) and the accounts
+(emails, password hashes and every diary answer), so keep it private and encrypted at rest.
 
 To look into the database from your machine, open an SSH session into the container's `psql` —
 Postgres publishes no port, so there is nothing to forward a port to (see "Looking into the
@@ -274,9 +284,47 @@ whatever `ufw status` says. Only Infomaniak's firewall would still stand in the 
 
 ### Before a public Play release
 
-The app sends a device identifier and a push address to this server, so a public listing on Google
-Play needs a privacy-policy URL (for example a page on `polleninfo.ch`, which this stack does not
-serve). Internal and closed testing tracks do not.
+The app sends a device identifier and a push address to this server, and an account holds an email
+address and diary answers about how its owner felt — health information. A public listing on Google
+Play therefore needs a privacy-policy URL (for example a page on `polleninfo.ch`, which this stack does not
+serve) and a filled-in Data safety form; since the app creates accounts, Play also asks for a way to
+request deletion outside the app — the contact address in Settings serves for that. Internal and
+closed testing tracks need none of this.
+
+Release builds report crashes to Firebase Crashlytics, so with the first release that contains it:
+
+- **Play Console, Data safety:** declare *App info and performance → Crash logs* and
+  *Diagnostics* as collected, not shared (Google Firebase processes them on the app's behalf),
+  optional (the user can switch them off), purpose *Analytics* (app stability).
+- **Privacy policy:** mention Firebase Crashlytics — what a report holds (stack trace, device model,
+  Android and app version, the Firebase Installation ID), that it goes to Google Firebase, and that
+  it holds no location, station, account, email or diary data.
+
+### Crash reporting manual check
+
+Crashlytics is configured by Gradle, manifest and a platform class, so it is checked by hand before a release
+that touches it. The app has no test-crash button by design; the crash lives in a scratch commit
+that never leaves the machine.
+
+1. On a scratch branch, add a temporary crash, for example `error("Crashlytics check")` in a click
+   handler (e.g. the Settings version line), and a temporary ANR: `Thread.sleep(10_000)` on the main
+   thread in another handler (Android reports an ANR after a > 5 s block on input). Commit it.
+2. Build and install a release with network access, so the mapping is uploaded:
+   `./gradlew :androidApp:assembleRelease`. The build has no signing config, so sign
+   `androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk` with `apksigner` (any local key)
+   and `adb install` the result.
+3. Tap the crash handler, reopen the app (reports are sent on the next launch). Within a few minutes
+   the [Crashlytics console](https://console.firebase.google.com/) shows the crash for
+   `ch.stenzel.tim.polleninfo` with real class and method names, the app version, the device model
+   and the Android version. Repeat with the ANR handler, tap again while it blocks, choose *Close
+   app*, reopen: the ANR appears too.
+4. Opt-out: on a fresh install, Settings → Privacy shows "Send crash reports" on. Switch it off,
+   provoke the crash, reopen: nothing new appears. Force-stop and reopen the app: the switch is still
+   off. With it off, use Home, All stations, Diary, Alarms and Settings: all work as before. Switch it
+   on again, provoke the crash, reopen: it is reported again.
+5. Install a debug build of the same commit (`./gradlew :androidApp:assembleDebug`), leave the switch
+   on, provoke the crash, reopen: nothing new appears for `ch.stenzel.tim.polleninfo.debug`.
+6. Delete the scratch branch; nothing of it is pushed.
 
 ## Try the production stack locally
 

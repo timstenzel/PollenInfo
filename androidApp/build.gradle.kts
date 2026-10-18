@@ -1,3 +1,5 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+
 plugins {
     // AGP 9 compiles Kotlin itself; no separate Kotlin Android plugin.
     alias(libs.plugins.androidApplication)
@@ -5,6 +7,9 @@ plugins {
     // Reads androidApp/google-services.json (committed; it identifies the Firebase project and is
     // not a secret) into resources that firebase-messaging initialises from.
     alias(libs.plugins.googleServices)
+    // Uploads the R8 mapping of every release build to Firebase so Crashlytics shows readable stack
+    // traces. The library itself is a dependency of :composeApp.
+    alias(libs.plugins.firebaseCrashlytics)
 }
 
 android {
@@ -44,6 +49,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // On by default so no release ships with unreadable crashes. An offline or quick local
+            // release passes -Ppolleninfo.uploadCrashlyticsMapping=false and accepts that its
+            // crashes stay obfuscated.
+            configure<CrashlyticsExtension> {
+                mappingFileUploadEnabled = providers.gradleProperty("polleninfo.uploadCrashlyticsMapping")
+                    .map(String::toBoolean)
+                    .getOrElse(true)
+            }
         }
     }
 
@@ -59,8 +72,9 @@ dependencies {
     implementation(project(":theme"))
 
     // Used directly by MainActivity (setContent, AppCompatActivity) and PollenInfoApplication
-    // (startKoin with androidContext).
+    // (startKoin with androidContext, the process-lifetime scope of the crash-reporting sync).
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
     implementation(libs.koin.android)
+    implementation(libs.kotlinx.coroutines.android)
 }

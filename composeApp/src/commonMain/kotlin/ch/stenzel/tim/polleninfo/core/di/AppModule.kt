@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.core.di
 
+import ch.stenzel.tim.polleninfo.core.crashreporting.CrashReportingSync
 import ch.stenzel.tim.polleninfo.core.diary.data.local.DataStoreFeelingPromptPreferences
 import ch.stenzel.tim.polleninfo.core.diary.data.remote.DiaryApiService
 import ch.stenzel.tim.polleninfo.core.diary.data.repository.DiaryRepositoryImpl
@@ -14,10 +15,12 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.repository.StationMeasu
 import ch.stenzel.tim.polleninfo.core.measurement.domain.usecase.GetStationMeasurementUseCase
 import ch.stenzel.tim.polleninfo.core.network.API_BASE_URL
 import ch.stenzel.tim.polleninfo.core.network.createHttpClient
+import ch.stenzel.tim.polleninfo.core.preferences.CrashReportingPreferences
+import ch.stenzel.tim.polleninfo.core.preferences.DataStoreCrashReportingPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreDeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreNotificationPermissionPreferences
-import ch.stenzel.tim.polleninfo.core.preferences.DeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.DataStoreSelectedStationRepository
+import ch.stenzel.tim.polleninfo.core.preferences.DeviceRegistrationRepository
 import ch.stenzel.tim.polleninfo.core.preferences.NotificationPermissionPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.push.PushTokenUpdater
@@ -81,6 +84,9 @@ val dataModule = module {
     // The DataStore itself comes from platformModule; only the thin repository over it is common.
     single<SelectedStationRepository> { DataStoreSelectedStationRepository(get()) }
     single<NotificationPermissionPreferences> { DataStoreNotificationPermissionPreferences(get()) }
+    // Not a secret: the default DataStore, kept in backups. CrashReporter comes from platformModule.
+    single<CrashReportingPreferences> { DataStoreCrashReportingPreferences(get()) }
+    single { CrashReportingSync(get(), get()) }
     single<DeviceRegistrationRepository> { DataStoreDeviceRegistrationRepository(get(DEVICE_DATA_STORE)) }
     // The login, in a DataStore file of its own that backups leave out.
     single<SessionStorage> { DataStoreSessionStorage(get(SESSION_DATA_STORE)) }
@@ -117,8 +123,8 @@ val presentationModule = module {
     viewModel { params -> AccountViewModel(params.get(), get(), get()) }
     viewModel { AlarmsViewModel(get(), get(), get(), get()) }
     viewModel { params -> AlarmEditorViewModel(params.getOrNull(), get(), get(), get(), get()) }
-    // AppInfo comes from platformModule.
-    viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
+    // AppInfo and CrashReporter come from platformModule.
+    viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ChangeStationViewModel(get(), get(), get(), get()) }
 }
 

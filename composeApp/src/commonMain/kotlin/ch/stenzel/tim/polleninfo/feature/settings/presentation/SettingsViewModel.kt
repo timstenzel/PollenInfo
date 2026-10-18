@@ -3,8 +3,10 @@ package ch.stenzel.tim.polleninfo.feature.settings.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
+import ch.stenzel.tim.polleninfo.core.crashreporting.CrashReporter
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.language.LanguageRepository
+import ch.stenzel.tim.polleninfo.core.preferences.CrashReportingPreferences
 import ch.stenzel.tim.polleninfo.core.preferences.SelectedStationRepository
 import ch.stenzel.tim.polleninfo.core.result.Result
 import ch.stenzel.tim.polleninfo.core.session.domain.model.SignedOutException
@@ -12,10 +14,13 @@ import ch.stenzel.tim.polleninfo.core.session.domain.model.toSessionAppError
 import ch.stenzel.tim.polleninfo.core.session.domain.repository.SessionRepository
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepository
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -34,6 +39,11 @@ import kotlinx.coroutines.launch
  * The account is **observed** too, from the login stored on the phone — no request: logging in or
  * out anywhere in the app shows here at once. Logging out asks for confirmation first; deleting the
  * account asks for the password, and a wrong one keeps the dialog open with its error.
+ *
+ * The crash-report switch is **observed** from [CrashReportingPreferences] and only ever written
+ * there: `CrashReportingSync` hands every stored value to the platform, so this never calls
+ * [CrashReporter.setEnabled] — it asks the reporter only whether the platform reports at all. A
+ * choice that cannot be stored puts the switch back and sends [SettingsEvent.CrashReportsSaveFailed].
  */
 class SettingsViewModel(
     selectedStationRepository: SelectedStationRepository,
@@ -41,12 +51,21 @@ class SettingsViewModel(
     private val languageRepository: LanguageRepository,
     appInfo: AppInfo,
     private val sessionRepository: SessionRepository,
+    private val crashReportingPreferences: CrashReportingPreferences,
+    crashReporter: CrashReporter,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        SettingsUiState(language = languageRepository.current, version = appInfo.version),
+        SettingsUiState(
+            language = languageRepository.current,
+            version = appInfo.version,
+            crashReportsAvailable = crashReporter.isAvailable,
+        ),
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private val _events = Channel<SettingsEvent>(Channel.BUFFERED)
+    val events: Flow<SettingsEvent> = _events.receiveAsFlow()
 
     /** `null` until the list has arrived, and for good if it failed. */
     private val stations = MutableStateFlow<List<Station>?>(null)
@@ -71,6 +90,27 @@ class SettingsViewModel(
                         showLogoutDialog = it.showLogoutDialog && session != null,
                     ).let { state -> if (session == null) state.withDeleteDialogClosed() else state }
                 }
+            }
+        }
+        viewModelScope.launch {
+            crashReportingPreferences.enabled.collect { enabled ->
+                _uiState.update { it.copy(crashReportsEnabled = enabled) }
+            }
+        }
+    }
+
+    /**
+     * Shows the new position at once and stores it; the sync then applies it to the platform. If it
+     * cannot be stored, the switch goes back to where it was — the stored choice, which is still in
+     * force — and the screen says so once.
+     */
+    fun onCrashReportsToggled(enabled: Boolean) {
+        val previous = _uiState.value.crashReportsEnabled
+        _uiState.update { it.copy(crashReportsEnabled = enabled) }
+        viewModelScope.launch {
+            if (crashReportingPreferences.setEnabled(enabled) is Result.Failure) {
+                _uiState.update { it.copy(crashReportsEnabled = previous) }
+                _events.send(SettingsEvent.CrashReportsSaveFailed)
             }
         }
     }

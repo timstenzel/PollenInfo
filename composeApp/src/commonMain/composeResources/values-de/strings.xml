@@ -12,6 +12,10 @@
     <string name="settings_language_action">Sprache ändern</string>
     <string name="settings_language_system">Systemsprache</string>
     <string name="settings_language_restart_note">Die neue Sprache gilt ab dem nächsten Öffnen der App.</string>
+    <string name="settings_privacy_title">Datenschutz</string>
+    <string name="settings_crash_reports_label">Absturzberichte senden</string>
+    <string name="settings_crash_reports_description">Stürzt die App ab, geht ein technischer Bericht an Google Firebase, damit der Fehler behoben werden kann. Er enthält keine Standort-, Stations-, Konto- oder Tagebuchdaten.</string>
+    <string name="settings_crash_reports_save_failed">Deine Wahl konnte nicht gespeichert werden. Bitte versuche es noch einmal.</string>
     <string name="settings_section_impressum">Impressum</string>
     <string name="settings_developed_by">Entwickelt von %1$s</string>
     <string name="settings_email_action">E-Mail schreiben</string>
