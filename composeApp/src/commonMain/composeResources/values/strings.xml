@@ -22,6 +22,7 @@
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_crash_reports_label">Send crash reports</string>
     <string name="settings_crash_reports_description">If the app crashes, a technical report goes to Google Firebase so the developer can fix it. It contains no location, station, account or diary data.</string>
+    <string name="settings_crash_reports_save_failed">Could not save your choice. Please try again.</string>
     <string name="settings_section_impressum">Impressum</string>
     <!-- %1$s is the developer's name. -->
     <string name="settings_developed_by">Developed by %1$s</string>

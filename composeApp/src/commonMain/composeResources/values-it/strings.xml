@@ -15,6 +15,7 @@
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_crash_reports_label">Invia rapporti sugli arresti anomali</string>
     <string name="settings_crash_reports_description">Se l’app si arresta in modo anomalo, un rapporto tecnico viene inviato a Google Firebase affinché lo sviluppatore possa correggere l’errore. Non contiene posizione, stazione, dati dell’account o del diario.</string>
+    <string name="settings_crash_reports_save_failed">Non è stato possibile salvare la Sua scelta. Riprovi.</string>
     <string name="settings_section_impressum">Note legali</string>
     <string name="settings_developed_by">Sviluppato da %1$s</string>
     <string name="settings_email_action">Scrivere un’e-mail</string>

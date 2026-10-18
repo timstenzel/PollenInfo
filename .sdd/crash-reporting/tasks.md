@@ -94,25 +94,25 @@ languages and screen-reader access.
 
 ### Implementation steps
 
-- [ ] Add `sealed interface SettingsEvent` with `CrashReportsSaveFailed`, exposed from `SettingsViewModel` as a buffered `Channel` via `receiveAsFlow()`
-- [ ] In `onCrashReportsToggled`, on `Result.Failure` restore the previous `crashReportsEnabled` value and send `CrashReportsSaveFailed`
-- [ ] Give the `SettingsScreen` `Scaffold` a `SnackbarHost`, collect the events in a `LaunchedEffect` and show the translated message
-- [ ] Add `settings_crash_reports_save_failed` in all four languages
-- [ ] Make the next write of `FakeCrashReportingPreferences` failable and extend `SettingsViewModelTest`
-- [ ] Update the "UI state and events" rule in `CLAUDE.md`: a snackbar that concerns only the screen itself may be shown in-screen, without a lambda from `AppNavigation`
+- [x] Add `sealed interface SettingsEvent` with `CrashReportsSaveFailed`, exposed from `SettingsViewModel` as a buffered `Channel` via `receiveAsFlow()`
+- [x] In `onCrashReportsToggled`, on `Result.Failure` restore the previous `crashReportsEnabled` value and send `CrashReportsSaveFailed`
+- [x] Give the `SettingsScreen` `Scaffold` a `SnackbarHost`, collect the events in a `LaunchedEffect` and show the translated message
+- [x] Add `settings_crash_reports_save_failed` in all four languages
+- [x] Make the next write of `FakeCrashReportingPreferences` failable and extend `SettingsViewModelTest`
+- [x] Update the "UI state and events" rule in `CLAUDE.md`: a snackbar that concerns only the screen itself may be shown in-screen, without a lambda from `AppNavigation`
 
 ### Acceptance criteria
 
-- [ ] `SettingsViewModelTest`: a failed write restores the previous switch value and the preference still holds the old value
-- [ ] `SettingsViewModelTest`: a failed write sends `CrashReportsSaveFailed` exactly once; a successful write sends no event
-- [ ] Manual (Android): with a scratch change making `DataStoreCrashReportingPreferences.setEnabled` return `Result.Failure`, toggling shows the snackbar in the app language and the switch springs back; then revert the scratch change
-- [ ] Manual (Android): with TalkBack, the crash-report row is announced with its label and on/off state and can be toggled
-- [ ] Manual (Android): with the app language set to German, French and Italian in turn, the Privacy title, switch label, explanation and save-failure message appear in that language
+- [x] `SettingsViewModelTest`: a failed write restores the previous switch value and the preference still holds the old value
+- [x] `SettingsViewModelTest`: a failed write sends `CrashReportsSaveFailed` exactly once; a successful write sends no event
+- [x] Manual (Android): with a scratch change making `DataStoreCrashReportingPreferences.setEnabled` return `Result.Failure`, toggling shows the snackbar in the app language and the switch springs back; then revert the scratch change
+- [ ] ~~Manual (Android): with TalkBack, the crash-report row is announced with its label and on/off state and can be toggled~~ *(skipped: spoken TalkBack output cannot be heard or captured here. Partial evidence on the emulator: the accessibility tree has one clickable, checkable node for the whole row, holding the label and explanation, and its `checked` flag went true → false → (after force-stop) false → true when toggled)*
+- [x] Manual (Android): with the app language set to German, French and Italian in turn, the Privacy title, switch label, explanation and save-failure message appear in that language
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :composeApp:checkTranslations` passes
-- [ ] No new deprecation or compiler warning; the hard-coded-text grep finds no new hit
-- [ ] Test names are backtick sentences without commas; no mocking framework; `Result` imported explicitly from `core.result`
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :composeApp:checkTranslations` passes
+- [x] No new deprecation or compiler warning; the hard-coded-text grep finds no new hit
+- [x] Test names are backtick sentences without commas; no mocking framework; `Result` imported explicitly from `core.result`

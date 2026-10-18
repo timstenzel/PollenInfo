@@ -248,7 +248,9 @@ There is no `iosApp` Xcode project yet. Whoever creates it must add:
   on screen and holds the indicator at least `MIN_REFRESH_INDICATOR`.
 - **One-shot actions (navigation, snackbars) are events**, not booleans on state: a
   `Channel<XEvent>(Channel.BUFFERED)` exposed via `receiveAsFlow()`, collected in a `LaunchedEffect`
-  calling a lambda from `AppNavigation`. Anything the screen keeps showing (e.g. `saveError`) is state.
+  calling a lambda from `AppNavigation`. A snackbar that concerns only the screen itself (Alarms'
+  `ToggleFailed`, Settings' `CrashReportsSaveFailed`) is shown by the screen's own `SnackbarHost`,
+  without a lambda. Anything the screen keeps showing (e.g. `saveError`) is state.
 - Form rules belong in a pure, unit-tested state class (`AlarmFormState`, `AccountFormState`);
   field changes are ignored while saving, and a save sends the form as it was when tapped.
 
@@ -375,7 +377,8 @@ Details live in the ViewModels and their tests; these are the decisions that are
 - **Settings** observes the station, the session and the crash-report choice; the station name falls
   back to the stored one, never an error. The Privacy section (crash-report switch, whole row
   `toggleable` with `Role.Switch`) shows only when `CrashReporter.isAvailable`; the switch only writes
-  `CrashReportingPreferences`, never the reporter. The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
+  `CrashReportingPreferences`, never the reporter; a failed write puts the switch back and sends
+  `SettingsEvent.CrashReportsSaveFailed` (snackbar). The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
   per language — **do not rephrase** (French keeps "Source:" without the space). Links go through
   `LocalUriHandler`.
 

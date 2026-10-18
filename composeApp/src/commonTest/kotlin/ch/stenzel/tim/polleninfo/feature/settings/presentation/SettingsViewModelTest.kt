@@ -23,8 +23,11 @@ import ch.stenzel.tim.polleninfo.core.station.domain.repository.StationRepositor
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -577,6 +580,86 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         assertTrue(crashReporter.applied.isEmpty())
+    }
+
+    /** Collects every event the ViewModel sends for the rest of the test. */
+    private fun TestScope.collectEvents(viewModel: SettingsViewModel): List<SettingsEvent> {
+        val events = mutableListOf<SettingsEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.toList(events) }
+        return events
+    }
+
+    @Test
+    fun `a failed write puts the switch back and keeps the stored choice`() = runTest {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        crashReportingPreferences.failNextWrite()
+        viewModel.onCrashReportsToggled(false)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+        advanceUntilIdle()
+
+        assertEquals(listOf(false), crashReportingPreferences.writes)
+        assertTrue(crashReportingPreferences.stored)
+        assertTrue(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `a failed write of switching back on puts the switch back off`() = runTest {
+        crashReportingPreferences.setEnabled(false)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        crashReportingPreferences.failNextWrite()
+        viewModel.onCrashReportsToggled(true)
+        advanceUntilIdle()
+
+        assertFalse(crashReportingPreferences.stored)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+    }
+
+    @Test
+    fun `a failed write says so exactly once`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+
+        crashReportingPreferences.failNextWrite()
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+
+        assertEquals(listOf<SettingsEvent>(SettingsEvent.CrashReportsSaveFailed), events)
+    }
+
+    @Test
+    fun `a successful write sends no event`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+        viewModel.onCrashReportsToggled(true)
+        advanceUntilIdle()
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `the switch works again after a failed write`() = runTest {
+        val viewModel = viewModel()
+        val events = collectEvents(viewModel)
+        advanceUntilIdle()
+
+        crashReportingPreferences.failNextWrite()
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+        viewModel.onCrashReportsToggled(false)
+        advanceUntilIdle()
+
+        assertFalse(crashReportingPreferences.stored)
+        assertFalse(viewModel.uiState.value.crashReportsEnabled)
+        assertEquals(1, events.size)
     }
 }
 
