@@ -291,6 +291,41 @@ serve) and a filled-in Data safety form; since the app creates accounts, Play al
 request deletion outside the app — the contact address in Settings serves for that. Internal and
 closed testing tracks need none of this.
 
+Release builds report crashes to Firebase Crashlytics, so with the first release that contains it:
+
+- **Play Console, Data safety:** declare *App info and performance → Crash logs* and
+  *Diagnostics* as collected, not shared (Google Firebase processes them on the app's behalf),
+  optional (the user can switch them off), purpose *Analytics* (app stability).
+- **Privacy policy:** mention Firebase Crashlytics — what a report holds (stack trace, device model,
+  Android and app version, the Firebase Installation ID), that it goes to Google Firebase, and that
+  it holds no location, station, account, email or diary data.
+
+### Crash reporting manual check
+
+Crashlytics is configured by Gradle, manifest and a platform class, so it is checked by hand before a release
+that touches it. The app has no test-crash button by design; the crash lives in a scratch commit
+that never leaves the machine.
+
+1. On a scratch branch, add a temporary crash, for example `error("Crashlytics check")` in a click
+   handler (e.g. the Settings version line), and a temporary ANR: `Thread.sleep(10_000)` on the main
+   thread in another handler (Android reports an ANR after a > 5 s block on input). Commit it.
+2. Build and install a release with network access, so the mapping is uploaded:
+   `./gradlew :androidApp:assembleRelease`. The build has no signing config, so sign
+   `androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk` with `apksigner` (any local key)
+   and `adb install` the result.
+3. Tap the crash handler, reopen the app (reports are sent on the next launch). Within a few minutes
+   the [Crashlytics console](https://console.firebase.google.com/) shows the crash for
+   `ch.stenzel.tim.polleninfo` with real class and method names, the app version, the device model
+   and the Android version. Repeat with the ANR handler, tap again while it blocks, choose *Close
+   app*, reopen: the ANR appears too.
+4. Opt-out: on a fresh install, Settings → Privacy shows "Send crash reports" on. Switch it off,
+   provoke the crash, reopen: nothing new appears. Force-stop and reopen the app: the switch is still
+   off. With it off, use Home, All stations, Diary, Alarms and Settings: all work as before. Switch it
+   on again, provoke the crash, reopen: it is reported again.
+5. Install a debug build of the same commit (`./gradlew :androidApp:assembleDebug`), leave the switch
+   on, provoke the crash, reopen: nothing new appears for `ch.stenzel.tim.polleninfo.debug`.
+6. Delete the scratch branch; nothing of it is pushed.
+
 ## Try the production stack locally
 
 The same `compose.yaml`, with `compose.local.yaml` on top: Caddy serves `localhost` with a

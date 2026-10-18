@@ -8,11 +8,19 @@
   with ACCESS_LOCAL_NETWORK. It is a runtime permission the app never asks for: grant it once per
   fresh install with
   adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOCAL_NETWORK
+
+  Crashlytics collection is switched off here so crashes from development and testing never reach
+  the crash statistics; only release builds report. Check that only the debug manifest carries it:
+  grep -l 'firebase_crashlytics_collection_enabled' androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+    </application>
 
 </manifest>

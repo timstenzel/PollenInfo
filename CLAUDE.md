@@ -53,6 +53,7 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Dev database up / reset | `docker compose -f deploy/compose.dev.yaml up -d` / `… down -v` |
 | Backend on :8080 | `./gradlew :server:run` (push logged unless `FCM_CREDENTIALS`) |
 | Android debug / release | `./gradlew :androidApp:assembleDebug` / `:androidApp:assembleRelease` |
+| Release without network | `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` |
 | Server image | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` |
 
 - `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM.
@@ -64,6 +65,10 @@ call reports no JDK, export `JAVA_HOME` for that one call).
   `docker compose -f deploy/compose.dev.yaml exec postgres psql -U postgres -d polleninfo`.
 - **No new deprecation or compiler warning.** The only accepted ones come from plugins: AGP 9.4's
   `Configuration.setVisible` and KGP 2.4's `KotlinNativeBundleArtifactsTypes`.
+- A release build uploads its R8 mapping to Crashlytics (`uploadCrashlyticsMappingFileRelease`,
+  needs network). Gradle property `polleninfo.uploadCrashlyticsMapping` (default `true`) switches it
+  off for offline/quick builds — their crashes stay obfuscated. Never set it in the project's
+  `gradle.properties`.
 - `gradle-wrapper.jar` is committed (CI validates it); regenerate only with `./gradlew wrapper`.
 - CI: `.github/workflows/server.yml`, shared setup in `.github/actions/setup-jvm`; every action
   pinned by commit SHA. Rules in `deploy/README.md`.
@@ -163,7 +168,8 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `diary` | `Feeling` (with `level`), `DiaryRepository` (`record`, `today`, `entries`), `swissToday(clock)`, `FeelingPromptPreferences` |
 | `session` | `Session`, `SessionRepository` (register/login/logout/deleteAccount/clear), `AccountApiService`, `SessionStorage`, `toSessionAppError()` |
 | `push` | `PushTokenProvider`, `PushTokenUpdater`, `parseAlarmPayload`, `notificationText`; Android channels + messaging service in `androidMain` |
-| `preferences` | `SelectedStationRepository`, `NotificationPermissionPreferences`, `DeviceRegistrationRepository` |
+| `preferences` | `SelectedStationRepository`, `NotificationPermissionPreferences`, `CrashReportingPreferences`, `DeviceRegistrationRepository` |
+| `crashreporting` | `CrashReporter` (platform-bound: `FirebaseCrashReporter` / iOS `NoCrashReporter`), `CrashReportingSync` |
 | `stationpicker` | `StationPicker` state holder + `StationPickerContent`, `FindNearestStationUseCase` |
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
@@ -242,7 +248,9 @@ There is no `iosApp` Xcode project yet. Whoever creates it must add:
   on screen and holds the indicator at least `MIN_REFRESH_INDICATOR`.
 - **One-shot actions (navigation, snackbars) are events**, not booleans on state: a
   `Channel<XEvent>(Channel.BUFFERED)` exposed via `receiveAsFlow()`, collected in a `LaunchedEffect`
-  calling a lambda from `AppNavigation`. Anything the screen keeps showing (e.g. `saveError`) is state.
+  calling a lambda from `AppNavigation`. A snackbar that concerns only the screen itself (Alarms'
+  `ToggleFailed`, Settings' `CrashReportsSaveFailed`) is shown by the screen's own `SnackbarHost`,
+  without a lambda. Anything the screen keeps showing (e.g. `saveError`) is state.
 - Form rules belong in a pure, unit-tested state class (`AlarmFormState`, `AccountFormState`);
   field changes are ignored while saving, and a save sends the form as it was when tapped.
 
@@ -261,6 +269,8 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
   `SESSION_DATA_STORE`), both provided by `platformModule`. Exclusion rules:
   `androidApp/src/main/res/xml/data_extraction_rules.xml` and `backup_rules.xml` — they name exactly
   these two files.
+- `CrashReportingPreferences.enabled` (key `crash_reports_enabled`, `true` when unset) is an ordinary
+  preference in the default DataStore — not a secret, kept in backups.
 - `FeelingPromptPreferences` (Home prompt dismissal) stays on the device under the legacy key
   `diary_prompt_dismissed_on`; the orphaned `diary_entries` key is intentionally unread.
 - **The app language is not stored here** — it belongs to the platform (see Localization).
@@ -275,7 +285,7 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
   `toRoute` + `parametersOf`.
 - Platform-built bindings go in `core/di/PlatformModule.kt` (`expect val platformModule`, first in
   `appModules`): the DataStores, `CoarseLocationProvider`, `PushTokenProvider`, `AppInfo`,
-  `LanguageRepository`, `CredentialStore`. These are plain platform classes, not `expect`/`actual`
+  `LanguageRepository`, `CredentialStore`, `CrashReporter`. These are plain platform classes, not `expect`/`actual`
   (only the implementation differs). iOS uses `Dispatchers.Default` (`Dispatchers.IO` is internal on
   Native).
 - Things that need an activity-scoped launcher are **`@Composable expect fun`**:
@@ -364,15 +374,18 @@ Details live in the ViewModels and their tests; these are the decisions that are
   answers**. A `401` on an authenticated call → `sessions.clear()` (only if the refused session is
   still stored). `AndroidCredentialStore` follows the current `ComponentActivity` via
   `ActivityLifecycleCallbacks` (weakly) and logs exceptions by type only, never with credentials.
-- **Settings** observes the station and the session; the station name falls back to the stored one,
-  never an error. The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
+- **Settings** observes the station, the session and the crash-report choice; the station name falls
+  back to the stored one, never an error. The Privacy section (crash-report switch, whole row
+  `toggleable` with `Role.Switch`) shows only when `CrashReporter.isAvailable`; the switch only writes
+  `CrashReportingPreferences`, never the reporter; a failed write puts the switch back and sends
+  `SettingsEvent.CrashReportsSaveFailed` (snackbar). The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
   per language — **do not rephrase** (French keeps "Source:" without the space). Links go through
   `LocalUriHandler`.
 
 ### Firebase and push (Android)
 
-- FCM is the main Play-services dependency (the other: Credential Manager's
-  `credentials-play-services-auth`). Location stays Play-free.
+- FCM is the main Play-services dependency (the others: Firebase Crashlytics and Credential
+  Manager's `credentials-play-services-auth`). Location stays Play-free.
 - `androidApp/google-services.json` is committed (not a secret) and holds clients for
   `ch.stenzel.tim.polleninfo` and `.debug`; re-download after adding an app id.
 - **The push address is the Firebase Installation ID**, not a registration token
@@ -390,6 +403,31 @@ Details live in the ViewModels and their tests; these are the decisions that are
 - Testing by hand: the Firebase console can't send data-only messages — run `:server:run` with
   `FCM_CREDENTIALS` and an alarm due in a minute, or POST
   `{"message":{"fid":…,"android":{"priority":"HIGH"},"data":{…}}}` to FCM HTTP v1.
+
+### Crash reporting (Android)
+
+- **Firebase Crashlytics, release builds only**, same Firebase project and `google-services.json`;
+  no new secret. Library in `:composeApp`'s `androidMain` (BoM version), Gradle plugin in
+  `:androidApp`. iOS has none yet (needs the native SDK, dSYM upload and a Kotlin bridge).
+- **Fatal crashes and ANRs only.** No `recordException`, no custom keys, no logs, no user id —
+  nothing that could carry a location, station, account, email, diary or token. Check:
+  `grep -rnE 'setCustomKey|setUserId|recordException|Crashlytics.*\.log\(' composeApp/src androidApp/src`
+  finds nothing. Crashlytics identifies the install by the FID (the same one push uses).
+- **Debug builds never report:** `firebase_crashlytics_collection_enabled=false` in
+  `androidApp/src/debug/AndroidManifest.xml`. Verify with `grep -l 'firebase_crashlytics_collection_enabled'
+  androidApp/build/intermediates/merged_manifest/*/process*MainManifest/AndroidManifest.xml` — only debug matches.
+- **Readable traces:** the plugin uploads the R8 mapping of every release (see Commands for the
+  `polleninfo.uploadCrashlyticsMapping` switch); `proguard-rules.pro` keeps `SourceFile,LineNumberTable`
+  and exception class names (the library's consumer rules do not).
+- **Opt-out:** the user's switch (`CrashReportingPreferences`, on by default) is the **single source
+  of truth**. `CrashReportingSync` (`core/crashreporting`, tested) applies every distinct stored value
+  to `CrashReporter.setEnabled` — nothing else calls it — and swallows read failures (Firebase keeps
+  its persisted value). `PollenInfoApplication.onCreate` starts it after Koin on a process-lifetime
+  scope, so FCM-started processes honour it too. `FirebaseCrashReporter(collectionAllowed)` gets
+  `!FLAG_DEBUGGABLE` from `platformModule` and then always disables: a runtime call overrides the
+  debug manifest flag, so it must never pass `true` in a debug build.
+- No NDK plugin (no native code of our own). Manual end-to-end check and the release disclosures
+  (Data safety, privacy policy): `deploy/README.md`, "Crash reporting manual check".
 
 ### Localization
 

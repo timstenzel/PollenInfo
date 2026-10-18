@@ -30,6 +30,8 @@ flyway = "13.10.0"
 testcontainers = "2.0.5"
 firebaseBom = "35.0.0"
 googleServices = "4.5.0"
+# The Crashlytics Gradle plugin: uploads the R8 mapping of every release build.
+firebaseCrashlyticsPlugin = "3.0.8"
 googleAuth = "1.54.0"
 bouncycastle = "1.86"
 # Built for slf4j 2.0, which is what Ktor brings.
@@ -118,6 +120,8 @@ bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref 
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-installations = { module = "com.google.firebase:firebase-installations" }
+# Firebase Crashlytics (android only) — fatal crashes and ANRs of release builds
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 
 # Test
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -134,3 +138,4 @@ kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", versio
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }

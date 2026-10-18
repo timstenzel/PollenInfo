@@ -2,12 +2,15 @@ package ch.stenzel.tim.polleninfo.core.di
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import ch.stenzel.tim.polleninfo.core.appinfo.AndroidAppInfo
 import ch.stenzel.tim.polleninfo.core.appinfo.AppInfo
+import ch.stenzel.tim.polleninfo.core.crashreporting.CrashReporter
+import ch.stenzel.tim.polleninfo.core.crashreporting.FirebaseCrashReporter
 import ch.stenzel.tim.polleninfo.core.credentials.AndroidCredentialStore
 import ch.stenzel.tim.polleninfo.core.credentials.CredentialStore
 import ch.stenzel.tim.polleninfo.core.language.AndroidLanguageRepository
@@ -30,6 +33,12 @@ actual val platformModule: Module = module {
     single<PushTokenProvider> { FirebasePushTokenProvider() }
     single<AppInfo> { AndroidAppInfo(get()) }
     single<LanguageRepository> { AndroidLanguageRepository() }
+    // A debug build never reports, whatever the switch says. `:composeApp` cannot see `:androidApp`'s
+    // BuildConfig, so the build type is read from the installed app's debuggable flag.
+    single<CrashReporter> {
+        val debuggable = get<Context>().applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        FirebaseCrashReporter(collectionAllowed = !debuggable)
+    }
     // At start, so it follows the activity from the first one on (see AndroidCredentialStore).
     single<CredentialStore>(createdAtStart = true) { AndroidCredentialStore(get<Context>() as Application) }
 }

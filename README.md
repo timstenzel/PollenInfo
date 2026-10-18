@@ -100,7 +100,7 @@ what the server computed.
 
 | Module | Type | Contains |
 | --- | --- | --- |
-| [`androidApp`](androidApp) | Android application | The APK: `MainActivity`, the manifest, icons, build types and the backend address per build, Firebase config, R8 rules |
+| [`androidApp`](androidApp) | Android application | The APK: `MainActivity`, the manifest, icons, build types and the backend address per build, Firebase config, Crashlytics mapping upload, R8 rules |
 | [`composeApp`](composeApp) | KMP library (Android, iOS) | All app code: UI, ViewModels, repositories, REST client, push service, platform actuals, all app tests |
 | [`theme`](theme) | KMP library (Android, iOS) | Material 3 colours and typography, plus the severity, species and map palettes |
 | [`server`](server) | Kotlin/JVM (Ktor + Netty) | REST API, station / species / threshold domain, MeteoSwiss fetching, alarm scheduler, accounts and diary, PostgreSQL store |
@@ -159,7 +159,7 @@ The full contract, with every status code, is in [`CLAUDE.md`](CLAUDE.md#rest-ap
 | Language | Kotlin 2.4 |
 | App UI | Compose Multiplatform 1.12, Material 3 |
 | App plumbing | Ktor Client, Koin, kotlinx.serialization, kotlinx-datetime, DataStore, Navigation Compose |
-| Android | AGP 9.4, minSdk 26, targetSdk 37, Firebase Cloud Messaging, Credential Manager |
+| Android | AGP 9.4, minSdk 26, targetSdk 37, Firebase Cloud Messaging, Firebase Crashlytics (release builds only), Credential Manager |
 | Server | Ktor 3.6 on Netty, Exposed, HikariCP, Flyway, Bouncy Castle (Argon2id), Logback |
 | Database | PostgreSQL 18 |
 | Infrastructure | Docker Compose, Caddy, GitHub Actions, GHCR, Trivy, Dependabot |
@@ -198,6 +198,12 @@ sent. Reset the database with `docker compose -f deploy/compose.dev.yaml down -v
 A debug build talks to `http://10.0.2.2:8080` — the emulator's alias for your machine. To point it
 elsewhere, pass `-Ppolleninfo.apiBaseUrl=https://api.polleninfo.ch` (or set it in
 `~/.gradle/gradle.properties`). A release build always uses `https://api.polleninfo.ch`.
+
+A release build reports fatal crashes and ANRs to Firebase Crashlytics (debug builds never do) and
+uploads its R8 mapping so the stack traces are readable. That upload needs network access; for an
+offline or quick local release pass `-Ppolleninfo.uploadCrashlyticsMapping=false` and accept that
+its crashes stay obfuscated. The manual end-to-end check is in
+[`deploy/README.md`](deploy/README.md#crash-reporting-manual-check).
 
 On an **Android 17 (API 37)** emulator, grant local-network access after each fresh install, or
 every request times out:
