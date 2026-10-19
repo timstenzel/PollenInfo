@@ -102,7 +102,7 @@ what the server computed.
 | --- | --- | --- |
 | [`androidApp`](androidApp) | Android application | The APK: `MainActivity`, the manifest, icons, build types and the backend address per build, Firebase config, Crashlytics mapping upload, R8 rules |
 | [`composeApp`](composeApp) | KMP library (Android, iOS) | All app code: UI, ViewModels, repositories, REST client, push service, platform actuals, all app tests |
-| [`theme`](theme) | KMP library (Android, iOS) | Material 3 colours and typography, plus the severity, species and map palettes |
+| [`theme`](theme) | KMP library (Android, iOS) | The Meadow theme: colour schemes, extended colours, bundled fonts and type scale, shapes, plus the severity, species and map palettes |
 | [`server`](server) | Kotlin/JVM (Ktor + Netty) | REST API, station / species / threshold domain, MeteoSwiss fetching, alarm scheduler, accounts and diary, PostgreSQL store |
 
 ### Inside the app
@@ -157,7 +157,7 @@ The full contract, with every status code, is in [`CLAUDE.md`](CLAUDE.md#rest-ap
 | Area | Choice |
 | --- | --- |
 | Language | Kotlin 2.4 |
-| App UI | Compose Multiplatform 1.12, Material 3 |
+| App UI | Compose Multiplatform 1.12, Material 3 with the own "Meadow" theme (no dynamic colour); bundled fonts Fraunces and Plus Jakarta Sans (SIL Open Font License) |
 | App plumbing | Ktor Client, Koin, kotlinx.serialization, kotlinx-datetime, DataStore, Navigation Compose |
 | Android | AGP 9.4, minSdk 26, targetSdk 37, Firebase Cloud Messaging, Firebase Crashlytics (release builds only), Credential Manager |
 | Server | Ktor 3.6 on Netty, Exposed, HikariCP, Flyway, Bouncy Castle (Argon2id), Logback |

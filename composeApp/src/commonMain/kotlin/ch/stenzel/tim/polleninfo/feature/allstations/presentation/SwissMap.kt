@@ -37,8 +37,6 @@ import ch.stenzel.tim.polleninfo.feature.allstations.map.nearestStation
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.all_stations_map_description
 import ch.stenzel.tim.polleninfo.theme.mapWaterDark
-import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeDark
-import ch.stenzel.tim.polleninfo.theme.mapWaterEdgeLight
 import ch.stenzel.tim.polleninfo.theme.mapWaterLight
 import org.jetbrains.compose.resources.pluralStringResource
 
@@ -74,7 +72,6 @@ fun SwissMap(
     // follow the scheme the dots do.
     val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val lakeFill = if (darkTheme) mapWaterDark else mapWaterLight
-    val lakeStroke = if (darkTheme) mapWaterEdgeDark else mapWaterEdgeLight
     val positions = stations.associate { it.station.abbr to it.station.position }
     val currentOnStationClick by rememberUpdatedState(onStationClick)
     val description = pluralStringResource(Res.plurals.all_stations_map_description, stations.size, stations.size)
@@ -103,7 +100,6 @@ fun SwissMap(
                 .drawWithCache {
                     val border = ringPath(SWISS_BORDER, size)
                     val lakes = SWISS_LAKES.map { ringPath(it.outline, size) }
-                    val lakeStrokeStyle = Stroke(width = LAKE_STROKE_WIDTH.toPx(), join = StrokeJoin.Round)
                     val borderStrokeStyle = Stroke(width = BORDER_STROKE_WIDTH.toPx(), join = StrokeJoin.Round)
                     val dotRadius = DOT_RADIUS.toPx()
                     val hollowStroke = Stroke(width = HOLLOW_DOT_STROKE_WIDTH.toPx())
@@ -111,11 +107,8 @@ fun SwissMap(
                     val ringRadius = (DOT_RADIUS + RING_GAP).toPx() + ringStroke.width / 2
                     onDrawBehind {
                         drawPath(border, borderFill)
-                        // Landmarks only, beneath the border line and the dots.
-                        lakes.forEach { lake ->
-                            drawPath(lake, lakeFill)
-                            drawPath(lake, lakeStroke, style = lakeStrokeStyle)
-                        }
+                        // Landmarks only, a flat fill beneath the border line and the dots.
+                        lakes.forEach { lake -> drawPath(lake, lakeFill) }
                         drawPath(border, borderStroke, style = borderStrokeStyle)
                         dots.forEach { dot ->
                             val p = SwissMapProjection.project(dot.position, size.width, size.height)
@@ -184,4 +177,3 @@ private val RING_STROKE_WIDTH = 2.dp
 private val RING_GAP = 3.dp
 private val BORDER_STROKE_WIDTH = 1.dp
 private const val BORDER_FILL_ALPHA = 0.5f
-private val LAKE_STROKE_WIDTH = 0.75.dp

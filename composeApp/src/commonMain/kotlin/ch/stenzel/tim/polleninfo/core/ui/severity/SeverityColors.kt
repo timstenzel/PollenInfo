@@ -35,7 +35,7 @@ fun severityColor(severity: PollenSeverity, darkTheme: Boolean): Color = when (s
  * [severityColor] for the scheme actually in effect.
  *
  * Dark is read off the applied surface rather than `isSystemInDarkTheme()`, so it follows whatever
- * `PollenInfoTheme` was given — including a `darkTheme` override and Android's dynamic schemes.
+ * `PollenInfoTheme` was given — including a `darkTheme` override.
  */
 @Composable
 fun PollenSeverity.color(): Color =

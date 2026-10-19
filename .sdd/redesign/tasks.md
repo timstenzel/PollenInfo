@@ -49,31 +49,31 @@ check guards all palette pairings from now on.
 
 ### Implementation steps
 
-- [ ] Confirm the existing `feature/redesign` branch with the maintainer; commit the specification (`.sdd/redesign/`) as the first commit and push
-- [ ] Replace the light and dark `ColorScheme` values with the Meadow mapping from the annex, each value with its contrast noted beside it
-- [ ] Add the extended Meadow tokens (data class + composition local provided by `PollenInfoTheme`) for wash, glass, accent/onAccent, warningContainer/onWarningContainer and map land
-- [ ] Remove dynamic colour from the Android theme so both platforms use the Meadow schemes
-- [ ] Change `severityModerateLight` to `#A07400`, update its recorded ratio, and update `SeverityColorsTest` for this value only
-- [ ] Replace the map water fill with the Meadow lake colour and remove the lake edge colour and its drawing
-- [ ] Add the font files and their OFL licence texts as Compose resources in `:theme`; build the typography from them with the annex's type scale; add the shape scale
-- [ ] Add the pure WCAG contrast function and the palette contrast test with every pairing listed in the annex's testing decisions
-- [ ] Update CLAUDE.md "Colours and bars" (palettes, extended tokens, no dynamic colour, flat lakes, contrast test replaces the manual validator) and the README tech stack (fonts)
+- [x] Confirm the existing `feature/redesign` branch with the maintainer; commit the specification (`.sdd/redesign/`) as the first commit and push
+- [x] Replace the light and dark `ColorScheme` values with the Meadow mapping from the annex, each value with its contrast noted beside it
+- [x] Add the extended Meadow tokens (data class + composition local provided by `PollenInfoTheme`) for wash, glass, accent/onAccent, warningContainer/onWarningContainer and map land
+- [x] Remove dynamic colour from the Android theme so both platforms use the Meadow schemes
+- [x] Change `severityModerateLight` to `#A07400`, update its recorded ratio, and update `SeverityColorsTest` for this value only
+- [x] Replace the map water fill with the Meadow lake colour and remove the lake edge colour and its drawing
+- [x] Add the font files and their OFL licence texts as Compose resources in `:theme`; build the typography from them with the annex's type scale; add the shape scale
+- [x] Add the pure WCAG contrast function and the palette contrast test with every pairing listed in the annex's testing decisions
+- [x] Update CLAUDE.md "Colours and bars" (palettes, extended tokens, no dynamic colour, flat lakes, contrast test replaces the manual validator) and the README tech stack (fonts)
 
 ### Acceptance criteria
 
-- [ ] Automated test: every severity colour reaches ≥ 3:1 against surface, raised, sunken, background, wash and map land, in both schemes
-- [ ] Automated test: every species colour reaches ≥ 3.5:1 against the chart card surface, and primary/secondary text, on-primary, on-accent and on-warning pairs reach ≥ 4.5:1, in both schemes
-- [ ] Automated test: the contrast function returns 21 for black on white and 1 for identical colours
-- [ ] Runtime (Android 12+ emulator with a non-green wallpaper): Home shows the Meadow forest green and cream background in light mode and the Meadow dark colours in dark mode, never wallpaper colours
-- [ ] Runtime: body text on Home, Settings and the alarm editor renders in Plus Jakarta Sans; the All stations map shows lakes as a flat fill without an edge line
-- [ ] Repository: an OFL licence text sits beside each of the two font families' files
+- [x] Automated test: every severity colour reaches ≥ 3:1 against surface, raised, sunken, background, wash and map land, in both schemes
+- [x] Automated test: every species colour reaches ≥ 3.5:1 against the chart card surface, and primary/secondary text, on-primary, on-accent and on-warning pairs reach ≥ 4.5:1, in both schemes
+- [x] Automated test: the contrast function returns 21 for black on white and 1 for identical colours
+- [x] Runtime (Android 12+ emulator with a non-green wallpaper): Home shows the Meadow forest green and cream background in light mode and the Meadow dark colours in dark mode, never wallpaper colours
+- [x] Runtime: body text on Home, Settings and the alarm editor renders in Plus Jakarta Sans; the All stations map shows lakes as a flat fill without an edge line
+- [x] Repository: an OFL licence text sits beside each of the two font families' files
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (all existing tests unchanged except `SeverityColorsTest`'s Moderate light value)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` passes
-- [ ] New test names are backtick sentences without commas
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (all existing tests unchanged except `SeverityColorsTest`'s Moderate light value)
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` passes
+- [x] New test names are backtick sentences without commas
 
 ## Task [02-glass-tab-bar-and-tab-screen-frame]
 

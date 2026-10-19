@@ -163,11 +163,29 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
 
 ### Colours and bars
 
+- **Theme "Meadow"** (`:theme`, common code, the same on Android and iOS): `PollenInfoTheme` applies
+  `MeadowLightColorScheme` / `MeadowDarkColorScheme` (`Color.kt`, Figma token named beside each
+  value) following the system light/dark setting — **no dynamic (wallpaper) colour**. Card =
+  `surfaceContainerLowest` ("raised"), track/skeleton/segment background = `surfaceContainerHighest`
+  ("sunken"); Material's `outline` is a derived 3:1 component edge, Figma's hairline is
+  `outlineVariant`. Colours Material has no role for are `MeadowColors` (`wash`, `glass`, `accent` +
+  `onAccent` pollen gold, `warningContainer` + `onWarningContainer`, `mapLand`), read with
+  `MaterialTheme.meadowColors`. Shapes `PollenInfoShapes` (12/20/28/36 dp; pills `CircleShape`).
+- **Fonts** are bundled Compose resources of `:theme` (`composeResources/font/`, `Res` in
+  `ch.stenzel.tim.polleninfo.theme.resources`): Fraunces SemiBold (72 pt) for `display*`/`headline*`,
+  Plus Jakarta Sans (Regular/Medium/SemiBold/Bold) for the rest; `pollenInfoTypography()` holds the
+  scale. `labelSmall` is the overline — the caller upper-cases the text. The OFL licence texts sit
+  beside them (`*_ofl.txt`; the generator also gives them `Res.font` accessors — not fonts, never use).
 - Palettes outside Material live in `:theme`: `SeverityPalette.kt`, `SpeciesPalette.kt` (Diary
-  lines), `MapPalette.kt` (lakes). Each colour has an **explicit light and dark value** with its
-  WCAG contrast against `surfaceLight`/`surfaceDark` recorded beside it (severity ≥ 3:1, species ≥
-  3.5:1). Species hues stay in cyan→magenta so no line reads as a severity; **re-run a palette
-  validator on any change**.
+  lines), `MapPalette.kt` (lakes: a **flat fill**, no edge line). Each colour has an **explicit light
+  and dark value** with its WCAG contrast recorded beside it. Species hues stay in cyan→magenta so no
+  line reads as a severity (re-check the colour-vision distances in `SpeciesPalette.kt` if one changes).
+- **`PaletteContrastTest`** (`commonTest`, `core/ui/palette`, pure `contrastRatio`) is the palette
+  check, replacing any manual validator: every severity colour ≥ 3:1 on surface, raised, sunken,
+  background, wash and map land; every species colour ≥ 3.5:1 on the diary chart card, which
+  **must stay `surface`** (on raised, dark Ash is 3.11:1); body text (`onSurface`,
+  `onSurfaceVariant`) and on-primary/on-accent/on-warning ≥ 4.5:1 — both schemes. **Add every new
+  foreground/background pairing to it.**
 - `:theme` never sees `PollenSeverity`; the mapping is `core/ui/severity/SeverityColors.kt`, and it
   picks light/dark by **luminance of `colorScheme.surface`**, not `isSystemInDarkTheme()` (same rule
   for species and lake colours).

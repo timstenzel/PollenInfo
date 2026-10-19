@@ -13,8 +13,10 @@ import androidx.compose.ui.graphics.Color
 // 15.9). Re-run a palette validator on any change rather than nudging one value by eye.
 //
 // Each colour has an explicit light and dark value, as in SeverityPalette, and the ratio beside it
-// is its WCAG 2.1 contrast against `surfaceLight` (0xFFFCFAED) or `surfaceDark` (0xFF13140D). All
-// clear 3:1 for non-text graphics (SC 1.4.11).
+// is its WCAG 2.1 contrast against `surfaceLight` (0xFFFBFAF3) or `surfaceDark` (0xFF16211A), the
+// diary chart card's background. All clear the 3.5:1 the lines need (`PaletteContrastTest`). The
+// chart card must stay on `surface`: on the lighter dark `surfaceContainerLowest` (raised, 0xFF1F2C23)
+// Ash-dark falls to 3.11:1.
 //
 // Known limit: Oak's light teal is the nearest any value comes to a severity colour — ΔE 9.4 from
 // severityLowLight. Kept on purpose: severity colours are not drawn in the diary chart, and every
@@ -24,19 +26,19 @@ import androidx.compose.ui.graphics.Color
 // (`core/ui/species/SpeciesColors.kt`).
 
 // Light
-val speciesAlderLight = Color(0xFF1F6FD1) // 4.71:1
+val speciesAlderLight = Color(0xFF1F6FD1) // 4.72:1
 val speciesBirchLight = Color(0xFFC2338A) // 4.85:1
-val speciesHazelLight = Color(0xFF6A3FC1) // 6.48:1
+val speciesHazelLight = Color(0xFF6A3FC1) // 6.49:1
 val speciesBeechLight = Color(0xFF0090A8) // 3.61:1
-val speciesAshLight = Color(0xFF2F4BA8) // 7.44:1
-val speciesOakLight = Color(0xFF00897B) // 4.12:1
-val speciesGrassesLight = Color(0xFFB565C9) // 3.53:1
+val speciesAshLight = Color(0xFF2F4BA8) // 7.45:1
+val speciesOakLight = Color(0xFF00897B) // 4.13:1
+val speciesGrassesLight = Color(0xFFB565C9) // 3.54:1
 
 // Dark
-val speciesAlderDark = Color(0xFF4C8DF0) // 5.62:1
-val speciesBirchDark = Color(0xFFE05AA8) // 5.47:1
-val speciesHazelDark = Color(0xFF9A73F0) // 5.37:1
-val speciesBeechDark = Color(0xFF1495B0) // 5.25:1
-val speciesAshDark = Color(0xFF6567D8) // 3.96:1
-val speciesOakDark = Color(0xFF1AA595) // 6.05:1
-val speciesGrassesDark = Color(0xFFB86FCC) // 5.46:1
+val speciesAlderDark = Color(0xFF4C8DF0) // 5.03:1
+val speciesBirchDark = Color(0xFFE05AA8) // 4.89:1
+val speciesHazelDark = Color(0xFF9A73F0) // 4.8:1
+val speciesBeechDark = Color(0xFF1495B0) // 4.7:1
+val speciesAshDark = Color(0xFF6567D8) // 3.54:1
+val speciesOakDark = Color(0xFF1AA595) // 5.42:1
+val speciesGrassesDark = Color(0xFFB86FCC) // 4.88:1
