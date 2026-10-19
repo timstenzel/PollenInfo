@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,9 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,7 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
@@ -54,6 +56,9 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
 import ch.stenzel.tim.polleninfo.core.ui.format.resolve
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
@@ -68,6 +73,7 @@ import ch.stenzel.tim.polleninfo.resources.all_stations_detail_loading
 import ch.stenzel.tim.polleninfo.resources.all_stations_detail_unavailable
 import ch.stenzel.tim.polleninfo.resources.all_stations_expanded
 import ch.stenzel.tim.polleninfo.resources.all_stations_load_failed
+import ch.stenzel.tim.polleninfo.resources.all_stations_overline
 import ch.stenzel.tim.polleninfo.resources.all_stations_row_loading
 import ch.stenzel.tim.polleninfo.resources.all_stations_row_no_reading
 import ch.stenzel.tim.polleninfo.resources.all_stations_stale
@@ -77,6 +83,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -129,7 +136,8 @@ private suspend fun LazyListState.revealExpandedItem(index: Int) {
         return
     }
     val top = item.offset - layoutInfo.viewportStartOffset
-    val bottom = item.offset + item.size - layoutInfo.viewportEndOffset
+    // The list extends behind the glass tab bar; only what is above its end padding counts as visible.
+    val bottom = item.offset + item.size - (layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding)
     val distance = when {
         top < 0 -> top
         bottom > 0 -> minOf(bottom, top)
@@ -138,7 +146,6 @@ private suspend fun LazyListState.revealExpandedItem(index: Int) {
     animateScrollBy(distance.toFloat())
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AllStationsContent(
     uiState: AllStationsUiState,
@@ -147,25 +154,35 @@ private fun AllStationsContent(
     onRetry: () -> Unit,
     onStationClick: (String) -> Unit,
 ) {
-    Scaffold(
-        // The tab's own name, so what is announced and what is shown cannot disagree.
-        topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_all_stations)) }) },
-    ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
+    TabScreenFrame { contentPadding ->
+        val header = @Composable {
+            ScreenHeader(
+                // The count is only known once the station list is; until then the line stays empty.
+                overline = (uiState as? AllStationsUiState.Content)?.stations?.size?.let { count ->
+                    pluralStringResource(Res.plurals.all_stations_overline, count, count)
+                },
+                // The tab's own name, so what is announced and what is shown cannot disagree.
+                title = stringResource(Res.string.nav_all_stations),
+            )
+        }
         when (uiState) {
             // Only until the station list is known; readings never hold the screen up.
-            is AllStationsUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
+            is AllStationsUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
 
-            is AllStationsUiState.Content -> ContentView(uiState, listState, onRefresh, onStationClick, modifier)
+            is AllStationsUiState.Content -> ContentView(
+                content = uiState,
+                listState = listState,
+                contentPadding = contentPadding,
+                header = header,
+                onRefresh = onRefresh,
+                onStationClick = onStationClick,
+            )
 
-            is AllStationsUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
+            is AllStationsUiState.Error -> TabCenteredContent(contentPadding, header) {
+                ErrorView(uiState.error.message(), onRetry)
+            }
         }
     }
-}
-
-@Composable
-private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,18 +190,28 @@ private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
 private fun ContentView(
     content: AllStationsUiState.Content,
     listState: LazyListState,
+    contentPadding: PaddingValues,
+    header: @Composable () -> Unit,
     onRefresh: () -> Unit,
     onStationClick: (String) -> Unit,
-    modifier: Modifier,
 ) {
     // Sampled at composition and deliberately not remembered, as on Home: staleness is a fact
     // about now, so a later recomposition must be free to escalate a row to stale.
     val now = Clock.System.now()
-    BoxWithConstraints(modifier) {
-        // The column's height, i.e. the screen between the top bar and the bottom bar — so the cap
-        // is a share of what this screen actually has, in portrait, landscape and on small devices.
+    // Only the top and the sides: the list runs on behind the glass tab bar and pads its own end.
+    val layoutDirection = LocalLayoutDirection.current
+    val framePadding = PaddingValues(
+        start = contentPadding.calculateStartPadding(layoutDirection),
+        top = contentPadding.calculateTopPadding(),
+        end = contentPadding.calculateEndPadding(layoutDirection),
+    )
+    BoxWithConstraints(Modifier.fillMaxSize().padding(framePadding)) {
+        // The column's height, i.e. the screen below the status bar — so the cap is a share of what
+        // this screen actually has, in portrait, landscape and on small devices.
         val mapMaxHeight = maxHeight * MAP_MAX_HEIGHT_FRACTION
         Column(Modifier.fillMaxSize()) {
+            // Fixed with the map: the map stays put while the list scrolls.
+            Box(Modifier.padding(horizontal = 24.dp)) { header() }
             // Outside the list and outside pull-to-refresh: the map stays put while the list scrolls.
             SwissMap(
                 stations = content.stations,
@@ -214,6 +241,7 @@ private fun ContentView(
                     selectedAbbr = content.selectedAbbr,
                     now = now,
                     listState = listState,
+                    bottomPadding = contentPadding.calculateBottomPadding(),
                     onStationClick = onStationClick,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -228,10 +256,15 @@ private fun StationList(
     selectedAbbr: String?,
     now: Instant,
     listState: LazyListState,
+    bottomPadding: Dp,
     onStationClick: (String) -> Unit,
     modifier: Modifier,
 ) {
-    LazyColumn(state = listState, modifier = modifier, contentPadding = PaddingValues(vertical = 8.dp)) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + bottomPadding),
+    ) {
         items(stations, key = { it.station.abbr }) { reading ->
             val abbr = reading.station.abbr
             val expanded = abbr == selectedAbbr

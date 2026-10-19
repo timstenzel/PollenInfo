@@ -1,29 +1,22 @@
 package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +37,11 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabPullToRefreshBox
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.format.resolve
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
@@ -57,6 +55,7 @@ import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.home_driven_by
 import ch.stenzel.tim.polleninfo.resources.home_load_failed
+import ch.stenzel.tim.polleninfo.resources.home_overline
 import kotlin.time.Clock
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -64,7 +63,7 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * The pollen situation at the station the user chose.
  *
- * There is deliberately no way to change the station from here — the pin in the top bar is
+ * There is deliberately no way to change the station from here — the pin before the title is
  * decorative. Station changes belong to Settings. [onOpenAccount] opens the login, when a feeling
  * is tapped while nobody is logged in.
  */
@@ -89,7 +88,6 @@ fun HomeScreen(onOpenAccount: () -> Unit, viewModel: HomeViewModel = koinViewMod
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeContent(
     uiState: HomeUiState,
@@ -98,22 +96,25 @@ private fun HomeContent(
     onFeelingSelected: (Feeling) -> Unit,
     onFeelingPromptDismissed: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            // Outside the `when`: the station name is on every state, so the bar never goes blank
-            // and the screen is identifiable while the readings are still loading.
-            TopAppBar(title = { StationTitle(uiState.stationName) })
-        },
-    ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
+    TabScreenFrame { contentPadding ->
+        // On every state: the station name is in the header, so the screen never goes blank and is
+        // identifiable while the readings are still loading.
+        val header = @Composable {
+            ScreenHeader(
+                overline = stringResource(Res.string.home_overline),
+                title = uiState.stationName,
+                icon = Icons.Default.LocationOn,
+            )
+        }
         when (uiState) {
-            is HomeUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
+            is HomeUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
 
             // The readings stay composed while a refresh runs; only the indicator is added.
-            is HomeUiState.Content -> PullToRefreshBox(
+            is HomeUiState.Content -> TabPullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
                 onRefresh = onRefresh,
-                modifier = modifier,
+                topInset = contentPadding.calculateTopPadding(),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 // The card floats over the list rather than taking space from it; while it is up,
                 // the list's end grows by the card's height so the last row can still be scrolled
@@ -124,7 +125,13 @@ private fun HomeContent(
                 } else {
                     0.dp
                 }
-                ReadingView(uiState, bottomInset = promptInset, modifier = Modifier.fillMaxSize())
+                ReadingView(
+                    content = uiState,
+                    contentPadding = contentPadding,
+                    bottomInset = promptInset,
+                    header = header,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 if (uiState.showFeelingPrompt) {
                     FeelingPrompt(
                         saveError = uiState.feelingSaveError,
@@ -132,6 +139,8 @@ private fun HomeContent(
                         onDismiss = onFeelingPromptDismissed,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
+                            // Above the glass tab bar, which the screen extends behind.
+                            .padding(bottom = LocalBottomBarPadding.current)
                             .padding(PROMPT_MARGIN)
                             .fillMaxWidth()
                             .onSizeChanged { promptHeightPx = it.height },
@@ -139,7 +148,9 @@ private fun HomeContent(
                 }
             }
 
-            is HomeUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
+            is HomeUiState.Error -> TabCenteredContent(contentPadding, header) {
+                ErrorView(uiState.error.message(), onRetry)
+            }
         }
     }
 }
@@ -148,18 +159,21 @@ private fun HomeContent(
 private val PROMPT_MARGIN = 16.dp
 
 @Composable
-private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
-}
-
-@Composable
-private fun ReadingView(content: HomeUiState.Content, bottomInset: Dp, modifier: Modifier) {
+private fun ReadingView(
+    content: HomeUiState.Content,
+    contentPadding: PaddingValues,
+    bottomInset: Dp,
+    header: @Composable () -> Unit,
+    modifier: Modifier,
+) {
     // Scrollable even when it fits, so the pull gesture has something to drag.
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 24.dp + bottomInset),
+            .padding(contentPadding)
+            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp + bottomInset),
     ) {
+        header()
         // Classified against the clock at composition, deliberately not remembered: the age is a
         // fact about now, so a later recomposition must be free to escalate it to stale.
         val now = Clock.System.now()
@@ -178,20 +192,6 @@ private fun ReadingView(content: HomeUiState.Content, bottomInset: Dp, modifier:
             Spacer(Modifier.height(16.dp))
             SpeciesRow(reading)
         }
-    }
-}
-
-@Composable
-private fun StationTitle(stationName: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            // Decorative: the name beside it already says what this is, and the pin is not
-            // actionable, so announcing it would only add noise to a screen reader.
-            contentDescription = null,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(stationName)
     }
 }
 

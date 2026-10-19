@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,13 +31,11 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +55,9 @@ import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
@@ -73,6 +76,7 @@ import ch.stenzel.tim.polleninfo.resources.diary_intro
 import ch.stenzel.tim.polleninfo.resources.diary_load_failed
 import ch.stenzel.tim.polleninfo.resources.diary_no_entries_hint
 import ch.stenzel.tim.polleninfo.resources.diary_not_measured
+import ch.stenzel.tim.polleninfo.resources.diary_overline
 import ch.stenzel.tim.polleninfo.resources.diary_range_month
 import ch.stenzel.tim.polleninfo.resources.diary_range_week
 import ch.stenzel.tim.polleninfo.resources.diary_range_year
@@ -126,27 +130,57 @@ private class DiaryActions(
     val onCreateAccount: () -> Unit,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiaryContent(
     uiState: DiaryUiState,
     actions: DiaryActions,
     onRetry: () -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_diary)) }) }) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
+    TabScreenFrame { contentPadding ->
+        val header = @Composable {
+            ScreenHeader(
+                overline = stringResource(Res.string.diary_overline),
+                title = stringResource(Res.string.nav_diary),
+            )
+        }
         when (uiState) {
-            is DiaryUiState.Loading -> CenteredBox(modifier) { CircularProgressIndicator() }
-            is DiaryUiState.SignedOut -> DiaryGate(actions, modifier)
-            is DiaryUiState.Content -> DiaryView(uiState, actions, modifier)
-            is DiaryUiState.Error -> CenteredBox(modifier) { ErrorView(uiState.error.message(), onRetry) }
+            is DiaryUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
+            is DiaryUiState.SignedOut -> DiaryGate(actions, contentPadding, header)
+            is DiaryUiState.Content -> DiaryView(uiState, actions, contentPadding, header)
+            is DiaryUiState.Error -> TabCenteredContent(contentPadding, header) {
+                ErrorView(uiState.error.message(), onRetry)
+            }
         }
     }
 }
 
+/** The scrolling column of the signed-in and signed-out Diary, clear of the status bar and the tab bar. */
 @Composable
-private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modifier: Modifier) {
-    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+private fun DiaryColumn(
+    contentPadding: PaddingValues,
+    header: @Composable () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(contentPadding)
+            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+    ) {
+        header()
+        content()
+    }
+}
+
+@Composable
+private fun DiaryView(
+    content: DiaryUiState.Content,
+    actions: DiaryActions,
+    contentPadding: PaddingValues,
+    header: @Composable () -> Unit,
+) {
+    DiaryColumn(contentPadding, header) {
         StationDropdown(stations = content.stations, selectedAbbr = content.stationAbbr, onSelected = actions.onStationSelected)
         Spacer(Modifier.height(16.dp))
         RangeSelector(selected = content.range, onSelected = actions.onRangeSelected)
@@ -220,8 +254,8 @@ private fun DiaryView(content: DiaryUiState.Content, actions: DiaryActions, modi
  * in, and the email is only used to log in — and the two ways in. No chart.
  */
 @Composable
-private fun DiaryGate(actions: DiaryActions, modifier: Modifier) {
-    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+private fun DiaryGate(actions: DiaryActions, contentPadding: PaddingValues, header: @Composable () -> Unit) {
+    DiaryColumn(contentPadding, header) {
         Text(
             text = stringResource(Res.string.diary_gate_title),
             style = MaterialTheme.typography.headlineSmall,
@@ -350,11 +384,6 @@ private fun HistoryRange.labelResource(): StringResource = when (this) {
     HistoryRange.WEEK -> Res.string.diary_range_week
     HistoryRange.MONTH -> Res.string.diary_range_month
     HistoryRange.YEAR -> Res.string.diary_range_year
-}
-
-@Composable
-private fun CenteredBox(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier.padding(24.dp), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable

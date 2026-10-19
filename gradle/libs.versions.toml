@@ -6,6 +6,8 @@ composeMultiplatform = "1.12.2"
 composeMaterial3 = "1.9.0"
 composeMaterialIcons = "1.7.3"
 navigationEvent = "1.1.0"
+# The glass bars' blur. 2.0.1 is built against Compose 1.12.1 / Kotlin 2.4.20 / lifecycle 2.11.0.
+haze = "2.0.1"
 ktor = "3.6.0"
 koin = "4.2.2"
 serialization = "1.11.0"
@@ -87,6 +89,9 @@ lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecyc
 
 # Navigation (KMP)
 navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationEvent" }
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
+# Since Haze 2.0 the blur effect is its own artifact.
+haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 
 # DataStore (KMP) — persisted user selections

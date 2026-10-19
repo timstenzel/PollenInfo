@@ -246,6 +246,7 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SpeciesRow`, `ReadingAgeView`, `speciesColor`/`speciesName`, `Feeling.label()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
+| `ui/layout` | `TabScreenFrame`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
 `HistoryFixtures.kt`, `FakeDiaryRepository` (enforces first-answer-is-final, has gates),
@@ -393,12 +394,26 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
   ALARMS, SETTINGS). Icon-only, so the `nav_*` `contentDescription` is the only name. The bar shows
   exactly when `TopLevelDestination.current(isOnRoute)` is non-null; non-tab screens (`Onboarding`,
   `AlarmEditor`, `ChangeStation`, `Account`, `Example`) hide it.
+- **Glass bar** (`navigation/GlassNavigationBar`): 36 dp upper corners, `meadowColors.glass` tint,
+  `outline` hairline along the top; the current tab sits on a 60×44 `primary` pill. Each tab is a
+  `Role.Tab` `selectable` named by its `nav_*` description. The blur is Haze (`haze` + `haze-blur`,
+  pinned in the catalog): the `NavHost` is the `hazeSource`, the bar the `hazeBlur`; below Android
+  12 Haze draws the tint alone with its alpha boosted, which keeps the icons readable.
 - **`navigateToTab`**: `popUpTo<Screen.Home> { saveState = true }`, `launchSingleTop`,
   `restoreState`. Pop to `Screen.Home`, **not** `findStartDestination()` — after a fresh install the
   start destination (Onboarding) is already popped and the `popUpTo` would be silently ignored.
   Reselecting the current tab does nothing. Each tab keeps its ViewModel.
-- **Insets:** the outer `Scaffold` has `contentWindowInsets = WindowInsets(0)`; each screen's own
-  `Scaffold` handles the top; the `NavHost` gets `.padding(innerPadding).consumeWindowInsets(innerPadding)`.
+- **Insets:** the outer `Scaffold` has `contentWindowInsets = WindowInsets(0)` and does **not** pad
+  the `NavHost` — content draws behind the glass bar. Its bottom padding (the bar's height,
+  navigation-bar inset included; zero without a bar) reaches the screens as
+  `core/ui/layout/LocalBottomBarPadding`. Non-tab screens' own `Scaffold`s still handle their insets.
+- **Tab screens have no top bar.** `TabScreenFrame` draws the background, the decorative washes and
+  a status-bar scrim, and hands its content the padding for the safe top and sides plus
+  `LocalBottomBarPadding`; the content starts with `ScreenHeader(overline, title)` (overline
+  `labelSmall` upper-cased in code, title `displayMedium`, a heading). Loading/error/message states
+  use `TabCenteredContent`, pull-to-refresh under the status bar uses `TabPullToRefreshBox`.
+  **Bottom padding rule:** every list end, floating card, FAB and `SnackbarHost` on a tab adds
+  `LocalBottomBarPadding`, or it ends up behind the bar.
 - **Adding a tab:** a `Screen` object, a `TopLevelDestination` entry (icon + `nav_*` string in all
   four languages), its `composable<Screen.X>`, and update `TopLevelDestinationTest`.
 
@@ -410,7 +425,8 @@ Details live in the ViewModels and their tests; these are the decisions that are
   decorative). The feeling prompt shows once per Swiss day: logged out, a tap sends
   `HomeEvent.OpenAccount` and records nothing; logged in, it waits for `today()` (re-asked on every
   load, refresh and session change) and hides on success or a `SignedOutException`. Dismissal is
-  per phone. List bottom padding grows by the card's measured height.
+  per phone. The card floats above the glass bar; list bottom padding grows by the card's measured
+  height plus the bar's.
 - **All stations** fans out one `/measurements` request per station in parallel (no batch
   endpoint); a failure is `Unavailable` for that row only. Full-screen `Error` only if the station
   list fails or **every** station is `Unavailable`. A refresh replaces all rows at once with the

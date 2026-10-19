@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,7 +22,6 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -30,8 +33,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,12 +41,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,6 +62,11 @@ import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.loadMessage
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabPullToRefreshBox
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.severity.label
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.MAX_ALARMS
@@ -68,6 +77,7 @@ import ch.stenzel.tim.polleninfo.resources.alarm_empty_body
 import ch.stenzel.tim.polleninfo.resources.alarm_empty_title
 import ch.stenzel.tim.polleninfo.resources.alarm_limit_hint
 import ch.stenzel.tim.polleninfo.resources.alarm_load_failed
+import ch.stenzel.tim.polleninfo.resources.alarm_overline
 import ch.stenzel.tim.polleninfo.resources.alarm_permission_allow
 import ch.stenzel.tim.polleninfo.resources.alarm_permission_body_request
 import ch.stenzel.tim.polleninfo.resources.alarm_permission_body_settings
@@ -147,7 +157,6 @@ fun AlarmsScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlarmsContent(
     uiState: AlarmsUiState,
@@ -160,60 +169,121 @@ private fun AlarmsContent(
     onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(Res.string.nav_alarms)) }) },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            // The empty state has its own, more prominent button.
-            if (uiState is AlarmsUiState.Content && uiState.alarms.isNotEmpty()) {
-                CreateAlarmButton(enabled = !uiState.limitReached, onClick = onCreateAlarm)
-            }
-        },
-    ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
-        val messageModifier = modifier.padding(24.dp)
-        when (uiState) {
-            // Reading the permission is near-instant; a spinner would only flash.
-            AlarmsUiState.CheckingPermission -> Unit
-
-            is AlarmsUiState.PermissionRequired -> PermissionRequiredView(
-                state = uiState.state,
-                onRequestPermission = onRequestPermission,
-                onOpenSettings = onOpenSettings,
-                modifier = messageModifier,
-            )
-
-            AlarmsUiState.Loading -> Box(messageModifier, contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-
-            // The alarms stay composed while a refresh runs; only the indicator is added.
-            is AlarmsUiState.Content -> PullToRefreshBox(
-                isRefreshing = uiState.isRefreshing,
-                onRefresh = onRefresh,
-                modifier = modifier,
-            ) {
-                if (uiState.alarms.isEmpty()) {
-                    // Scrollable so the pull gesture has something to drag.
-                    EmptyAlarmsView(
-                        onCreateAlarm = onCreateAlarm,
-                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-                    )
-                } else {
-                    AlarmList(
-                        alarms = uiState.alarms,
-                        limitReached = uiState.limitReached,
-                        onEditAlarm = onEditAlarm,
-                        onEnabledToggled = onEnabledToggled,
-                        modifier = Modifier.fillMaxSize(),
+    TabScreenFrame { contentPadding ->
+        // The screen runs on behind the glass tab bar; what floats at its bottom is lifted above it.
+        val bottomBar = LocalBottomBarPadding.current
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0),
+            snackbarHost = { SnackbarHost(snackbarHostState, Modifier.padding(bottom = bottomBar)) },
+            floatingActionButton = {
+                // The empty state has its own, more prominent button.
+                if (uiState is AlarmsUiState.Content && uiState.alarms.isNotEmpty()) {
+                    CreateAlarmButton(
+                        enabled = !uiState.limitReached,
+                        onClick = onCreateAlarm,
+                        modifier = Modifier.padding(bottom = bottomBar),
                     )
                 }
+            },
+        ) { scaffoldPadding ->
+            val header = @Composable {
+                ScreenHeader(
+                    overline = stringResource(Res.string.alarm_overline),
+                    title = stringResource(Res.string.nav_alarms),
+                )
             }
+            Box(Modifier.fillMaxSize().padding(scaffoldPadding)) {
+                when (uiState) {
+                    // Reading the permission is near-instant; a spinner would only flash.
+                    AlarmsUiState.CheckingPermission -> TabCenteredContent(contentPadding, header) {}
 
-            is AlarmsUiState.Error -> if (uiState.error == AppError.PushUnavailable) {
-                PushUnavailableView(messageModifier)
+                    is AlarmsUiState.PermissionRequired -> TabCenteredContent(contentPadding, header) {
+                        PermissionRequiredView(
+                            state = uiState.state,
+                            onRequestPermission = onRequestPermission,
+                            onOpenSettings = onOpenSettings,
+                            modifier = Modifier,
+                        )
+                    }
+
+                    AlarmsUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
+
+                    is AlarmsUiState.Content -> AlarmsContentView(
+                        content = uiState,
+                        contentPadding = contentPadding,
+                        header = header,
+                        onRefresh = onRefresh,
+                        onCreateAlarm = onCreateAlarm,
+                        onEditAlarm = onEditAlarm,
+                        onEnabledToggled = onEnabledToggled,
+                    )
+
+                    is AlarmsUiState.Error -> TabCenteredContent(contentPadding, header) {
+                        if (uiState.error == AppError.PushUnavailable) {
+                            PushUnavailableView(Modifier)
+                        } else {
+                            ErrorView(uiState.error.message(), onRetry, Modifier)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The header stays above the list with the limit hint (see [AlarmList]), so only the alarms scroll
+ * — on behind the glass tab bar, with their end padded clear of it.
+ */
+@Composable
+private fun AlarmsContentView(
+    content: AlarmsUiState.Content,
+    contentPadding: PaddingValues,
+    header: @Composable () -> Unit,
+    onRefresh: () -> Unit,
+    onCreateAlarm: () -> Unit,
+    onEditAlarm: (alarmId: String) -> Unit,
+    onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
+) {
+    val layoutDirection = LocalLayoutDirection.current
+    val bottomBar = contentPadding.calculateBottomPadding()
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(
+                start = contentPadding.calculateStartPadding(layoutDirection),
+                top = contentPadding.calculateTopPadding(),
+                end = contentPadding.calculateEndPadding(layoutDirection),
+            ),
+    ) {
+        Box(Modifier.padding(horizontal = 24.dp)) { header() }
+        // The alarms stay composed while a refresh runs; only the indicator is added.
+        TabPullToRefreshBox(
+            isRefreshing = content.isRefreshing,
+            onRefresh = onRefresh,
+            topInset = 0.dp,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        ) {
+            if (content.alarms.isEmpty()) {
+                // Scrollable so the pull gesture has something to drag.
+                EmptyAlarmsView(
+                    onCreateAlarm = onCreateAlarm,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = bottomBar)
+                        .padding(24.dp),
+                )
             } else {
-                ErrorView(uiState.error.message(), onRetry, messageModifier)
+                AlarmList(
+                    alarms = content.alarms,
+                    limitReached = content.limitReached,
+                    bottomPadding = bottomBar,
+                    onEditAlarm = onEditAlarm,
+                    onEnabledToggled = onEnabledToggled,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -260,7 +330,7 @@ private fun EmptyAlarmsView(onCreateAlarm: () -> Unit, modifier: Modifier) {
  * Material 3 spec, ignores clicks and is marked disabled for screen readers.
  */
 @Composable
-private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
+private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     ExtendedFloatingActionButton(
         onClick = { if (enabled) onClick() },
@@ -278,7 +348,7 @@ private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
         } else {
             FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
         },
-        modifier = if (enabled) Modifier else Modifier.semantics { disabled() },
+        modifier = if (enabled) modifier else modifier.semantics { disabled() },
     )
 }
 
@@ -290,6 +360,7 @@ private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
 private fun AlarmList(
     alarms: List<AlarmListItem>,
     limitReached: Boolean,
+    bottomPadding: Dp,
     onEditAlarm: (alarmId: String) -> Unit,
     onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
     modifier: Modifier,
@@ -306,13 +377,14 @@ private fun AlarmList(
             )
             HorizontalDivider()
         }
-        AlarmRows(alarms, onEditAlarm, onEnabledToggled, Modifier.weight(1f))
+        AlarmRows(alarms, bottomPadding, onEditAlarm, onEnabledToggled, Modifier.weight(1f))
     }
 }
 
 @Composable
 private fun AlarmRows(
     alarms: List<AlarmListItem>,
+    bottomPadding: Dp,
     onEditAlarm: (alarmId: String) -> Unit,
     onEnabledToggled: (alarmId: String, enabled: Boolean) -> Unit,
     modifier: Modifier,
@@ -320,8 +392,8 @@ private fun AlarmRows(
     val dates = rememberDateWording()
     val severityLabels = PollenSeverity.entries.associateWith { it.label() }
     val wording = rememberAlarmSummaryWording()
-    // Room below the last row, so the create button never covers it.
-    LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp)) {
+    // Room below the last row, so neither the create button nor the glass tab bar covers it.
+    LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 88.dp + bottomPadding)) {
         items(alarms, key = { it.alarm.id }) { item ->
             val enabled = item.alarm.enabled
             val speciesNames = item.speciesNames.mapValues { (id, name) -> speciesName(id, name) }

@@ -8,7 +8,8 @@ Notes that apply to every task:
 
 - **Visual only.** No ViewModel, UI-state, use-case, repository, API or navigation-graph change, and
   no existing test changes except `SeverityColorsTest` for the one deliberately changed colour. The
-  only new string is the alarm count in task 07. If a screen seems to need a state change or another
+  only new strings are the five tab overlines (task 02, decided with the maintainer on 2026-10-19)
+  and the alarm count in task 07. If a screen seems to need a state change or another
   string, stop and ask.
 - **Decisions taken while verifying the annex (2026-10-19):**
   - Home's feeling card moves **inline** (between the gauge card and the pollen tiles), as in Figma.
@@ -87,28 +88,28 @@ untouched.
 
 ### Implementation steps
 
-- [ ] Add Haze (pinned in the version catalog) and mark the tab host content as the blur source
-- [ ] Replace the Material navigation bar with the glass bar driven by `TopLevelDestination` (same descriptions, selection semantics and `navigateToTab`), with Haze blur and its fallback tint
-- [ ] Stop padding the tab host for the bar; expose the bar height to screens and add it to each tab screen's scrolling end padding and to Home's floating feeling card, Alarms' create button and snackbar host, and Settings' snackbar host
-- [ ] Add the shared tab-screen frame: background with decorative washes, header (overline + serif title, announced as heading), content slot
-- [ ] Move Home, All stations, Diary, Alarms and Settings onto the frame and remove their `TopAppBar`s; Home's header shows the station name in every state
-- [ ] Update CLAUDE.md "Navigation" (glass bar, insets now drawn behind the bar, bottom padding rule)
+- [x] Add Haze (pinned in the version catalog) and mark the tab host content as the blur source
+- [x] Replace the Material navigation bar with the glass bar driven by `TopLevelDestination` (same descriptions, selection semantics and `navigateToTab`), with Haze blur and its fallback tint
+- [x] Stop padding the tab host for the bar; expose the bar height to screens and add it to each tab screen's scrolling end padding and to Home's floating feeling card, Alarms' create button and snackbar host, and Settings' snackbar host
+- [x] Add the shared tab-screen frame: background with decorative washes, header (overline + serif title, announced as heading), content slot
+- [x] Move Home, All stations, Diary, Alarms and Settings onto the frame and remove their `TopAppBar`s; Home's header shows the station name in every state
+- [x] Update CLAUDE.md "Navigation" (glass bar, insets now drawn behind the bar, bottom padding rule)
 
 ### Acceptance criteria
 
-- [ ] Automated test: `TopLevelDestinationTest` still passes unchanged
-- [ ] Runtime: on every tab there is no title bar; overline and serif (Fraunces) title sit at the top of the content, and Home shows the station name while loading, with content and on error
-- [ ] Runtime: the bar has rounded upper corners, shows the same five icons in the same order, and the current tab sits on a green pill
-- [ ] Runtime: scrolling Home and All stations shows the content blurred behind the bar, and the last item scrolls fully above the bar; Home's feeling card, Alarms' "Create alarm" and the Alarms and Settings snackbars (triggered with the backend stopped) appear fully above the bar
-- [ ] Runtime (Android 11 emulator): the bar is see-through without blur; a screenshot with Home's gauge card behind the bar shows every icon and the selected pill distinct from the content
-- [ ] Runtime: switching tabs, reselecting the current tab and the back gesture behave as before; TalkBack announces each tab by its existing name and the title as a heading
+- [x] Automated test: `TopLevelDestinationTest` still passes unchanged
+- [x] Runtime: on every tab there is no title bar; overline and serif (Fraunces) title sit at the top of the content, and Home shows the station name while loading, with content and on error
+- [x] Runtime: the bar has rounded upper corners, shows the same five icons in the same order, and the current tab sits on a green pill
+- [ ] ~~Runtime: scrolling Home and All stations shows the content blurred behind the bar, and the last item scrolls fully above the bar; Home's feeling card, Alarms' "Create alarm" and the Alarms and Settings snackbars (triggered with the backend stopped) appear fully above the bar~~ *(skipped in part: the Settings snackbar only appears when the crash-report preference write fails, which the backend cannot trigger; it uses the same `LocalBottomBarPadding` lift as the Alarms one. Everything else passed on API 37: blur behind the bar, last row of Home and All stations above it, feeling card, "Create alarm" and the Alarms snackbar)*
+- [x] Runtime (Android 11 emulator): the bar is see-through without blur; a screenshot with Home's gauge card behind the bar shows every icon and the selected pill distinct from the content *(the gauge card arrives in task 04; checked with Home's species rows behind the bar at font scale 1.3)*
+- [ ] ~~Runtime: switching tabs, reselecting the current tab and the back gesture behave as before; TalkBack announces each tab by its existing name and the title as a heading~~ *(skipped in part: TalkBack's speech could not be captured on the emulator, so the title's heading announcement is unverified (the semantics are set in `ScreenHeader`). Passed: tab switching, reselect without reload, back to Home and out of the app; the accessibility tree names the tabs Home, All stations, Diary, Alarms, Settings with the current one selected)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` passes
-- [ ] After `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`, the two merged-manifest `grep`s from CLAUDE.md match only the debug manifest
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` passes
+- [x] After `./gradlew :androidApp:assembleDebug :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false`, the two merged-manifest `grep`s from CLAUDE.md match only the debug manifest
 
 ## Task [03-non-tab-frame-and-dialogs]
 

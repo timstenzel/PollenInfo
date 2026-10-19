@@ -1,13 +1,10 @@
 package ch.stenzel.tim.polleninfo.navigation
 
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -17,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
 import ch.stenzel.tim.polleninfo.feature.account.presentation.AccountScreen
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.AlarmEditorScreen
@@ -28,7 +26,8 @@ import ch.stenzel.tim.polleninfo.feature.home.presentation.HomeScreen
 import ch.stenzel.tim.polleninfo.feature.onboarding.presentation.OnboardingScreen
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.ChangeStationScreen
 import ch.stenzel.tim.polleninfo.feature.settings.presentation.SettingsScreen
-import org.jetbrains.compose.resources.stringResource
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 /**
  * [startDestination] is decided by the startup gate in `App()` — see its documentation for why the
@@ -36,6 +35,10 @@ import org.jetbrains.compose.resources.stringResource
  *
  * The bottom bar is shown only while the current destination is a [TopLevelDestination], so it
  * never appears during setup or on the reference example screen.
+ *
+ * Screens draw behind the glass bar: the `NavHost` is not padded for it but is the bar's blur
+ * source, and the bar's height reaches the tab screens as [LocalBottomBarPadding] (zero while the
+ * bar is hidden).
  */
 @Composable
 fun AppNavigation(startDestination: Screen) {
@@ -44,35 +47,31 @@ fun AppNavigation(startDestination: Screen) {
     val currentTab = backStackEntry?.destination?.let { destination ->
         TopLevelDestination.current { destination.hasRoute(it) }
     }
+    val hazeState = rememberHazeState()
 
     Scaffold(
-        // No insets here: each screen's own Scaffold handles the top, and NavigationBar applies the
-        // navigation-bar inset itself. Applying system bars here as well would add a gap above
-        // Home's top bar and pad Onboarding twice.
+        // No insets here: tab screens pad for the status bar and the glass bar themselves, the bar
+        // applies the navigation-bar inset, and the other screens' own Scaffolds handle theirs.
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (currentTab != null) {
-                NavigationBar {
-                    TopLevelDestination.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = tab == currentTab,
-                            // Reselecting the current tab is a no-op, not a reload.
-                            onClick = { if (tab != currentTab) navController.navigateToTab(tab) },
-                            icon = { Icon(tab.icon, contentDescription = stringResource(tab.contentDescription)) },
-                            alwaysShowLabel = false,
-                        )
-                    }
-                }
+                GlassNavigationBar(
+                    currentTab = currentTab,
+                    // Reselecting the current tab is a no-op, not a reload.
+                    onTabSelected = { tab -> if (tab != currentTab) navController.navigateToTab(tab) },
+                    hazeState = hazeState,
+                )
             }
         },
     ) { innerPadding ->
-        AppNavHost(
-            navController = navController,
-            startDestination = startDestination,
-            // Consuming the padding tells the screens' own Scaffolds that the bottom inset is
-            // already covered by the bar, so they do not add it a second time.
-            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
-        )
+        // Only the bar's height: with no insets of its own, the Scaffold's padding is exactly it.
+        CompositionLocalProvider(LocalBottomBarPadding provides innerPadding.calculateBottomPadding()) {
+            AppNavHost(
+                navController = navController,
+                startDestination = startDestination,
+                modifier = Modifier.fillMaxSize().hazeSource(hazeState),
+            )
+        }
     }
 }
 

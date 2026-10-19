@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -39,13 +39,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -61,6 +61,9 @@ import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.password.PasswordField
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.account_hide_password
@@ -93,6 +96,7 @@ import ch.stenzel.tim.polleninfo.resources.settings_language_system
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_link_action
 import ch.stenzel.tim.polleninfo.resources.settings_meteoswiss_url
 import ch.stenzel.tim.polleninfo.resources.settings_privacy_title
+import ch.stenzel.tim.polleninfo.resources.settings_overline
 import ch.stenzel.tim.polleninfo.resources.settings_section_account
 import ch.stenzel.tim.polleninfo.resources.settings_section_data_source
 import ch.stenzel.tim.polleninfo.resources.settings_section_impressum
@@ -182,7 +186,6 @@ fun SettingsScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsContent(
     uiState: SettingsUiState,
@@ -194,31 +197,43 @@ private fun SettingsContent(
     onCrashReportsToggled: (Boolean) -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 8.dp),
-        ) {
-            StationSection(uiState.stationName, onChangeStation)
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            AccountSection(uiState.accountChecked, uiState.accountEmail, onLogIn, onLogOut, onDeleteAccount)
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            LanguageSection(uiState.language, uiState.languageAppliesOnRestart, onLanguageRowClicked)
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            if (uiState.crashReportsAvailable) {
-                PrivacySection(uiState.crashReportsEnabled, onCrashReportsToggled)
+    TabScreenFrame { contentPadding ->
+        // The screen runs on behind the glass tab bar; the snackbar is lifted above it.
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0),
+            snackbarHost = {
+                SnackbarHost(snackbarHostState, Modifier.padding(bottom = LocalBottomBarPadding.current))
+            },
+        ) { scaffoldPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(scaffoldPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(contentPadding)
+                    .padding(bottom = 8.dp),
+            ) {
+                ScreenHeader(
+                    overline = stringResource(Res.string.settings_overline),
+                    title = stringResource(Res.string.settings_title),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                StationSection(uiState.stationName, onChangeStation)
                 HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                AccountSection(uiState.accountChecked, uiState.accountEmail, onLogIn, onLogOut, onDeleteAccount)
+                HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                LanguageSection(uiState.language, uiState.languageAppliesOnRestart, onLanguageRowClicked)
+                HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                if (uiState.crashReportsAvailable) {
+                    PrivacySection(uiState.crashReportsEnabled, onCrashReportsToggled)
+                    HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                }
+                ImpressumSection()
+                HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                DataSourceSection()
+                uiState.version?.let { VersionLine(it) }
             }
-            ImpressumSection()
-            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            DataSourceSection()
-            uiState.version?.let { VersionLine(it) }
         }
     }
 }
