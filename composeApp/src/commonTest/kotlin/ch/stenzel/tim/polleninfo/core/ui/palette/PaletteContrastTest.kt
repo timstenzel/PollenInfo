@@ -7,6 +7,7 @@ import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.ui.severity.severityColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.PAUSED_ALPHA
+import ch.stenzel.tim.polleninfo.feature.alarms.presentation.selectedTile
 import ch.stenzel.tim.polleninfo.theme.MeadowColors
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColorScheme
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColors
@@ -144,6 +145,20 @@ class PaletteContrastTest {
         )
     }
 
+    // Alarm editor: the chosen type card's icon on its faint tile over the green; the save error in
+    // the glass action bar; the time picker's selected hour or minute box and the dial's hand-picked
+    // number. Chips, fields, day circles and the window error (error on raised) are covered above;
+    // the locked type card is disabled and need not reach a minimum.
+    private fun Scheme.alarmEditorPairs(): List<Pair> {
+        val glass = meadow.glass.compositeOver(colors.background)
+        return listOf(
+            Pair("selected type icon (onPrimary)", "selected type tile", colors.onPrimary, selectedTile(colors.onPrimary, colors.primary), GRAPHICS),
+            Pair("save error (error)", "glass over background", colors.error, glass, TEXT),
+            Pair("time selector (onSurface)", "sunken", colors.onSurface, colors.surfaceContainerHighest, TEXT),
+            Pair("dial selector (primary)", "dial (sunken)", colors.primary, colors.surfaceContainerHighest, GRAPHICS),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -199,6 +214,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the alarm editor and its time picker are readable`() {
+        assertAllMeet { alarmEditorPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -210,6 +230,7 @@ class PaletteContrastTest {
             assertTrue(scheme.allStationsPairs().size == PollenSeverity.entries.size + 4, scheme.name)
             assertTrue(scheme.diaryPairs().size == 7 * 2 + 2, scheme.name)
             assertTrue(scheme.alarmsPairs().size == 4, scheme.name)
+            assertTrue(scheme.alarmEditorPairs().size == 4, scheme.name)
         }
     }
 

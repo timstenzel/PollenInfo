@@ -289,25 +289,25 @@ time field and time picker style are introduced here.
 
 ### Implementation steps
 
-- [ ] Replace the segmented type control with the two type cards, including the locked state and the description below
-- [ ] Restyle sections: station dropdown, filter chips, weekday circles, time fields and window error
-- [ ] Restyle the time picker dialog (large hour and minute boxes, 24-hour dial, Cancel / OK)
-- [ ] Show the save error inside the action bar above "Save"; keep "Saving…" / "Deleting…" labels
-- [ ] Use the Danger button for delete; use skeleton and status card for loading and error
+- [x] Replace the segmented type control with the two type cards, including the locked state and the description below *(`TypeCards` in `AlarmEditorParts.kt`, one radio group)*
+- [x] Restyle sections: station dropdown, filter chips, weekday circles, time fields and window error *(shared `core/ui/selection/MeadowFilterChip` and `core/ui/field/SelectField`; `DayToggles`; the invalid window turns the end field red as in Figma)*
+- [x] Restyle the time picker dialog (large hour and minute boxes, 24-hour dial, Cancel / OK) *(Figma's keyboard toggle is not drawn: it would need a new spoken string)*
+- [x] Show the save error inside the action bar above "Save"; keep "Saving…" / "Deleting…" labels *(with Figma's error icon)*
+- [x] Use the Danger button for delete; use skeleton and status card for loading and error *(`AlarmEditorSkeleton`; the delete button loses its icon, as in Figma)*
 
 ### Acceptance criteria
 
-- [ ] Runtime: a new alarm shows both type cards selectable and the chosen type's description below them; an existing alarm shows the other type dimmed with a lock and not selectable
-- [ ] Runtime: tapping the report time opens the time picker with large hour and minute boxes and the 24-hour dial; the chosen time appears in the field
-- [ ] Runtime: an end time before the start shows the window error under the fields; with the backend stopped, saving shows "Couldn't save the alarm. …" in red above "Save"
-- [ ] Runtime: in German, all section titles, chips and the type cards fit without clipping
+- [x] Runtime: a new alarm shows both type cards selectable and the chosen type's description below them; an existing alarm shows the other type dimmed with a lock and not selectable *(API 37: new alarm switched from Daily report to Threshold alert, description changed with it; Basel's threshold alert shows Daily report dimmed with a lock, a tap on it changed nothing, the node tree has both cards as disabled radio buttons with Threshold checked; light and dark)*
+- [x] Runtime: tapping the report time opens the time picker with large hour and minute boxes and the 24-hour dial; the chosen time appears in the field *("REPORT TIME" overline, 08 / 00 boxes, 0–23 dial, Cancel / OK; 18:30 picked and shown in the field)*
+- [x] Runtime: an end time before the start shows the window error under the fields; with the backend stopped, saving shows "Couldn't save the alarm. …" in red above "Save" *(07:00–06:00: red end field, "The end must be after the start.", Save disabled; server unreachable via airplane mode: "Couldn’t save the alarm. Couldn’t reach the server. …" with the error icon above Save. Also checked offline: the load error card with Retry; loading with a temporary, reverted 4 s delay: the skeleton)*
+- [x] Runtime: in German, all section titles, chips and the type cards fit without clipping *(dark scheme: "Tagesbericht" / "Schwellenalarm", "Benachrichtigen ab", "Aktives Zeitfenster", chips and Mo–So fit; the window fields' labels wrap to two lines and the fields grow, nothing clipped)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `AlarmFormStateTest` and `AlarmEditorViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `AlarmFormStateTest` and `AlarmEditorViewModelTest` unchanged) *(804 tests, 0 failures; new `PaletteContrastTest` case for the editor and time picker)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits *(only a KDoc comment)*
 
 ## Task [09-onboarding-and-change-station-redesign]
 

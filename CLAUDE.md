@@ -259,7 +259,8 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
 | `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
-| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken) |
+| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken), `MeadowFilterChip` + `ChipLabel` (pill chips, filled `primary` when selected, no check mark) |
+| `ui/field` | `SelectField` (label above value on raised with a hairline edge and a trailing icon, for values picked from a menu or picker; red edge and label on error) |
 | `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains (`grains = true` on any tone, e.g. Alarms' notifications gate), `centered = false` for a gate that lists points), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
@@ -513,8 +514,13 @@ Details live in the ViewModels and their tests; these are the decisions that are
   (a newer stored token is reused). A `404` on a single alarm is `AlarmNotFoundException` — no
   re-registration. `updateToken` is not a `withDevice` call: without a stored token it does nothing.
 - **Alarm editor**: leaving goes through `onBack()` (discard dialog when `isDirty`), using
-  `NavigationBackHandler` (`navigationevent-compose`). An existing alarm's type is locked. Windows
-  across midnight are out of scope.
+  `NavigationBackHandler` (`navigationevent-compose`). The type is two `TypeCards` (one radio
+  group); an existing alarm's type is locked — neither card selectable, the other one dimmed with a
+  lock. Days are `DayToggles` (one checkbox per circle, spoken by its full name); times are
+  `TimeField`s (`SelectField` opening the Meadow time picker: overline, large hour/minute boxes,
+  24-hour dial, Cancel/OK); an invalid window turns the end field red. A save or delete error sits
+  in the action bar above Save. Loading is `AlarmEditorSkeleton`, a load error a `StatusCard` with
+  Retry. Windows across midnight are out of scope.
 - **Account**: after a successful login/registration, offer the credentials to `CredentialStore.save`
   (except a login made with the credential the manager just handed over); `Done` follows whatever
   happens. In `LOGIN` mode, `offer()` first. `logout()` clears locally **whatever the server
