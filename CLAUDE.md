@@ -460,7 +460,7 @@ Details live in the ViewModels and their tests; these are the decisions that are
   `HomeEvent.OpenAccount` and records nothing; logged in, it waits for `today()` (re-asked on every
   load, refresh and session change) and hides on success or a `SignedOutException`. Dismissal is
   per phone. The card is **inline** (green `primary` card between the gauge card and the tiles; faces
-  best first, the reverse of `Feeling`'s declaration order), so the list end needs only
+  worst left to best right, `Feeling`'s declaration order), so the list end needs only
   `LocalBottomBarPadding`; a save error shows as a `Banner` inside it. Species are a two-column grid
   of `SpeciesTile`s, worst first. Loading is `HomeSkeleton` (shimmer) under the real station name;
   an error is a `StatusCard` with the existing wording and Retry.

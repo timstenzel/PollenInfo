@@ -82,8 +82,8 @@ fun FeelingPrompt(
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth().padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Drawn best first; the enum is declared worst first for the Diary's axis.
-            Feeling.entries.reversed().forEach { feeling ->
+            // Worst on the left, best on the right: the enum's declaration order.
+            Feeling.entries.forEach { feeling ->
                 FaceButton(feeling, onClick = { onFeelingSelected(feeling) }, modifier = Modifier.weight(1f))
             }
         }

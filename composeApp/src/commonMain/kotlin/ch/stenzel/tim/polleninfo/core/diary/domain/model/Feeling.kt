@@ -3,8 +3,8 @@ package ch.stenzel.tim.polleninfo.core.diary.domain.model
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 
 /**
- * How the user said they felt on a day, declared from worst to best (the Home prompt draws its
- * faces the other way round, best first).
+ * How the user said they felt on a day, declared from worst to best (the order the Home prompt
+ * draws its faces in, left to right).
  *
  * [level] puts a feeling on the pollen scale, so the Diary can draw both on one axis: higher is
  * always worse, "Very bad" sits level with "Very high" pollen. `NONE` has no feeling counterpart.
