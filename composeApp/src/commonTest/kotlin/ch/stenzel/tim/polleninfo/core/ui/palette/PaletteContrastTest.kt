@@ -84,6 +84,18 @@ class PaletteContrastTest {
         )
     }
 
+    // Home's feeling card (green `primary`): its dimmed "Not today" and the faces on their tinted
+    // circles, alphas as in `FeelingPrompt`. Home's other pairs are above — the reading-time pill
+    // (onPrimaryContainer), the stale pill and banner (warning), the gauge word (onSurface on raised);
+    // the gauge's unfilled segments are decorative.
+    private fun Scheme.homePairs(): List<Pair> {
+        val faceCircle = colors.onPrimary.copy(alpha = 0.14f).compositeOver(colors.primary)
+        return listOf(
+            Pair("Not today (onPrimary 75 %)", "primary", colors.onPrimary.copy(alpha = 0.75f).compositeOver(colors.primary), colors.primary, TEXT),
+            Pair("face (onPrimary)", "face circle", colors.onPrimary, faceCircle, GRAPHICS),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -119,6 +131,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the feeling card on Home is readable`() {
+        assertAllMeet { homePairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -126,6 +143,7 @@ class PaletteContrastTest {
             assertTrue(scheme.speciesPairs().size == 7, scheme.name)
             assertTrue(scheme.textPairs().size == 9, scheme.name)
             assertTrue(scheme.componentPairs().size == 7, scheme.name)
+            assertTrue(scheme.homePairs().size == 2, scheme.name)
         }
     }
 

@@ -56,7 +56,7 @@ fun SeverityBar(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(percent = 50)
-    val track = MaterialTheme.colorScheme.outlineVariant
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
     Box(
         modifier = modifier
             .height(size.height)

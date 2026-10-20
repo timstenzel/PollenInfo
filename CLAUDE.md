@@ -191,14 +191,23 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
   picks light/dark by **luminance of `colorScheme.surface`**, not `isSystemInDarkTheme()` (same rule
   for species and lake colours).
 - `SeverityBar` fills to **fixed stops** (NONE 4 %, then 25/50/75/100 %; 0 % muted track = no
-  reading), one solid colour, never interpolated. Colour never carries meaning alone — every bar sits
-  beside its word. Map dots use the same `PollenSeverity.color()` — no separate dot colour function.
+  reading) over a `surfaceContainerHighest` track, one solid colour, never interpolated. Colour never
+  carries meaning alone — every bar sits beside its word. Map dots use the same
+  `PollenSeverity.color()` — no separate dot colour function.
+- **`SeverityGauge`** (Home's hero): four arc segments over a half circle, the first
+  `gaugeFilledSegments(severity)` (pure, `SeverityGaugeTest`: none for no reading and NONE, then 1–4
+  for LOW–VERY_HIGH) in the severity colour, the rest in the track colour, a soft glow of that colour
+  behind and the severity word (`displayLarge`) in the middle. Arcs and glow are decorative. Unlike
+  the bar, NONE fills nothing — the word sits inside the gauge, so it cannot read as "no reading".
 
 ### Reading age
 
 `readingAgeOf(measuredAt, now)` (`core/measurement/domain/model/ReadingAge.kt`, pure) at render time:
 `< STALE_AFTER` (3 h) → `Fresh(localTime)` caption; otherwise `Stale.Today(localTime)` or
-`Stale.Earlier(localDate)` in `errorContainer` colours. Device time zone. "Refreshed 10:42"
+`Stale.Earlier(localDate)` as a warning. Home shows it as `ReadingAgePill` (sage when fresh, the
+`meadowColors.warningContainer` colours when stale) plus a `Banner` "These readings are not
+current." when stale; All stations' expanded row still uses `ReadingAgeView` (`errorContainer`).
+Device time zone. "Refreshed 10:42"
 (`refreshedLabel`) is `Content.refreshedAt` — when the app last *received* a reading, from an
 injected `kotlin.time.Clock` — a different fact from `measuredAt`, never a warning.
 
@@ -246,8 +255,9 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `stationpicker` | `StationPicker` state holder + `StationPickerContent`, `FindNearestStationUseCase` |
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
-| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SpeciesRow`, `ReadingAgeView`, `speciesColor`/`speciesName`, `Feeling.label()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
-| `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding` |
+| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`, `SpeciesRow`, `ReadingAgeView`/`ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
+| `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
+| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
@@ -446,8 +456,11 @@ Details live in the ViewModels and their tests; these are the decisions that are
   decorative). The feeling prompt shows once per Swiss day: logged out, a tap sends
   `HomeEvent.OpenAccount` and records nothing; logged in, it waits for `today()` (re-asked on every
   load, refresh and session change) and hides on success or a `SignedOutException`. Dismissal is
-  per phone. The card floats above the glass bar; list bottom padding grows by the card's measured
-  height plus the bar's.
+  per phone. The card is **inline** (green `primary` card between the gauge card and the tiles; faces
+  best first, the reverse of `Feeling`'s declaration order), so the list end needs only
+  `LocalBottomBarPadding`; a save error shows as a `Banner` inside it. Species are a two-column grid
+  of `SpeciesTile`s, worst first. Loading is `HomeSkeleton` (shimmer) under the real station name;
+  an error is a `StatusCard` with the existing wording and Retry.
 - **All stations** fans out one `/measurements` request per station in parallel (no batch
   endpoint); a failure is `Unavailable` for that row only. Full-screen `Error` only if the station
   list fails or **every** station is `Unavailable`. A refresh replaces all rows at once with the

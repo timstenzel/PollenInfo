@@ -155,27 +155,27 @@ species tile are introduced here.
 
 ### Implementation steps
 
-- [ ] Add the pure gauge filling rule and its test; add the gauge composable (decorative, glow behind)
-- [ ] Add the species tile (replacing the row on Home) with the same semantics as the current row; restyle the severity bar track
-- [ ] Restyle the feeling prompt as the inline green card with face buttons; remove the floating overlay and its padding mechanism; keep its save-error display
-- [ ] Restyle reading age: time pill and stale banner in warning colours; keep "Refreshed …"
-- [ ] Add the skeleton + shimmer, status card and banner components; use them for Home's loading and error states
-- [ ] Update CLAUDE.md "Screen behaviour → Home" (inline card, padding sentence) and "Colours and bars" (gauge; fill stops unchanged)
+- [x] Add the pure gauge filling rule and its test; add the gauge composable (decorative, glow behind)
+- [x] Add the species tile (replacing the row on Home) with the same semantics as the current row; restyle the severity bar track
+- [x] Restyle the feeling prompt as the inline green card with face buttons; remove the floating overlay and its padding mechanism; keep its save-error display
+- [x] Restyle reading age: time pill and stale banner in warning colours; keep "Refreshed …"
+- [x] Add the skeleton + shimmer, status card and banner components; use them for Home's loading and error states
+- [x] Update CLAUDE.md "Screen behaviour → Home" (inline card, padding sentence) and "Colours and bars" (gauge; fill stops unchanged)
 
 ### Acceptance criteria
 
-- [ ] Automated test: the gauge fills 0 segments for no reading and None, 1 for Low, 2 for Moderate, 3 for High, 4 for Very high, never decreasing with severity
-- [ ] Runtime: a High reading driven by Birch shows "High" with three filled segments and "Driven by Birch"; a None reading shows "None" with no filled segment; all seven types appear as tiles worst first, an unreported type shows "No data" with an empty bar
-- [ ] Runtime: with the feeling question due and logged in, the green card appears inline with face buttons labelled Very good, Good, Bad, Very bad and "Not today"; answering and "Not today" behave as before; logged out, a tap opens the account screen as before
-- [ ] Runtime: a reading older than three hours shows "These readings are not current." and the time pill in warning colours; loading shows the skeleton with a moving shimmer and the station name; a backend outage shows the status card with "Retry", which reloads
-- [ ] Runtime: TalkBack announces station, severity, driving type, reading time and each tile as before
+- [x] Automated test: the gauge fills 0 segments for no reading and None, 1 for Low, 2 for Moderate, 3 for High, 4 for Very high, never decreasing with severity
+- [x] Runtime: a High reading driven by Birch shows "High" with three filled segments and "Driven by Birch"; a None reading shows "None" with no filled segment; all seven types appear as tiles worst first, an unreported type shows "No data" with an empty bar
+- [x] Runtime: with the feeling question due and logged in, the green card appears inline with face buttons labelled Very good, Good, Bad, Very bad and "Not today"; answering and "Not today" behave as before; logged out, a tap opens the account screen as before
+- [x] Runtime: a reading older than three hours shows "These readings are not current." and the time pill in warning colours; loading shows the skeleton with a moving shimmer and the station name; a backend outage shows the status card with "Retry", which reloads
+- [ ] ~~Runtime: TalkBack announces station, severity, driving type, reading time and each tile as before~~ *(skipped in part: TalkBack's speech could not be captured on the emulator. Passed on API 37 through the accessibility tree: the station name (heading), the severity word, "Driven by Birch", "Data from 19:00" and "Refreshed 20:25" are text nodes in that order; each face and "Not today" is one clickable node with its word; each tile is one node announced name, severity word, concentration ("Birch, High, 412"; "Beech, No data"), the order the rows had)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `SeverityBarTest` and `HomeViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits; new test names are backtick sentences without commas
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `SeverityBarTest` and `HomeViewModelTest` unchanged)
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits; new test names are backtick sentences without commas
 
 ## Task [05-all-stations-redesign]
 

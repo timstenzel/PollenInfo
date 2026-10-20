@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
@@ -21,13 +22,16 @@ import ch.stenzel.tim.polleninfo.resources.reading_concentration_unit
 import ch.stenzel.tim.polleninfo.resources.reading_no_data
 import org.jetbrains.compose.resources.stringResource
 
-/** The unit is stated once here, so the numbers on the rows can stay bare and scannable. */
+/**
+ * The unit is stated once here, so the numbers on the rows can stay bare and scannable. [titleStyle]
+ * lets Home set the heading in its serif.
+ */
 @Composable
-fun SpeciesListHeading(unit: String) {
+fun SpeciesListHeading(unit: String, titleStyle: TextStyle = MaterialTheme.typography.titleMedium) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Text(
             text = stringResource(Res.string.reading_all_species),
-            style = MaterialTheme.typography.titleMedium,
+            style = titleStyle,
             modifier = Modifier.weight(1f),
         )
         Text(

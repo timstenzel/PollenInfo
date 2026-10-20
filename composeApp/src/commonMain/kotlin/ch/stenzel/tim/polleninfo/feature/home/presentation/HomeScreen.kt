@@ -2,8 +2,13 @@ package ch.stenzel.tim.polleninfo.feature.home.presentation
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,51 +17,45 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
-import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
+import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
-import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
+import ch.stenzel.tim.polleninfo.core.ui.format.resolve
+import ch.stenzel.tim.polleninfo.core.ui.layout.MeadowCard
 import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
-import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
 import ch.stenzel.tim.polleninfo.core.ui.layout.TabPullToRefreshBox
 import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
-import ch.stenzel.tim.polleninfo.core.ui.format.resolve
-import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgeView
-import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBar
-import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityBarSize
+import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgePill
+import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityGauge
 import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesListHeading
-import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesRow
-import ch.stenzel.tim.polleninfo.core.ui.severity.label
+import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesTile
 import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
+import ch.stenzel.tim.polleninfo.core.ui.status.Banner
+import ch.stenzel.tim.polleninfo.core.ui.status.StatusCard
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.home_driven_by
 import ch.stenzel.tim.polleninfo.resources.home_load_failed
 import ch.stenzel.tim.polleninfo.resources.home_overline
+import ch.stenzel.tim.polleninfo.resources.reading_not_current
 import kotlin.time.Clock
+import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -107,7 +106,10 @@ private fun HomeContent(
             )
         }
         when (uiState) {
-            is HomeUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
+            is HomeUiState.Loading -> HomeColumn(contentPadding, Modifier.fillMaxSize()) {
+                header()
+                HomeSkeleton()
+            }
 
             // The readings stay composed while a refresh runs; only the indicator is added.
             is HomeUiState.Content -> TabPullToRefreshBox(
@@ -116,126 +118,132 @@ private fun HomeContent(
                 topInset = contentPadding.calculateTopPadding(),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // The card floats over the list rather than taking space from it; while it is up,
-                // the list's end grows by the card's height so the last row can still be scrolled
-                // fully above it.
-                var promptHeightPx by remember { mutableIntStateOf(0) }
-                val promptInset = if (uiState.showFeelingPrompt) {
-                    with(LocalDensity.current) { promptHeightPx.toDp() } + PROMPT_MARGIN
-                } else {
-                    0.dp
-                }
-                ReadingView(
-                    content = uiState,
-                    contentPadding = contentPadding,
-                    bottomInset = promptInset,
-                    header = header,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                if (uiState.showFeelingPrompt) {
-                    FeelingPrompt(
-                        saveError = uiState.feelingSaveError,
+                // Scrollable even when it fits, so the pull gesture has something to drag.
+                HomeColumn(contentPadding, Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    header()
+                    ReadingView(
+                        content = uiState,
                         onFeelingSelected = onFeelingSelected,
-                        onDismiss = onFeelingPromptDismissed,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            // Above the glass tab bar, which the screen extends behind.
-                            .padding(bottom = LocalBottomBarPadding.current)
-                            .padding(PROMPT_MARGIN)
-                            .fillMaxWidth()
-                            .onSizeChanged { promptHeightPx = it.height },
+                        onFeelingPromptDismissed = onFeelingPromptDismissed,
                     )
                 }
             }
 
-            is HomeUiState.Error -> TabCenteredContent(contentPadding, header) {
-                ErrorView(uiState.error.message(), onRetry)
+            is HomeUiState.Error -> HomeColumn(contentPadding, Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                header()
+                StatusCard(
+                    title = stringResource(Res.string.home_load_failed),
+                    body = uiState.error.message(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PillButton(onClick = onRetry, style = PillButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(Res.string.common_retry))
+                    }
+                }
             }
         }
     }
 }
 
-/** The gap around the floating feeling card. */
-private val PROMPT_MARGIN = 16.dp
+/** Home's column inside the frame's [contentPadding], with the screen's side margins. */
+@Composable
+private fun HomeColumn(contentPadding: PaddingValues, modifier: Modifier, content: @Composable () -> Unit) {
+    Column(modifier.padding(contentPadding).padding(start = SIDE_MARGIN, end = SIDE_MARGIN, bottom = 24.dp)) {
+        content()
+    }
+}
 
+private val SIDE_MARGIN = 20.dp
+
+/** The vertical gap between Home's cards. */
+private val SECTION_GAP = 20.dp
+
+/**
+ * From the top: the outdated-reading banner if it applies, the gauge card, the feeling card when it
+ * is due, and the grid of species tiles, worst first.
+ */
 @Composable
 private fun ReadingView(
     content: HomeUiState.Content,
-    contentPadding: PaddingValues,
-    bottomInset: Dp,
-    header: @Composable () -> Unit,
-    modifier: Modifier,
+    onFeelingSelected: (Feeling) -> Unit,
+    onFeelingPromptDismissed: () -> Unit,
 ) {
-    // Scrollable even when it fits, so the pull gesture has something to drag.
-    Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState())
-            .padding(contentPadding)
-            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp + bottomInset),
-    ) {
-        header()
-        // Classified against the clock at composition, deliberately not remembered: the age is a
-        // fact about now, so a later recomposition must be free to escalate it to stale.
-        val now = Clock.System.now()
-        ReadingAgeView(readingAgeOf(content.measuredAt, now))
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = refreshedLabel(content.refreshedAt, now, rememberDateWording()).resolve(),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // Classified against the clock at composition, deliberately not remembered: the age is a
+    // fact about now, so a later recomposition must be free to escalate it to stale.
+    val now = Clock.System.now()
+    val age = readingAgeOf(content.measuredAt, now)
+    if (age is ReadingAge.Stale) {
+        Banner(text = stringResource(Res.string.reading_not_current), modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(SECTION_GAP))
+    }
+    GaugeCard(content, age, now)
+    if (content.showFeelingPrompt) {
+        Spacer(Modifier.height(SECTION_GAP))
+        FeelingPrompt(
+            saveError = content.feelingSaveError,
+            onFeelingSelected = onFeelingSelected,
+            onDismiss = onFeelingPromptDismissed,
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(24.dp))
-        OverallSeverityView(content.overallSeverity, content.drivenBy)
-        HorizontalDivider(Modifier.padding(vertical = 24.dp))
-        SpeciesListHeading(content.unit)
-        content.species.forEach { reading ->
+    }
+    Spacer(Modifier.height(SECTION_GAP))
+    SpeciesListHeading(content.unit, titleStyle = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(SECTION_GAP))
+    SpeciesGrid(content.species, content.unit)
+}
+
+/** The hero: the gauge with the worst severity, what drives it, and when the reading is from. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GaugeCard(content: HomeUiState.Content, age: ReadingAge, now: Instant) {
+    MeadowCard(Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            SeverityGauge(content.overallSeverity)
+            // The overall severity is an aggregate with no concentration of its own; without naming
+            // its source, the user would have to scan the tiles to learn what is high.
+            val drivenBy = content.drivenBy
+            if (drivenBy != null) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = stringResource(Res.string.home_driven_by, speciesName(drivenBy.id, drivenBy.name)),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(16.dp))
-            SpeciesRow(reading)
+            // Side by side when they fit, stacked when a long language or a large font needs it.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReadingAgePill(age)
+                Text(
+                    text = refreshedLabel(content.refreshedAt, now, rememberDateWording()).resolve(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
+/** The species as tiles two to a row, the pair in a row as tall as the taller of the two. */
 @Composable
-private fun OverallSeverityView(severity: PollenSeverity, drivenBy: SpeciesReading?) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = severity.label(), style = MaterialTheme.typography.displaySmall)
-        Spacer(Modifier.height(12.dp))
-        SeverityBar(severity, SeverityBarSize.Large, Modifier.fillMaxWidth())
-        // The overall severity is an aggregate with no concentration of its own; without naming
-        // its source, the user would have to scan the list to learn what is high.
-        if (drivenBy != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(Res.string.home_driven_by, speciesName(drivenBy.id, drivenBy.name)),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+private fun SpeciesGrid(species: List<SpeciesReading>, unit: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+        species.chunked(2).forEach { pair ->
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+                pair.forEach { reading ->
+                    SpeciesTile(reading, unit, Modifier.weight(1f).fillMaxHeight())
+                }
+                // An odd last tile keeps the width of a column.
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
         }
-    }
-}
-
-@Composable
-private fun ErrorView(message: String, onRetry: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = stringResource(Res.string.home_load_failed),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
     }
 }
