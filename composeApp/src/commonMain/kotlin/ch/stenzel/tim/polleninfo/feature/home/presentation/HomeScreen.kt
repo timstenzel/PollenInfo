@@ -4,11 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.diary.domain.model.Feeling
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.ReadingAge
-import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.readingAgeOf
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
@@ -43,7 +39,7 @@ import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
 import ch.stenzel.tim.polleninfo.core.ui.severity.ReadingAgePill
 import ch.stenzel.tim.polleninfo.core.ui.severity.SeverityGauge
 import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesListHeading
-import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesTile
+import ch.stenzel.tim.polleninfo.core.ui.severity.SpeciesTileGrid
 import ch.stenzel.tim.polleninfo.core.ui.severity.refreshedLabel
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.core.ui.status.Banner
@@ -190,7 +186,7 @@ private fun ReadingView(
     Spacer(Modifier.height(SECTION_GAP))
     SpeciesListHeading(content.unit, titleStyle = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(SECTION_GAP))
-    SpeciesGrid(content.species, content.unit)
+    SpeciesTileGrid(content.species, content.unit)
 }
 
 /** The hero: the gauge with the worst severity, what drives it, and when the reading is from. */
@@ -235,22 +231,6 @@ private fun GaugeCard(content: HomeUiState.Content, age: ReadingAge, now: Instan
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-    }
-}
-
-/** The species as tiles two to a row, the pair in a row as tall as the taller of the two. */
-@Composable
-private fun SpeciesGrid(species: List<SpeciesReading>, unit: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(TILE_GAP)) {
-        species.chunked(2).forEach { pair ->
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
-                pair.forEach { reading ->
-                    SpeciesTile(reading, unit, Modifier.weight(1f).fillMaxHeight())
-                }
-                // An odd last tile keeps the width of a column.
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }

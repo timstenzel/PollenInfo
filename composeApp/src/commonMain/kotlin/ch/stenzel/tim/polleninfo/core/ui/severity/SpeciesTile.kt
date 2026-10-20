@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.SpeciesReading
@@ -26,9 +29,53 @@ import ch.stenzel.tim.polleninfo.core.ui.layout.MeadowCard
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesIcon
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.resources.Res
+import ch.stenzel.tim.polleninfo.resources.reading_all_species
+import ch.stenzel.tim.polleninfo.resources.reading_concentration_unit
 import ch.stenzel.tim.polleninfo.resources.reading_no_data
 import ch.stenzel.tim.polleninfo.resources.reading_not_reported
 import org.jetbrains.compose.resources.stringResource
+
+/**
+ * The unit is stated once here, so the numbers on the tiles can stay bare and scannable. [titleStyle]
+ * lets Home set the heading in its serif.
+ */
+@Composable
+fun SpeciesListHeading(unit: String, titleStyle: TextStyle = MaterialTheme.typography.titleMedium) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = stringResource(Res.string.reading_all_species),
+            style = titleStyle,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = stringResource(Res.string.reading_concentration_unit, unit),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * [species] as [SpeciesTile]s two to a row, in the order given, the pair in a row as tall as the
+ * taller of the two. Home's grid and an expanded station on All stations.
+ */
+@Composable
+fun SpeciesTileGrid(species: List<SpeciesReading>, unit: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(SPECIES_TILE_GAP)) {
+        species.chunked(2).forEach { pair ->
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(SPECIES_TILE_GAP)) {
+                pair.forEach { reading ->
+                    SpeciesTile(reading, unit, Modifier.weight(1f).fillMaxHeight())
+                }
+                // An odd last tile keeps the width of a column.
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** The gap between the tiles of a [SpeciesTileGrid], across and down; skeletons use it too. */
+val SPECIES_TILE_GAP = 13.dp
 
 /**
  * One species as a card tile: the species' icon on a pale tile, the concentration with [unit] at the

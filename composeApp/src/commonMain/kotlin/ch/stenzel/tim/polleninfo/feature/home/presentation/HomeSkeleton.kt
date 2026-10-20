@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.core.ui.layout.MeadowCard
 import ch.stenzel.tim.polleninfo.core.ui.severity.GAUGE_HEIGHT
 import ch.stenzel.tim.polleninfo.core.ui.severity.GAUGE_WIDTH
+import ch.stenzel.tim.polleninfo.core.ui.severity.SPECIES_TILE_GAP
 import ch.stenzel.tim.polleninfo.core.ui.severity.drawGaugeSegments
 import ch.stenzel.tim.polleninfo.core.ui.status.ShimmerBox
 import ch.stenzel.tim.polleninfo.core.ui.status.SkeletonBlock
@@ -50,8 +51,8 @@ internal fun HomeSkeleton(modifier: Modifier = Modifier) {
             SkeletonBlock(150.dp, 26.dp, shape = MaterialTheme.shapes.small)
             Spacer(Modifier.height(20.dp))
             repeat(SKELETON_TILE_ROWS) { row ->
-                if (row > 0) Spacer(Modifier.height(TILE_GAP))
-                Row(horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+                if (row > 0) Spacer(Modifier.height(SPECIES_TILE_GAP))
+                Row(horizontalArrangement = Arrangement.spacedBy(SPECIES_TILE_GAP)) {
                     repeat(2) { SkeletonTile(Modifier.weight(1f)) }
                 }
             }
@@ -79,6 +80,3 @@ private fun SkeletonTile(modifier: Modifier) {
 
 /** Two rows of tiles fill the screen below the gauge card; more would only be scrolled to. */
 private const val SKELETON_TILE_ROWS = 2
-
-/** The gap between the tiles of Home's grid, across and down. */
-internal val TILE_GAP = 13.dp

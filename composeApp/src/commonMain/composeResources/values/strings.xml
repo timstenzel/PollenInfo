@@ -75,7 +75,9 @@
 
     <!-- All stations. The screen's title is nav_all_stations, so it matches the tab's name. -->
     <string name="all_stations_load_failed">The stations could not be loaded.</string>
-    <!-- Row states: short, they share a fixed-width column with the severity words. -->
+    <!-- Heading of the station list below the map. -->
+    <string name="all_stations_list_heading">Stations</string>
+    <!-- Row states: short, they stand where a row says its level. -->
     <string name="all_stations_row_loading">Loading…</string>
     <string name="all_stations_row_no_reading">No reading</string>
     <string name="all_stations_detail_loading">Loading this station’s reading…</string>

@@ -96,6 +96,22 @@ class PaletteContrastTest {
         )
     }
 
+    // All stations: the selected row is `primaryContainer`, so its severity dot and its text sit on
+    // it; the outdated-reading icon sits on a row of either kind; the map's selected tag is
+    // onPrimary on primary (above). The grey "no level" dot and the map's border and halo are
+    // decorative — the row's words carry them.
+    private fun Scheme.allStationsPairs(): List<Pair> {
+        val selectedRow = colors.primaryContainer
+        return PollenSeverity.entries.map { severity ->
+            Pair("severity $severity", "selected row (primaryContainer)", severityColor(severity, dark), selectedRow, GRAPHICS)
+        } + listOf(
+            Pair("onSurface", "selected row (primaryContainer)", colors.onSurface, selectedRow, TEXT),
+            Pair("onSurfaceVariant", "selected row (primaryContainer)", colors.onSurfaceVariant, selectedRow, TEXT),
+            Pair("stale icon (onWarningContainer)", "raised", meadow.onWarningContainer, colors.surfaceContainerLowest, GRAPHICS),
+            Pair("stale icon (onWarningContainer)", "selected row (primaryContainer)", meadow.onWarningContainer, selectedRow, GRAPHICS),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -136,6 +152,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the station rows on All stations are readable`() {
+        assertAllMeet { allStationsPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -144,6 +165,7 @@ class PaletteContrastTest {
             assertTrue(scheme.textPairs().size == 9, scheme.name)
             assertTrue(scheme.componentPairs().size == 7, scheme.name)
             assertTrue(scheme.homePairs().size == 2, scheme.name)
+            assertTrue(scheme.allStationsPairs().size == PollenSeverity.entries.size + 4, scheme.name)
         }
     }
 

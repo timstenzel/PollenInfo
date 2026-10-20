@@ -59,6 +59,7 @@
 
     <!-- All stations -->
     <string name="all_stations_load_failed">Non è stato possibile caricare le stazioni.</string>
+    <string name="all_stations_list_heading">Stazioni</string>
     <string name="all_stations_row_loading">Caricamento…</string>
     <string name="all_stations_row_no_reading">Nessun valore</string>
     <string name="all_stations_detail_loading">Caricamento del valore di questa stazione…</string>

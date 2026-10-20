@@ -10,6 +10,7 @@ Notes that apply to every task:
   no existing test changes except `SeverityColorsTest` for the one deliberately changed colour. The
   only new strings are the five tab overlines (task 02, decided with the maintainer on 2026-10-19),
   the gauge overline `home_gauge_overline` and the tile's `reading_not_reported` (task 04, decided
+  with the maintainer on 2026-10-20), the list heading `all_stations_list_heading` (task 05, decided
   with the maintainer on 2026-10-20) and the alarm count in task 07. If a screen seems to need a
   state change or another string, stop and ask.
 - **Decisions taken while verifying the annex (2026-10-19):**
@@ -189,24 +190,24 @@ shows the skeleton; total failure shows the status card.
 
 ### Implementation steps
 
-- [ ] Restyle the map: land fill, dots with ring, selected halo and "Name · Level" label; keep the single semantics node and tap behaviour
-- [ ] Add the legend row (dot + level word for each severity)
-- [ ] Restyle station rows and their loading / no-reading / stale variants; use species tiles in the expanded detail
-- [ ] Use the skeleton for loading and the status card for the full-screen error
+- [x] Restyle the map: land fill, dots with ring, selected halo and "Name · Level" label; keep the single semantics node and tap behaviour
+- [x] Add the legend row (dot + level word for each severity)
+- [x] Restyle station rows and their loading / no-reading / stale variants; use species tiles in the expanded detail
+- [x] Use the skeleton for loading and the status card for the full-screen error
 
 ### Acceptance criteria
 
-- [ ] Runtime: the map shows 15 coloured dots and the legend with None, Low, Moderate, High, Very high; selecting Zürich enlarges its dot with a halo and the label "Zürich · <its level>" and scrolls the list to it
-- [ ] Runtime: during a refresh or with a station unavailable, affected rows show a grey dot and "Loading…" or "No reading"; stale rows keep the warning icon
-- [ ] Runtime: expanding a row shows its readings as tiles; with every station failing, the status card with "No station's reading could be loaded…" and "Retry" is shown
-- [ ] Runtime: TalkBack reads the map's single description as before
+- [x] Runtime: the map shows 15 coloured dots and the legend with None, Low, Moderate, High, Very high; selecting Zürich enlarges its dot with a halo and the label "Zürich · <its level>" and scrolls the list to it *(API 37, light and dark, English and German: 15 dots, legend None/Low/Moderate/High/Very high (German on one line too), tapping the Zürich dot shows "Zürich · None" over an 18 dp dot in a halo and scrolls its expanded row into view; a station near the western edge (Lausanne) keeps its tag inside the map)*
+- [x] Runtime: during a refresh or with a station unavailable, affected rows show a grey dot and "Loading…" or "No reading"; stale rows keep the warning icon *(rows are pending only on the first load — a refresh keeps the old readings until its round completes, unchanged behaviour. Checked with a temporary, reverted delay and a forced Buchs failure in `GetAllStationReadingsUseCase`: every row "Loading…" with a grey ring and grey map dots, then Buchs "No reading" with a grey ring and a hollow map dot; Buchs, Luzern and Neuchâtel (outdated on the real backend) show the warning icon and "None · Reading not current")*
+- [x] Runtime: expanding a row shows its readings as tiles; with every station failing, the status card with "No station's reading could be loaded…" and "Retry" is shown *(expanded Zürich: reading pill, "All species" heading and the two-column tile grid in the sage selected card; pull-to-refresh in airplane mode gave the card "The stations could not be loaded." / "No station's reading could be loaded. Please try again later." / Retry, which reloaded once the network was back)*
+- [ ] ~~Runtime: TalkBack reads the map's single description as before~~ *(skipped in part: TalkBack's speech could not be captured on the emulator. Passed through the accessibility tree: the map (tag included) is one node described "Karte mit 15 Pollenmessstationen. Wähle eine Station in der Liste unten.", no node per dot; the legend is silent; each row header is one node)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `SwissMapProjectionTest`, `StationHitTestTest`, `SwissBorderTest`, `SwissLakesTest` and `AllStationsViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `SwissMapProjectionTest`, `StationHitTestTest`, `SwissBorderTest`, `SwissLakesTest` and `AllStationsViewModelTest` unchanged)
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits
 
 ## Task [06-diary-redesign]
 

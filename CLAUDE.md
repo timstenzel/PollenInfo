@@ -192,8 +192,9 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
   for species and lake colours).
 - `SeverityBar` fills to **fixed stops** (NONE 4 %, then 25/50/75/100 %; 0 % muted track = no
   reading) over a `surfaceContainerHighest` track, one solid colour, never interpolated. Colour never
-  carries meaning alone — every bar sits beside its word. Map dots use the same
-  `PollenSeverity.color()` — no separate dot colour function.
+  carries meaning alone — every bar and dot sits beside its word. All stations' row dots and map
+  dots use the same `PollenSeverity.color()` — no separate dot colour function; a row without a
+  level (loading, no reading) gets a grey ring, the map a grey (loading) or hollow (no reading) dot.
 - **`SeverityGauge`** (Home's hero): four arc segments over a half circle, the first
   `gaugeFilledSegments(severity)` (pure, `SeverityGaugeTest`: none for no reading and NONE, then 1–4
   for LOW–VERY_HIGH) in the severity colour, the rest in the track colour, a soft glow of that colour
@@ -206,8 +207,8 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
 `< STALE_AFTER` (3 h) → `Fresh(localTime)` caption; otherwise `Stale.Today(localTime)` or
 `Stale.Earlier(localDate)` as a warning. Home shows it as `ReadingAgePill` (sage when fresh, the
 `meadowColors.warningContainer` colours when stale) plus a `Banner` "These readings are not
-current." when stale; All stations' expanded row still uses `ReadingAgeView` (`errorContainer`).
-Device time zone. "Refreshed 10:42"
+current." when stale. All stations' expanded row shows the same pill; its collapsed row says
+"Reading not current" in its line beside a warning icon. Device time zone. "Refreshed 10:42"
 (`refreshedLabel`) is `Content.refreshedAt` — when the app last *received* a reading, from an
 injected `kotlin.time.Clock` — a different fact from `measuredAt`, never a warning.
 
@@ -255,7 +256,7 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `stationpicker` | `StationPicker` state holder + `StationPickerContent`, `FindNearestStationUseCase` |
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
-| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`, `SpeciesRow`, `ReadingAgeView`/`ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
+| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
 | `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
 | `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
@@ -464,15 +465,22 @@ Details live in the ViewModels and their tests; these are the decisions that are
 - **All stations** fans out one `/measurements` request per station in parallel (no batch
   endpoint); a failure is `Unavailable` for that row only. Full-screen `Error` only if the station
   list fails or **every** station is `Unavailable`. A refresh replaces all rows at once with the
-  round's final result. Stale rows show a warning icon (slot reserved on every row). Selection is
-  `Content.selectedAbbr`; the scroll to it is an event (`ScrollToStation`). Never touches the
-  stored station.
+  round's final result. The map card (with the five-level legend, silent to screen readers) stays
+  fixed above the list; only the list (heading "Stations" + "Refreshed …" as its first item, then
+  one rounded row per station: dot, name, "level · driving type", reserved stale-icon slot,
+  chevron) scrolls and pulls to refresh. Stale rows show a warning icon and "Reading not current"
+  in their line. The selected row is `primaryContainer` with a `primary` edge and expands to the
+  reading pill and a `SpeciesTileGrid`. Loading is `AllStationsSkeleton`, a full-screen error a
+  `StatusCard` with Retry. Selection is `Content.selectedAbbr`; the scroll to it is an event
+  (`ScrollToStation`, list index offset by the heading item). Never touches the stored station.
 - **Map** (`feature/allstations/map/`, pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
   1:10m, Douglas–Peucker 0.01°), lakes `SWISS_LAKES` (0.003°; Bodensee and Lago Maggiore omitted on
   request; landmarks only), equirectangular projection scaled by cos 46.8° — border, lakes, dots
   and the tab icon all go through the same `project`. Tap = **nearest** dot within `TAP_RADIUS`
   24 dp (`nearestStation`, ties → alphabetically first). One `clearAndSetSemantics` node, no focus
-  stop per dot.
+  stop per dot. Land `meadowColors.mapLand`, border `primary` at 55 %, 12 dp dots in a 2 dp ring of
+  the card colour; the selected dot is 18 dp in a halo of its colour with a "Name · Level" `primary`
+  tag above it (below it when there is no room, kept inside the map sideways).
 - **Diary** is gated on a session (`SignedOut` fetches nothing). Each load fetches the history and
   `entries(from, until)` **in parallel**, window computed on the phone with
   `historyWindow(range, swissToday(clock))`; either failing is `Error` (a chart without the feeling

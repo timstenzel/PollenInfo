@@ -62,6 +62,7 @@
 
     <!-- All stations -->
     <string name="all_stations_load_failed">Les stations n’ont pas pu être chargées.</string>
+    <string name="all_stations_list_heading">Stations</string>
     <string name="all_stations_row_loading">Chargement…</string>
     <string name="all_stations_row_no_reading">Sans mesure</string>
     <string name="all_stations_detail_loading">Chargement de la mesure de cette station…</string>
