@@ -199,6 +199,7 @@
     <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.*</string>
     <string name="diary_no_entries_hint">Répondez à « %1$s » dans l’onglet %2$s pour voir votre courbe ici.</string>
     <string name="diary_species_heading">Types de pollen</string>
+    <string name="diary_feeling_legend">Votre ressenti</string>
     <string name="diary_not_measured">Non mesuré ici</string>
     <string name="diary_disclaimer">* Ceci n’est pas un diagnostic médical. Si vous soupçonnez une allergie au pollen, veuillez consulter un médecin.</string>
     <string name="diary_load_failed">L’historique des pollens n’a pas pu être chargé.</string>

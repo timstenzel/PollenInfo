@@ -1,10 +1,15 @@
 package ch.stenzel.tim.polleninfo.feature.diary.presentation
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,33 +22,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
@@ -53,19 +50,26 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.history.domain.model.HistoryRange
 import ch.stenzel.tim.polleninfo.core.species.domain.model.Species
-import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
 import ch.stenzel.tim.polleninfo.core.ui.error.message
+import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.layout.MeadowCard
 import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
-import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
 import ch.stenzel.tim.polleninfo.core.ui.layout.TabScreenFrame
+import ch.stenzel.tim.polleninfo.core.ui.selection.DropdownPill
+import ch.stenzel.tim.polleninfo.core.ui.selection.SegmentedToggle
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
+import ch.stenzel.tim.polleninfo.core.ui.status.StatusCard
+import ch.stenzel.tim.polleninfo.core.ui.status.StatusTone
 import ch.stenzel.tim.polleninfo.feature.diary.chart.DiaryChart
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.account_title_login
 import ch.stenzel.tim.polleninfo.resources.account_title_register
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.diary_disclaimer
+import ch.stenzel.tim.polleninfo.resources.diary_feeling_legend
 import ch.stenzel.tim.polleninfo.resources.diary_gate_intro
 import ch.stenzel.tim.polleninfo.resources.diary_gate_point_devices
 import ch.stenzel.tim.polleninfo.resources.diary_gate_point_email
@@ -92,8 +96,8 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * The Diary tab: the user's answers and the daily pollen levels at a station — the home station
  * until another is chosen — over the last week, month or year. A period without answers shows a
- * hint over the chart pointing to Home. Below the chart, one checkbox per pollen type switches its
- * line on and off and doubles as the legend.
+ * hint over the chart pointing to Home. Below the chart, one tick chip per pollen type, in its
+ * line's colour, switches its line on and off and doubles as the legend.
  *
  * Scrolls as a whole and has no pull-to-refresh. The note that the diary is no diagnosis is part of
  * every state with a graph, tied to the explanatory line by its asterisk.
@@ -144,17 +148,25 @@ private fun DiaryContent(
             )
         }
         when (uiState) {
-            is DiaryUiState.Loading -> TabCenteredContent(contentPadding, header) { CircularProgressIndicator() }
-            is DiaryUiState.SignedOut -> DiaryGate(actions, contentPadding, header)
-            is DiaryUiState.Content -> DiaryView(uiState, actions, contentPadding, header)
-            is DiaryUiState.Error -> TabCenteredContent(contentPadding, header) {
-                ErrorView(uiState.error.message(), onRetry)
+            is DiaryUiState.Loading -> DiaryColumn(contentPadding, header) { DiarySkeleton() }
+            is DiaryUiState.SignedOut -> DiaryColumn(contentPadding, header) { DiaryGate(actions) }
+            is DiaryUiState.Content -> DiaryColumn(contentPadding, header) { DiaryView(uiState, actions) }
+            is DiaryUiState.Error -> DiaryColumn(contentPadding, header) {
+                StatusCard(
+                    title = stringResource(Res.string.diary_load_failed),
+                    body = uiState.error.message(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PillButton(onClick = onRetry, style = PillButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(Res.string.common_retry))
+                    }
+                }
             }
         }
     }
 }
 
-/** The scrolling column of the signed-in and signed-out Diary, clear of the status bar and the tab bar. */
+/** The Diary's scrolling column, clear of the status bar and the tab bar, with the screen's margins. */
 @Composable
 private fun DiaryColumn(
     contentPadding: PaddingValues,
@@ -166,215 +178,274 @@ private fun DiaryColumn(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
-            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            .padding(start = SIDE_MARGIN, end = SIDE_MARGIN, bottom = 24.dp),
     ) {
         header()
         content()
     }
 }
 
+private val SIDE_MARGIN = 20.dp
+
+/** The vertical gap between the Diary's sections. */
+internal val DIARY_SECTION_GAP = 20.dp
+
+/**
+ * From the top: the explanatory line, the station and the range side by side (stacked when they do
+ * not fit), the chart card, the pollen-type chips and the disclaimer.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DiaryView(
-    content: DiaryUiState.Content,
-    actions: DiaryActions,
-    contentPadding: PaddingValues,
-    header: @Composable () -> Unit,
-) {
-    DiaryColumn(contentPadding, header) {
-        StationDropdown(stations = content.stations, selectedAbbr = content.stationAbbr, onSelected = actions.onStationSelected)
-        Spacer(Modifier.height(16.dp))
-        RangeSelector(selected = content.range, onSelected = actions.onRangeSelected)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = stringResource(Res.string.diary_intro),
-            style = MaterialTheme.typography.bodyMedium,
+private fun ColumnScope.DiaryView(content: DiaryUiState.Content, actions: DiaryActions) {
+    Text(
+        text = stringResource(Res.string.diary_intro),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(DIARY_SECTION_GAP))
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Any station; choosing one here never changes the home station.
+        DropdownPill(
+            label = stringResource(Res.string.diary_station_label),
+            value = content.stations.firstOrNull { it.abbr == content.stationAbbr }?.name ?: content.stationAbbr,
+            options = content.stations,
+            optionText = { it.name },
+            onSelected = { actions.onStationSelected(it.abbr) },
         )
-        Spacer(Modifier.height(16.dp))
-        // Reserved even when idle, so the chart does not jump when a load starts.
-        Box(Modifier.fillMaxWidth().height(4.dp)) {
-            if (content.isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        }
-        Spacer(Modifier.height(8.dp))
-        Box {
-            DiaryChart(
-                days = content.history.days,
-                speciesIds = content.shownSpeciesIds,
-                range = content.historyRange,
-                entries = content.entries,
+        SegmentedToggle(
+            options = HistoryRange.entries,
+            selected = content.range,
+            onSelected = actions.onRangeSelected,
+            label = { stringResource(it.labelResource()) },
+        )
+    }
+    // Reserved even when idle, so the chart does not jump when a load starts.
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(4.dp)) {
+        if (content.isLoading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
-            // Outside the chart's single semantics node, so a screen reader reads it on its own.
-            if (content.hasNoEntries) {
-                Surface(
-                    modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 48.dp, vertical = 16.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 2.dp,
-                ) {
-                    Text(
-                        text = stringResource(
-                            Res.string.diary_no_entries_hint,
-                            stringResource(Res.string.home_feeling_question),
-                            stringResource(Res.string.nav_home),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
-                }
-            }
         }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = stringResource(Res.string.diary_species_heading),
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(Modifier.height(4.dp))
-        val notMeasured = content.notMeasured
+    }
+    ChartCard(content)
+    Spacer(Modifier.height(DIARY_SECTION_GAP))
+    Text(
+        text = stringResource(Res.string.diary_species_heading),
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.semantics { heading() },
+    )
+    Spacer(Modifier.height(DIARY_SECTION_GAP))
+    val notMeasured = content.notMeasured
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(CHIP_GAP), verticalArrangement = Arrangement.spacedBy(CHIP_GAP)) {
         content.species.forEach { species ->
-            SpeciesCheckboxRow(
+            SpeciesChip(
                 species = species,
                 checked = species.id in content.checked,
                 measured = species.id !in notMeasured,
                 onToggled = { actions.onSpeciesToggled(species.id) },
             )
         }
-        Spacer(Modifier.height(24.dp))
+    }
+    Spacer(Modifier.height(DIARY_SECTION_GAP))
+    Text(
+        text = stringResource(Res.string.diary_disclaimer),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * The chart in its card, titled with the period it shows and a legend for the dashed feeling line.
+ * The card is `surface`, not the raised card colour: every species line reaches 3.5:1 only on it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChartCard(content: DiaryUiState.Content) {
+    val cardColor = MaterialTheme.colorScheme.surface
+    MeadowCard(Modifier.fillMaxWidth(), color = cardColor) {
+        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 16.dp, top = 18.dp, bottom = 14.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = rememberDateWording().dateRange(content.history.from, content.history.until),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                FeelingLegend()
+            }
+            Spacer(Modifier.height(12.dp))
+            Box {
+                DiaryChart(
+                    days = content.history.days,
+                    speciesIds = content.shownSpeciesIds,
+                    range = content.historyRange,
+                    entries = content.entries,
+                    cardColor = cardColor,
+                )
+                // Outside the chart's single semantics node, so a screen reader reads it on its own.
+                if (content.hasNoEntries) {
+                    Text(
+                        text = stringResource(
+                            Res.string.diary_no_entries_hint,
+                            stringResource(Res.string.home_feeling_question),
+                            stringResource(Res.string.nav_home),
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(horizontal = 40.dp, vertical = 16.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A sample of the dashed feeling line and its name. The chart itself is described as a whole. */
+@Composable
+private fun FeelingLegend() {
+    val color = MaterialTheme.colorScheme.primary
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Canvas(Modifier.size(width = 18.dp, height = 3.dp).clearAndSetSemantics { }) {
+            drawLine(
+                color,
+                start = Offset(0f, size.height / 2),
+                end = Offset(size.width, size.height / 2),
+                strokeWidth = size.height,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+            )
+        }
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = stringResource(Res.string.diary_disclaimer),
-            style = MaterialTheme.typography.bodySmall,
+            text = stringResource(Res.string.diary_feeling_legend),
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 /**
- * The Diary without an account: a heading, why the diary needs one — the answers are health
+ * The Diary without an account, as a gate card: why the diary needs one — the answers are health
  * information kept in the account, survive a lost or replaced phone and appear on every phone logged
- * in, and the email is only used to log in — and the two ways in. No chart.
+ * in, and the email is only used to log in — each point beside a check badge, and the two ways in.
+ * No chart.
  */
 @Composable
-private fun DiaryGate(actions: DiaryActions, contentPadding: PaddingValues, header: @Composable () -> Unit) {
-    DiaryColumn(contentPadding, header) {
-        Text(
-            text = stringResource(Res.string.diary_gate_title),
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(text = stringResource(Res.string.diary_gate_intro), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        listOf(
-            Res.string.diary_gate_point_health,
-            Res.string.diary_gate_point_phone,
-            Res.string.diary_gate_point_devices,
-            Res.string.diary_gate_point_email,
-        ).forEach { point ->
-            Row(modifier = Modifier.padding(vertical = 4.dp)) {
-                // Decoration: each point is its own sentence, so the bullet is not read out.
-                Text(text = "•", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.clearAndSetSemantics { })
-                Spacer(Modifier.width(12.dp))
-                Text(text = stringResource(point), style = MaterialTheme.typography.bodyLarge)
-            }
+private fun DiaryGate(actions: DiaryActions) {
+    StatusCard(
+        title = stringResource(Res.string.diary_gate_title),
+        body = stringResource(Res.string.diary_gate_intro),
+        modifier = Modifier.fillMaxWidth(),
+        tone = StatusTone.Neutral,
+        icon = Icons.AutoMirrored.Filled.MenuBook,
+        centered = false,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            listOf(
+                Res.string.diary_gate_point_health,
+                Res.string.diary_gate_point_phone,
+                Res.string.diary_gate_point_devices,
+                Res.string.diary_gate_point_email,
+            ).forEach { point -> GatePoint(stringResource(point)) }
         }
-        Spacer(Modifier.height(32.dp))
-        Button(onClick = actions.onCreateAccount, modifier = Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(22.dp))
+        PillButton(onClick = actions.onCreateAccount, style = PillButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(Res.string.account_title_register))
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = actions.onLogIn, modifier = Modifier.fillMaxWidth()) {
+        PillButton(onClick = actions.onLogIn, style = PillButtonStyle.Outline, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(Res.string.account_title_login))
         }
     }
 }
 
-/** Any station; choosing one here never changes the home station. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** One point of the gate. The check badge is decoration: each point is its own sentence. */
 @Composable
-private fun StationDropdown(stations: List<Station>, selectedAbbr: String, onSelected: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = stations.firstOrNull { it.abbr == selectedAbbr }?.name ?: selectedAbbr,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(Res.string.diary_station_label)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            stations.forEach { station ->
-                DropdownMenuItem(
-                    text = { Text(station.name) },
-                    onClick = {
-                        onSelected(station.abbr)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                )
-            }
+private fun GatePoint(text: String) {
+    Row(Modifier.fillMaxWidth()) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(24.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+        ) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(16.dp),
+            )
         }
+        Spacer(Modifier.width(12.dp))
+        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
 /**
- * One pollen type's checkbox, with a sample of its line's colour so the rows are also the chart's
- * legend. A type the station does not measure in the period is disabled and shown unchecked with
+ * One pollen type's tick chip, in its line's colour so the chips are also the chart's legend:
+ * checked, a filled box with a tick and an edge in that colour; unchecked, an empty box in it. A
+ * type the station does not measure in the period is disabled and shown unchecked and dimmed with
  * "Not measured here" — no line is drawn for it, and a missing line must not read as "no pollen".
  * Its checked choice is kept, so it is drawn again at a station that measures it.
  *
- * The whole row is one toggleable focus stop; the colour sample is decoration.
+ * The whole chip is one toggleable focus stop. It is drawn at least 40 dp tall, so a row of chips
+ * with [CHIP_GAP] between them is 48 dp apart; Compose extends the touch area of the smaller chip to
+ * 48 dp.
  */
 @Composable
-private fun SpeciesCheckboxRow(species: Species, checked: Boolean, measured: Boolean, onToggled: () -> Unit) {
+private fun SpeciesChip(species: Species, checked: Boolean, measured: Boolean, onToggled: () -> Unit) {
     val shownChecked = checked && measured
+    val lineColor = speciesColor(species.id) ?: MaterialTheme.colorScheme.outline
+    val raised = MaterialTheme.colorScheme.surfaceContainerLowest
+    val textColor = if (measured) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .toggleable(value = shownChecked, enabled = measured, role = Role.Checkbox, onValueChange = { onToggled() }),
-    ) {
-        Checkbox(checked = shownChecked, onCheckedChange = null, enabled = measured)
-        Spacer(Modifier.width(12.dp))
-        Box(
-            Modifier
-                .size(width = 20.dp, height = 4.dp)
-                .alpha(if (measured) 1f else DISABLED_ALPHA)
-                .background(speciesColor(species.id) ?: MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = speciesName(species.id, species.name),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (measured) 1f else DISABLED_ALPHA),
+            .heightIn(min = CHIP_HEIGHT)
+            .clip(CircleShape)
+            .background(if (shownChecked) raised else Color.Transparent)
+            .border(
+                if (shownChecked) BorderStroke(1.5.dp, lineColor) else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                CircleShape,
             )
+            .toggleable(value = shownChecked, enabled = measured, role = Role.Checkbox, onValueChange = { onToggled() })
+            .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+    ) {
+        val box = RoundedCornerShape(6.dp)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(18.dp)
+                .alpha(if (measured) 1f else DISABLED_ALPHA)
+                .then(if (shownChecked) Modifier.background(lineColor, box) else Modifier.border(2.dp, lineColor, box)),
+        ) {
+            if (shownChecked) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = raised, modifier = Modifier.size(14.dp))
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(text = speciesName(species.id, species.name), style = MaterialTheme.typography.labelLarge, color = textColor)
             if (!measured) {
                 Text(
                     text = stringResource(Res.string.diary_not_measured),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RangeSelector(selected: HistoryRange, onSelected: (HistoryRange) -> Unit) {
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-        HistoryRange.entries.forEachIndexed { index, range ->
-            SegmentedButton(
-                selected = range == selected,
-                onClick = { onSelected(range) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = HistoryRange.entries.size),
-            ) {
-                Text(stringResource(range.labelResource()))
             }
         }
     }
@@ -386,28 +457,8 @@ private fun HistoryRange.labelResource(): StringResource = when (this) {
     HistoryRange.YEAR -> Res.string.diary_range_year
 }
 
-@Composable
-private fun ErrorView(message: String, onRetry: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = stringResource(Res.string.diary_load_failed),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
-    }
-}
+private val CHIP_HEIGHT = 40.dp
+private val CHIP_GAP = 8.dp
 
 /** Material's opacity for disabled content. */
 private const val DISABLED_ALPHA = 0.38f

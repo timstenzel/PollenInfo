@@ -40,6 +40,32 @@ class DateWordingTest {
     }
 
     @Test
+    fun `a date range within one year names both days without a year`() {
+        val from = LocalDate(2026, 10, 14)
+        val until = LocalDate(2026, 10, 20)
+
+        assertEquals(
+            listOf("14 Oct – 20 Oct", "14. Okt. – 20. Okt.", "14 oct. – 20 oct.", "14 ott – 20 ott"),
+            all.map { it.dateRange(from, until) },
+        )
+    }
+
+    @Test
+    fun `a date range across the new year gives each end its year`() {
+        val range = englishDates.dateRange(LocalDate(2025, 10, 21), LocalDate(2026, 10, 19))
+
+        assertEquals("21 Oct 2025 – 19 Oct 2026", range)
+    }
+
+    @Test
+    fun `a date range ending on 31 December keeps the years out`() {
+        // The boundary from the other side: same year at its very end.
+        val range = englishDates.dateRange(LocalDate(2025, 12, 1), LocalDate(2025, 12, 31))
+
+        assertEquals("1 Dec – 31 Dec", range)
+    }
+
+    @Test
     fun `the month-only form is the abbreviated month`() {
         val date = LocalDate(2026, 10, 1)
 

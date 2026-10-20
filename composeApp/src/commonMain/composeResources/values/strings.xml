@@ -224,6 +224,7 @@
     <string name="diary_intro">Compare how you felt with the pollen levels at a station.*</string>
     <string name="diary_no_entries_hint">Answer “%1$s” on %2$s to see your line here.</string>
     <string name="diary_species_heading">Pollen types</string>
+    <string name="diary_feeling_legend">Your feeling</string>
     <string name="diary_not_measured">Not measured here</string>
     <string name="diary_disclaimer">* This is not a medical diagnosis. If you suspect a pollen allergy, please see a doctor.</string>
     <string name="diary_load_failed">The pollen history could not be loaded.</string>

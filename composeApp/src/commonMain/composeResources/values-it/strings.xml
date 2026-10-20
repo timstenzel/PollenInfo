@@ -196,6 +196,7 @@
     <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.*</string>
     <string name="diary_no_entries_hint">Risponda a «%1$s» nella scheda %2$s per vedere qui la Sua linea.</string>
     <string name="diary_species_heading">Tipi di polline</string>
+    <string name="diary_feeling_legend">Il suo stato</string>
     <string name="diary_not_measured">Non misurato qui</string>
     <string name="diary_disclaimer">* Questa non è una diagnosi medica. Se sospetta un’allergia ai pollini, si rivolga a un medico.</string>
     <string name="diary_load_failed">Non è stato possibile caricare lo storico dei pollini.</string>

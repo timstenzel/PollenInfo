@@ -183,7 +183,8 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
 - **`PaletteContrastTest`** (`commonTest`, `core/ui/palette`, pure `contrastRatio`) is the palette
   check, replacing any manual validator: every severity colour ≥ 3:1 on surface, raised, sunken,
   background, wash and map land; every species colour ≥ 3.5:1 on the diary chart card, which
-  **must stay `surface`** (on raised, dark Ash is 3.11:1); body text (`onSurface`,
+  **must stay `surface`** (on raised, dark Ash is 3.11:1), and ≥ 3:1 on raised and background (the
+  Diary's tick chips), the dashed feeling line (`primary`) ≥ 3.5:1 on it too; body text (`onSurface`,
   `onSurfaceVariant`) and on-primary/on-accent/on-warning ≥ 4.5:1; button labels (`primary`,
   `error`, on-primary-container) ≥ 4.5:1 and the dialog badge icon and the back arrow on glass ≥ 3:1
   — both schemes. **Add every new foreground/background pairing to it.**
@@ -258,7 +259,8 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
 | `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
-| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
+| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken) |
+| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains, `centered = false` for a gate that lists points), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
@@ -487,7 +489,13 @@ Details live in the ViewModels and their tests; these are the decisions that are
   line would read as "no answers"). Station, range and checked types are ViewModel fields, never
   persisted; the station dropdown never writes the stored station. Feelings share the y-axis via
   `Feeling.level` (higher is worse). The chart never bridges a missing day; today is never plotted.
-  `DiaryChartGeometry` and `diaryChartDescription` are pure.
+  `DiaryChartGeometry` and `diaryChartDescription` are pure. Layout: intro line, `DropdownPill` +
+  `SegmentedToggle` (wrapping when they don't fit), the chart card titled with
+  `DateWording.dateRange` plus the "Your feeling" legend, then one tick chip per type in its line
+  colour (unmeasured: disabled, dimmed, "Not measured here"), then the disclaimer. The chart keeps
+  feeling words on its right axis (decided with the maintainer, unlike Figma); week ticks are
+  weekdays. Loading is `DiarySkeleton`, the gate a start-aligned neutral `StatusCard` with the four
+  points, an error a `StatusCard` with Retry.
 - **Alarms**: permission gate first; the list loads only on the first `ENABLED` (no backend
   contact or registration before). `onResume()` reloads quietly. The switch is optimistic (full `PUT`,
   flip back + `ToggleFailed` event on failure). Limit `MAX_ALARMS` = 10 (backend's limit).

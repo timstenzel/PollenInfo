@@ -196,6 +196,7 @@
     <string name="diary_intro">Vergleiche, wie du dich gefühlt hast, mit der Pollenbelastung an einer Station.*</string>
     <string name="diary_no_entries_hint">Beantworte «%1$s» unter %2$s, um hier deine Linie zu sehen.</string>
     <string name="diary_species_heading">Pollenarten</string>
+    <string name="diary_feeling_legend">Dein Befinden</string>
     <string name="diary_not_measured">Hier nicht gemessen</string>
     <string name="diary_disclaimer">* Dies ist keine medizinische Diagnose. Wenn du eine Pollenallergie vermutest, wende dich bitte an eine Ärztin oder einen Arzt.</string>
     <string name="diary_load_failed">Der Pollenverlauf konnte nicht geladen werden.</string>

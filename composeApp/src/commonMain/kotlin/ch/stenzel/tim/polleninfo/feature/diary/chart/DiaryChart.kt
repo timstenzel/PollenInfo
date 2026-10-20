@@ -7,7 +7,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,11 +34,13 @@ import kotlinx.datetime.LocalDate
  * The diary graph: one line per species in its palette colour, and the user's [entries] as the
  * feeling line, all on one scale (None at the bottom, Very high at the top). Severity words label
  * the left side, feeling words the right — "Very bad" level with "Very high" — and dates run below
- * in the app's language: "4 Sep" ("4. Sep.") for a week or a month, the month alone ("Oct") for a
- * year, whose ticks are month starts.
+ * in the app's language: the weekday ("Tue", "Di") for a week, "4 Sep" ("4. Sep.") for a month, the
+ * month alone ("Oct") for a year, whose ticks are month starts. The card around it names the period.
  *
- * The feeling line is drawn last, thicker and in `onSurface`, with a dot on every answered day, so
- * it stays distinguishable among the species lines and a single answer between gaps is still seen.
+ * Grid lines are dotted hairlines above a solid None baseline. The feeling line is drawn last,
+ * thicker, dashed and in `primary`, with a dot ringed in [cardColor] on every answered day, so it
+ * stays distinguishable among the solid species lines and a single answer between gaps is still
+ * seen.
  *
  * Drawn on a plain canvas from [diaryChartGeometry], which holds every layout rule. The whole chart
  * is one accessibility node announced with [diaryChartDescription]; the checkboxes below it are
@@ -48,12 +52,14 @@ fun DiaryChart(
     speciesIds: List<String>,
     range: HistoryRange,
     entries: List<DiaryEntry>,
+    cardColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val feelingColor = MaterialTheme.colorScheme.onSurface
+    val labelStyle = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = GRID_ALPHA)
+    val feelingColor = MaterialTheme.colorScheme.primary
+    val fallbackLineColor = MaterialTheme.colorScheme.outline
     val colors = speciesIds.associateWith { speciesColor(it) }
     val description = diaryChartDescription(speciesIds.size, range).resolve()
     // Resolved here: the draw lambda below is not composable.
@@ -79,11 +85,22 @@ fun DiaryChart(
         val plotHeight = size.height - top - dateLabelHeight - LABEL_GAP.toPx()
 
         val geometry = diaryChartGeometry(days, speciesIds, range, plotWidth, plotHeight, entries)
-        val dateLabel: (LocalDate) -> String = if (range == HistoryRange.YEAR) dates::monthOnly else dates::shortDate
+        val dateLabel: (LocalDate) -> String = when (range) {
+            HistoryRange.WEEK -> { date -> dates.weekdayShort(date.dayOfWeek) }
+            HistoryRange.MONTH -> dates::shortDate
+            HistoryRange.YEAR -> dates::monthOnly
+        }
         fun at(x: Float, y: Float) = Offset(gutterStart + x, top + y)
 
+        val dotted = PathEffect.dashPathEffect(floatArrayOf(GRID_DASH.toPx(), GRID_GAP.toPx()))
         geometry.levelTicks.forEach { tick ->
-            drawLine(gridColor, at(0f, tick.y), at(plotWidth, tick.y), strokeWidth = 1.dp.toPx())
+            drawLine(
+                gridColor,
+                at(0f, tick.y),
+                at(plotWidth, tick.y),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = if (tick.level == PollenSeverity.NONE) null else dotted,
+            )
             val label = levelLabels[tick.level.ordinal]
             drawText(label, topLeft = Offset(0f, top + tick.y - label.size.height / 2f))
         }
@@ -95,13 +112,19 @@ fun DiaryChart(
 
         val dateLabels = geometry.dateTicks.map { textMeasurer.measure(dateLabel(it.date), labelStyle) }
         val step = dateLabelStep(geometry.dateTicks.map { it.x }, dateLabels.map { it.size.width.toFloat() }, LABEL_GAP.toPx())
-        geometry.dateTicks.forEachIndexed { index, tick ->
-            // Counted back from the last tick, so the most recent date is always labelled.
-            if ((geometry.dateTicks.lastIndex - index) % step != 0) return@forEachIndexed
+        // Drawn back from the last tick, so the most recent date is always labelled. The first may
+        // reach into the start gutter, below the levels, as far as the short None word allows; one
+        // pushed inwards that would still touch its neighbour is left out.
+        val dateLabelMinX = levelLabels[PollenSeverity.NONE.ordinal].size.width + LABEL_GAP.toPx()
+        var nextLabelStart = Float.POSITIVE_INFINITY
+        geometry.dateTicks.indices.reversed().forEach { index ->
+            if ((geometry.dateTicks.lastIndex - index) % step != 0) return@forEach
             val label = dateLabels[index]
-            val x = (gutterStart + tick.x - label.size.width / 2f)
-                .coerceIn(gutterStart, size.width - label.size.width)
+            val x = (gutterStart + geometry.dateTicks[index].x - label.size.width / 2f)
+                .coerceIn(dateLabelMinX, size.width - label.size.width)
+            if (x + label.size.width + LABEL_GAP.toPx() > nextLabelStart) return@forEach
             drawText(label, topLeft = Offset(x, top + plotHeight + LABEL_GAP.toPx()))
+            nextLabelStart = x
         }
 
         val lineWidth = SPECIES_LINE_WIDTH.toPx()
@@ -111,7 +134,7 @@ fun DiaryChart(
         }
 
         geometry.lines.forEach { line ->
-            val color = colors[line.speciesId] ?: gridColor
+            val color = colors[line.speciesId] ?: fallbackLineColor
             line.runs.forEach { run ->
                 if (run.size == 1) {
                     drawCircle(color, radius = lineWidth * 1.5f, center = at(run[0].x, run[0].y))
@@ -122,12 +145,18 @@ fun DiaryChart(
         }
 
         // Last, so it lies on top of every species line.
-        val feelingWidth = FEELING_LINE_WIDTH.toPx()
+        val feelingStroke = Stroke(
+            FEELING_LINE_WIDTH.toPx(),
+            join = StrokeJoin.Round,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(FEELING_DASH.toPx(), FEELING_GAP.toPx())),
+        )
         geometry.feeling.runs.filter { it.size > 1 }.forEach { run ->
-            drawPath(polyline(run), feelingColor, style = Stroke(feelingWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(polyline(run), feelingColor, style = feelingStroke)
         }
+        // The ring in the card's colour cuts the dot free of the lines beneath it.
         geometry.feeling.dots.forEach { dot ->
-            drawCircle(feelingColor, radius = FEELING_DOT_RADIUS.toPx(), center = at(dot.x, dot.y))
+            drawCircle(cardColor, radius = FEELING_DOT_RADIUS.toPx(), center = at(dot.x, dot.y))
+            drawCircle(feelingColor, radius = (FEELING_DOT_RADIUS - FEELING_DOT_RING).toPx(), center = at(dot.x, dot.y))
         }
     }
 }
@@ -147,8 +176,14 @@ internal fun dateLabelStep(xs: List<Float>, widths: List<Float>, gap: Float): In
 /** Bottom to top, matching `PollenSeverity`'s order and so [LevelTick.level]'s ordinal. */
 private val DiaryLevels = PollenSeverity.entries
 
-private val CHART_HEIGHT = 240.dp
+private val CHART_HEIGHT = 206.dp
 private val LABEL_GAP = 6.dp
-private val SPECIES_LINE_WIDTH = 2.dp
+private val SPECIES_LINE_WIDTH = 2.5.dp
 private val FEELING_LINE_WIDTH = 3.dp
-private val FEELING_DOT_RADIUS = 4.5.dp
+private val FEELING_DASH = 5.5.dp
+private val FEELING_GAP = 4.5.dp
+private val FEELING_DOT_RADIUS = 5.5.dp
+private val FEELING_DOT_RING = 2.dp
+private val GRID_DASH = 2.dp
+private val GRID_GAP = 4.dp
+private const val GRID_ALPHA = 0.8f

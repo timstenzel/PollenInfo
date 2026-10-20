@@ -112,6 +112,22 @@ class PaletteContrastTest {
         )
     }
 
+    // The Diary: a checked chip is raised with its edge, box and the box's raised tick in the species
+    // colour; an unchecked chip's box edge sits on the screen. The dashed feeling line is `primary`
+    // on the chart card, held to the species lines' 3.5:1. The no-answers hint and the range toggle's
+    // unselected words sit on the sunken colour. The gate's check badges are onPrimaryContainer on
+    // primaryContainer (above); the chart's dotted grid is decorative.
+    private fun Scheme.diaryPairs(): List<Pair> = SPECIES_IDS.flatMap { id ->
+        val color = speciesColor(id, dark) ?: fail("no colour for $id")
+        listOf(
+            Pair("species $id", "checked chip (raised)", color, colors.surfaceContainerLowest, GRAPHICS),
+            Pair("species $id", "background", color, colors.background, GRAPHICS),
+        )
+    } + listOf(
+        Pair("feeling line (primary)", "chart card (surface)", colors.primary, colors.surface, SPECIES_LINE),
+        Pair("onSurface", "sunken", colors.onSurface, colors.surfaceContainerHighest, TEXT),
+    )
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -157,6 +173,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the chips chart and controls of the Diary are readable`() {
+        assertAllMeet { diaryPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -166,6 +187,7 @@ class PaletteContrastTest {
             assertTrue(scheme.componentPairs().size == 7, scheme.name)
             assertTrue(scheme.homePairs().size == 2, scheme.name)
             assertTrue(scheme.allStationsPairs().size == PollenSeverity.entries.size + 4, scheme.name)
+            assertTrue(scheme.diaryPairs().size == 7 * 2 + 2, scheme.name)
         }
     }
 

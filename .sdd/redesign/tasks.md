@@ -11,7 +11,9 @@ Notes that apply to every task:
   only new strings are the five tab overlines (task 02, decided with the maintainer on 2026-10-19),
   the gauge overline `home_gauge_overline` and the tile's `reading_not_reported` (task 04, decided
   with the maintainer on 2026-10-20), the list heading `all_stations_list_heading` (task 05, decided
-  with the maintainer on 2026-10-20) and the alarm count in task 07. If a screen seems to need a
+  with the maintainer on 2026-10-20), the chart legend `diary_feeling_legend` (task 06, decided with
+  the maintainer on 2026-10-20, who also kept the feeling words on the chart's right axis) and the
+  alarm count in task 07. If a screen seems to need a
   state change or another string, stop and ask.
 - **Decisions taken while verifying the annex (2026-10-19):**
   - Home's feeling card moves **inline** (between the gauge card and the pollen tiles), as in Figma.
@@ -221,25 +223,25 @@ field are introduced here.
 
 ### Implementation steps
 
-- [ ] Restyle the gate using the status card pattern with the four points
-- [ ] Add the segmented toggle component and use it for the range; add the Meadow dropdown field style and use it for the station
-- [ ] Restyle the chart card and the feeling line (dashed, with points); keep the pure chart geometry and description unchanged
-- [ ] Restyle species chips (checked fill in the line colour, unmeasured dimmed with its caption)
-- [ ] Use skeleton and status card for loading and error
+- [x] Restyle the gate using the status card pattern with the four points
+- [x] Add the segmented toggle component and use it for the range; add the Meadow dropdown field style and use it for the station
+- [x] Restyle the chart card and the feeling line (dashed, with points); keep the pure chart geometry and description unchanged
+- [x] Restyle species chips (checked fill in the line colour, unmeasured dimmed with its caption)
+- [x] Use skeleton and status card for loading and error
 
 ### Acceptance criteria
 
-- [ ] Runtime: logged out, the gate card shows the four points and both buttons, which open the account screen in the right mode
-- [ ] Runtime: logged in with a week of entries, the chart card shows severity words on the vertical axis, one coloured line per checked type, and the feeling as a dashed line with dots that never bridges a missing day
-- [ ] Runtime: switching Week / Month / Year and the station reloads as before; unchecking a species chip hides its line; an unmeasured type's chip is dimmed with "Not measured here"
-- [ ] Runtime: a server outage shows the status card with "The pollen history could not be loaded." and "Retry"
+- [x] Runtime: logged out, the gate card shows the four points and both buttons, which open the account screen in the right mode *(API 37, light: emblem with gold grains, title, intro, four points with check badges; "Create account" opened the account screen titled "Create account" with the repeat-password field and consent, "Log in" the one titled "Log in")*
+- [x] Runtime: logged in with a week of entries, the chart card shows severity words on the vertical axis, one coloured line per checked type, and the feeling as a dashed line with dots that never bridges a missing day *(test account with answers 13–19 Oct except 17 Oct: Week card "13 Oct – 19 Oct" with "Your feeling" legend, None…Very high on the left, feeling words on the right, weekdays Tue…Mon below; dashed primary line Tue–Fri, nothing across Saturday, then Sun–Mon; light and dark, English and German ("13. Okt. – 19. Okt.", "Dein Befinden"), nothing clipped. Found and fixed while checking: the first date label could collide with the second or be dropped)*
+- [x] Runtime: switching Week / Month / Year and the station reloads as before; unchecking a species chip hides its line; an unmeasured type's chip is dimmed with "Not measured here" *(Week, Month ("20 Sep – 19 Oct") and Year ("20 Oct 2025 – 19 Oct 2026") each reloaded; unchecking Grasses hid its line; choosing Neuchâtel (no values this week) from the dropdown reloaded with all seven chips dimmed, disabled and captioned "Not measured here", the home station untouched)*
+- [x] Runtime: a server outage shows the status card with "The pollen history could not be loaded." and "Retry" *(airplane mode then a range change: the warning card with that title, "Couldn’t reach the server…" and Retry, which reloaded once the network was back. Loading checked with a temporary, reverted 4 s delay: the skeleton with the moving shimmer under the real header)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `DiaryChartGeometryTest` and `DiaryViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `DiaryChartGeometryTest` and `DiaryViewModelTest` unchanged)
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits
 
 ## Task [07-alarms-list-redesign]
 
