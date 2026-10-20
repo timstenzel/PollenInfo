@@ -227,6 +227,10 @@
     <string name="alarm_empty_body">Créez une alarme pour recevoir un bulletin pollinique quotidien, ou un avertissement lorsqu’un type de pollen atteint le niveau de votre choix.</string>
     <string name="alarm_create">Créer une alarme</string>
     <string name="alarm_paused">En pause · %1$s</string>
+    <string name="alarm_paused_label">En pause</string>
+    <string name="alarm_count">%1$d sur %2$d</string>
+    <string name="alarm_tag_minimum">à partir de %1$s</string>
+    <string name="alarm_tag_any">Chaque jour choisi</string>
     <string name="alarm_switch_description">Alarme pour %1$s</string>
     <string name="alarm_edit_action">Modifier l’alarme</string>
     <string name="alarm_push_unavailable_title">Les notifications push ne sont pas encore disponibles sur cet appareil</string>

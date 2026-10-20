@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.compositeOver
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.ui.severity.severityColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
+import ch.stenzel.tim.polleninfo.feature.alarms.presentation.PAUSED_ALPHA
 import ch.stenzel.tim.polleninfo.theme.MeadowColors
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColorScheme
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColors
@@ -128,6 +129,21 @@ class PaletteContrastTest {
         Pair("onSurface", "sunken", colors.onSurface, colors.surfaceContainerHighest, TEXT),
     )
 
+    // Alarms: the minimum's tag is onSurfaceVariant on the sunken pill (the types' tag is onSurface,
+    // above); a paused card's chosen days are onSurface on the hairline grey; the snackbar is
+    // inverse. A paused card's fill is raised at PAUSED_ALPHA over the screen, its text undimmed.
+    // The count chip, type tiles, gold button and green day circles are covered above; the empty
+    // days' edge is decorative — the days are spoken as words.
+    private fun Scheme.alarmsPairs(): List<Pair> {
+        val pausedCard = colors.surfaceContainerLowest.copy(alpha = PAUSED_ALPHA).compositeOver(colors.background)
+        return listOf(
+            Pair("onSurfaceVariant", "sunken", colors.onSurfaceVariant, colors.surfaceContainerHighest, TEXT),
+            Pair("onSurface", "paused day (outlineVariant)", colors.onSurface, colors.outlineVariant, TEXT),
+            Pair("inverseOnSurface", "snackbar (inverseSurface)", colors.inverseOnSurface, colors.inverseSurface, TEXT),
+            Pair("onSurfaceVariant", "paused card", colors.onSurfaceVariant, pausedCard, TEXT),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -178,6 +194,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the alarm cards and the snackbar are readable`() {
+        assertAllMeet { alarmsPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -188,6 +209,7 @@ class PaletteContrastTest {
             assertTrue(scheme.homePairs().size == 2, scheme.name)
             assertTrue(scheme.allStationsPairs().size == PollenSeverity.entries.size + 4, scheme.name)
             assertTrue(scheme.diaryPairs().size == 7 * 2 + 2, scheme.name)
+            assertTrue(scheme.alarmsPairs().size == 4, scheme.name)
         }
     }
 

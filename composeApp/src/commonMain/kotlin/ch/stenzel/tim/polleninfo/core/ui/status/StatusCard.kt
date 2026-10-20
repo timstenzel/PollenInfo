@@ -39,7 +39,9 @@ enum class StatusTone {
  * with the existing wording and "Retry" — and for empty and gated states.
  *
  * Centred by default; a gate that goes on to list points (the Diary's) sets [centered] to `false`
- * and reads from the start edge, emblem included.
+ * and reads from the start edge, emblem included. [grains] adds the pollen-gold grains around the
+ * emblem — by default on neutral cards only; a gate that asks for something (Alarms' notifications)
+ * has them on its warning emblem too.
  */
 @Composable
 fun StatusCard(
@@ -49,6 +51,7 @@ fun StatusCard(
     tone: StatusTone = StatusTone.Warning,
     icon: ImageVector = Icons.Default.CloudOff,
     centered: Boolean = true,
+    grains: Boolean = tone == StatusTone.Neutral,
     actions: @Composable ColumnScope.() -> Unit = {},
 ) {
     val textAlign = if (centered) TextAlign.Center else TextAlign.Start
@@ -57,7 +60,7 @@ fun StatusCard(
             modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 24.dp),
             horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
         ) {
-            Emblem(icon, tone)
+            Emblem(icon, tone, grains)
             Spacer(Modifier.height(14.dp))
             Text(
                 text = title,
@@ -80,11 +83,11 @@ fun StatusCard(
 }
 
 /**
- * The 140 dp illustration: a pale outer ring, a fuller inner disc and the icon; a neutral emblem
- * also has three pollen-gold grains around it. Decorative.
+ * The 140 dp illustration: a pale outer ring, a fuller inner disc and the icon, with [grains] three
+ * pollen-gold grains around it. Decorative.
  */
 @Composable
-private fun Emblem(icon: ImageVector, tone: StatusTone) {
+private fun Emblem(icon: ImageVector, tone: StatusTone, grains: Boolean) {
     val (disc, ink) = when (tone) {
         StatusTone.Warning -> MaterialTheme.meadowColors.warningContainer to MaterialTheme.meadowColors.onWarningContainer
         StatusTone.Neutral -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
@@ -94,7 +97,7 @@ private fun Emblem(icon: ImageVector, tone: StatusTone) {
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(disc.copy(alpha = OUTER_RING_ALPHA))
             drawCircle(disc, radius = 48.dp.toPx())
-            if (tone == StatusTone.Neutral) {
+            if (grains) {
                 drawCircle(grain, radius = 6.dp.toPx(), center = Offset(124.dp.toPx(), 20.dp.toPx()))
                 drawCircle(grain, radius = 4.5.dp.toPx(), center = Offset(12.5.dp.toPx(), 104.5.dp.toPx()))
                 drawCircle(grain, radius = 3.5.dp.toPx(), center = Offset(131.5.dp.toPx(), 111.5.dp.toPx()))

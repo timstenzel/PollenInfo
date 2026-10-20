@@ -260,7 +260,7 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
 | `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
 | `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken) |
-| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains, `centered = false` for a gate that lists points), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
+| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains (`grains = true` on any tone, e.g. Alarms' notifications gate), `centered = false` for a gate that lists points), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
@@ -499,6 +499,15 @@ Details live in the ViewModels and their tests; these are the decisions that are
 - **Alarms**: permission gate first; the list loads only on the first `ENABLED` (no backend
   contact or registration before). `onResume()` reloads quietly. The switch is optimistic (full `PUT`,
   flip back + `ToggleFailed` event on failure). Limit `MAX_ALARMS` = 10 (backend's limit).
+  Each alarm is an `AlarmCard` worded from `AlarmSummary`'s parts (`typeSummary`, `daysSummary` —
+  spoken for the weekday circles — `speciesSummary`; the minimum tag `alarm_tag_minimum` /
+  `alarm_tag_any`); the card is one focus stop, its switch ("Alarm for …") another. A paused card
+  dims only its fill and type tile (`PAUSED_ALPHA`) — dimming its text would break 4.5:1 — and
+  shows the `alarm_paused_label` overline. The header carries the `alarm_count` chip ("3 of 10")
+  once there are alarms. The gold create button and the snackbar (inverse colours) float in one
+  column above the tab bar, the button above the snackbar — no `Scaffold`. Gate, empty state and
+  load error are `StatusCard`s (the empty state's button is the screen's one `Accent`); loading is
+  `AlarmsSkeleton`.
 - **`AlarmRepositoryImpl` registers lazily** via one `withDevice { }`: no token → push address →
   `POST /devices`. A `401` clears the token, registers once and retries once, behind a `Mutex`
   (a newer stored token is reused). A `404` on a single alarm is `AlarmNotFoundException` — no

@@ -224,6 +224,10 @@
     <string name="alarm_empty_body">Erstelle einen Alarm, um täglich einen Pollenbericht zu erhalten oder gewarnt zu werden, wenn eine Pollenart eine von dir gewählte Stufe erreicht.</string>
     <string name="alarm_create">Alarm erstellen</string>
     <string name="alarm_paused">Pausiert · %1$s</string>
+    <string name="alarm_paused_label">Pausiert</string>
+    <string name="alarm_count">%1$d von %2$d</string>
+    <string name="alarm_tag_minimum">ab %1$s</string>
+    <string name="alarm_tag_any">An jedem gewählten Tag</string>
     <string name="alarm_switch_description">Alarm für %1$s</string>
     <string name="alarm_edit_action">Alarm bearbeiten</string>
     <string name="alarm_push_unavailable_title">Push-Mitteilungen sind auf diesem Gerät noch nicht verfügbar</string>

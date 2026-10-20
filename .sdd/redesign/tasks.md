@@ -13,7 +13,9 @@ Notes that apply to every task:
   with the maintainer on 2026-10-20), the list heading `all_stations_list_heading` (task 05, decided
   with the maintainer on 2026-10-20), the chart legend `diary_feeling_legend` (task 06, decided with
   the maintainer on 2026-10-20, who also kept the feeling words on the chart's right axis) and the
-  alarm count in task 07. If a screen seems to need a
+  alarm count in task 07 plus the card's `alarm_paused_label` and the minimum tags
+  `alarm_tag_minimum` ("from %1$s") / `alarm_tag_any` (task 07, decided with the maintainer on
+  2026-10-20). If a screen seems to need a
   state change or another string, stop and ask.
 - **Decisions taken while verifying the annex (2026-10-19):**
   - Home's feeling card moves **inline** (between the gauge card and the pollen tiles), as in Figma.
@@ -254,26 +256,26 @@ errors show the status card.
 
 ### Implementation steps
 
-- [ ] Add the one new string for the count ("%1$d of %2$d", `alarm_` prefix, positional placeholders) in all four languages
-- [ ] Restyle the alarm card from the existing summary data (no new formatting rules)
-- [ ] Add the count chip and the gold extended create button above the glass bar
-- [ ] Restyle the permission gate (both variants) and the empty state as status cards
-- [ ] Restyle the toggle-failed snackbar (inverse surface) and its placement above the bar and below the create button
-- [ ] Use skeleton and status card for loading and error
+- [x] Add the one new string for the count ("%1$d of %2$d", `alarm_` prefix, positional placeholders) in all four languages *(`alarm_count`; with the maintainer's agreement also `alarm_paused_label`, `alarm_tag_minimum`, `alarm_tag_any`)*
+- [x] Restyle the alarm card from the existing summary data (no new formatting rules) *(`AlarmCard`; `AlarmSummary` exposes `typeSummary` and `speciesSummary`, which `summaryOf` now composes, unchanged in output)*
+- [x] Add the count chip and the gold extended create button above the glass bar
+- [x] Restyle the permission gate (both variants) and the empty state as status cards *(`StatusCard` gains `grains`, so the warning-toned gate has Figma's grains)*
+- [x] Restyle the toggle-failed snackbar (inverse surface) and its placement above the bar and below the create button *(one floating column instead of `Scaffold`)*
+- [x] Use skeleton and status card for loading and error *(`AlarmsSkeleton`)*
 
 ### Acceptance criteria
 
-- [ ] Runtime: three alarms (one paused) show as cards with summaries, stations, weekday circles, tags and switches; the paused one is dimmed and marked "Paused"; "3 of 10" is shown (and its German, French and Italian translations)
-- [ ] Runtime: with notifications denied, the card shows "Notifications are disabled" and the request or open-settings button as before; with no alarms, "No alarms yet" with the gold "Create alarm"
-- [ ] Runtime: with the backend stopped, flipping a switch flips it back and the snackbar appears above the bar with the create button above it
-- [ ] Runtime: TalkBack announces each switch as "Alarm for …" as before
+- [x] Runtime: three alarms (one paused) show as cards with summaries, stations, weekday circles, tags and switches; the paused one is dimmed and marked "Paused"; "3 of 10" is shown (and its German, French and Italian translations) *(API 37: Bern daily 08:00 every day, Basel threshold 07:00–21:00 Mon–Fri "Birch"/"from High", Lugano daily 18:00 paused Sat–Sun "Grasses"/"from Moderate" with "PAUSED", grey day circles and dimmed fill; "3 of 10", "3 von 10", "3 sur 10", "3 di 10"; light and dark, nothing clipped in any language. Found while checking: Figma's 82 % opacity on the whole paused card takes its text to 4.24:1 — only the fill and the type tile are dimmed, pinned by `PaletteContrastTest`)*
+- [x] Runtime: with notifications denied, the card shows "Notifications are disabled" and the request or open-settings button as before; with no alarms, "No alarms yet" with the gold "Create alarm" *(permission revoked: "Allow notifications"; after two denials "Open settings" with the settings wording; alarms deleted on the dev backend: neutral card with grains and the gold button, no count chip — alarms restored afterwards. Load error (offline): warning card "Your alarms could not be loaded." with Retry, which reloaded. Loading checked with a temporary, reverted 4 s delay: three shimmering skeleton cards)*
+- [x] Runtime: with the backend stopped, flipping a switch flips it back and the snackbar appears above the bar with the create button above it *(server unreachable via the emulator's airplane mode instead of stopping the backend: Basel's switch flipped back, "Couldn’t pause the alarm. Couldn’t reach the server. …" in the dark inverse snackbar 20 dp from the edges above the bar, "Create alarm" above it. Found while checking: Material's snackbar adds a 12 dp margin of its own, now subtracted)*
+- [x] Runtime: TalkBack announces each switch as "Alarm for …" as before *(checked in the accessibility node tree (`uiautomator dump`), not by listening to TalkBack: switches "Alarm for Bern" / "Alarm for Basel" / "Alarm for Lugano"; the weekday rows read as "Every day", "Mon–Fri", "Sat, Sun")*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `AlarmsViewModelTest` and `AlarmSummaryTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `AlarmsViewModelTest` and `AlarmSummaryTest` unchanged) *(803 tests, 0 failures; new `PaletteContrastTest` case for the alarm cards and snackbar)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits
 
 ## Task [08-alarm-editor-redesign]
 
