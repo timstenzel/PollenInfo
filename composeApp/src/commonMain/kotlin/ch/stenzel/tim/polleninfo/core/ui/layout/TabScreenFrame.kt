@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ch.stenzel.tim.polleninfo.theme.meadowColors
 
@@ -62,22 +63,7 @@ fun TabScreenFrame(content: @Composable (contentPadding: PaddingValues) -> Unit)
     Box(Modifier.fillMaxSize().background(background)) {
         Washes(Modifier.fillMaxSize())
         content(contentPadding)
-        // Opaque behind the status bar, then fading out, so scrolled content never runs into the
-        // clock and icons. It has no semantics and takes no touches.
-        val statusBar = safe.calculateTopPadding()
-        val height = statusBar + SCRIM_FADE
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(height)
-                .background(
-                    Brush.verticalGradient(
-                        0f to background,
-                        (statusBar / height) to background,
-                        1f to background.copy(alpha = 0f),
-                    ),
-                ),
-        )
+        TopScrim(opaqueHeight = safe.calculateTopPadding(), fade = SCRIM_FADE)
     }
 }
 
@@ -85,11 +71,33 @@ fun TabScreenFrame(content: @Composable (contentPadding: PaddingValues) -> Unit)
 private val SCRIM_FADE = 16.dp
 
 /**
+ * Opaque `background` for [opaqueHeight] — the status bar — then fading out over [fade], so
+ * scrolled content never runs into the clock and icons. It has no semantics and takes no touches.
+ */
+@Composable
+internal fun TopScrim(opaqueHeight: Dp, fade: Dp) {
+    val background = MaterialTheme.colorScheme.background
+    val height = opaqueHeight + fade
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(
+                Brush.verticalGradient(
+                    0f to background,
+                    (opaqueHeight / height) to background,
+                    1f to background.copy(alpha = 0f),
+                ),
+            ),
+    )
+}
+
+/**
  * The soft blobs of the Meadow background: a large sage wash at the top end and a small pollen-gold
  * one at the start. Pure decoration — a `Canvas` without semantics, never announced.
  */
 @Composable
-private fun Washes(modifier: Modifier) {
+internal fun Washes(modifier: Modifier) {
     val wash = MaterialTheme.meadowColors.wash
     val accent = MaterialTheme.meadowColors.accent.copy(alpha = ACCENT_WASH_ALPHA)
     Canvas(modifier) {

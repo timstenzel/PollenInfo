@@ -7,29 +7,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +32,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenFrame
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.password.PasswordField
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
@@ -68,7 +59,7 @@ import ch.stenzel.tim.polleninfo.resources.account_switch_to_login
 import ch.stenzel.tim.polleninfo.resources.account_switch_to_register
 import ch.stenzel.tim.polleninfo.resources.account_title_login
 import ch.stenzel.tim.polleninfo.resources.account_title_register
-import ch.stenzel.tim.polleninfo.resources.common_back
+import ch.stenzel.tim.polleninfo.resources.settings_section_account
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -76,14 +67,13 @@ import org.koin.core.parameter.parametersOf
 
 /**
  * Creating an account or logging in, opened from the Diary's gate in either mode. Not a tab, so the
- * bottom bar is hidden. Back — the arrow or the gesture — leaves without logging in; a success
+ * bottom bar is hidden. Back — the back button or the gesture — leaves without logging in; a success
  * leaves logged in ([onDone] for both).
  *
  * Logging in asks for the email and the password. Registration asks for the email, the password
  * twice (each field with its own show/hide button), the consent to storing the diary, and says
  * plainly that a forgotten password cannot be recovered.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
     initialMode: AccountMode,
@@ -101,35 +91,26 @@ fun AccountScreen(
     }
 
     val mode = uiState.form.mode
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(mode.titleResource())) },
-                navigationIcon = {
-                    IconButton(onClick = onDone) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    ScreenFrame(onBack = onDone) { contentPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(contentPadding)
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
         ) {
+            // The overline names the place, the title what is done here.
+            ScreenHeader(
+                overline = stringResource(Res.string.settings_section_account),
+                title = stringResource(mode.titleResource()),
+            )
             AccountForm(uiState, viewModel)
             Spacer(Modifier.height(8.dp))
-            TextButton(
+            PillButton(
                 onClick = {
                     viewModel.onModeChanged(if (mode == AccountMode.LOGIN) AccountMode.REGISTER else AccountMode.LOGIN)
                 },
+                style = PillButtonStyle.Text,
                 enabled = !uiState.isSubmitting,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
@@ -185,19 +166,13 @@ private fun AccountForm(uiState: AccountUiState, viewModel: AccountViewModel) {
     )
     if (registering) RegisterFields(uiState, viewModel)
     Spacer(Modifier.height(24.dp))
-    Button(
+    PillButton(
         onClick = viewModel::submit,
+        style = PillButtonStyle.Primary,
         enabled = uiState.canSubmit,
+        busy = uiState.isSubmitting,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (uiState.isSubmitting) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = LocalContentColor.current,
-            )
-            Spacer(Modifier.width(8.dp))
-        }
         Text(stringResource(form.mode.titleResource()))
     }
     uiState.error?.let { error ->

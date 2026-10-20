@@ -2,6 +2,7 @@ package ch.stenzel.tim.polleninfo.core.ui.palette
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.ui.severity.severityColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
@@ -67,6 +68,22 @@ class PaletteContrastTest {
         )
     }
 
+    // The pill buttons and dialogs: Text/Outline labels in `primary` and Danger labels in `error`, on
+    // a screen (`background`) and in a dialog (raised); Tonal labels; the dialog's icon badges; the
+    // back arrow on the glass circle, the glass composited over the screen it floats on.
+    private fun Scheme.componentPairs(): List<Pair> {
+        val glass = meadow.glass.compositeOver(colors.background)
+        return listOf(
+            Pair("primary label", "background", colors.primary, colors.background, TEXT),
+            Pair("primary label", "raised", colors.primary, colors.surfaceContainerLowest, TEXT),
+            Pair("error label", "background", colors.error, colors.background, TEXT),
+            Pair("error label", "raised", colors.error, colors.surfaceContainerLowest, TEXT),
+            Pair("onPrimaryContainer", "primaryContainer", colors.onPrimaryContainer, colors.primaryContainer, TEXT),
+            Pair("error icon", "warningContainer", colors.error, meadow.warningContainer, GRAPHICS),
+            Pair("back arrow (onSurface)", "glass over background", colors.onSurface, glass, GRAPHICS),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -97,12 +114,18 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `button labels dialog badges and the back arrow are readable`() {
+        assertAllMeet { componentPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
             assertTrue(scheme.severityPairs().size == PollenSeverity.entries.size * 6, scheme.name)
             assertTrue(scheme.speciesPairs().size == 7, scheme.name)
             assertTrue(scheme.textPairs().size == 9, scheme.name)
+            assertTrue(scheme.componentPairs().size == 7, scheme.name)
         }
     }
 

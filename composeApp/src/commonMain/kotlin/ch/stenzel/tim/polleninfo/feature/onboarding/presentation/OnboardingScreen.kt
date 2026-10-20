@@ -1,13 +1,10 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +14,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.StationPickerContent
 import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.selected
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenFrame
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.onboarding_continue
 import ch.stenzel.tim.polleninfo.resources.onboarding_intro
@@ -26,8 +27,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Deliberately no `TopAppBar`: this screen is a one-time setup step, not a place in the app the
- * user navigates around, so a title bar would suggest somewhere to go back to.
+ * The first-launch setup: the shared picker under the welcome header, Continue in the glass action
+ * bar. Deliberately no back button: this is a one-time step, not a place in the app the user
+ * navigates around, so there is nowhere to go back to.
  */
 @Composable
 fun OnboardingScreen(
@@ -46,45 +48,47 @@ fun OnboardingScreen(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
-        StationPickerContent(
-            state = uiState.picker,
-            onPermissionResult = viewModel::onPermissionResult,
-            onStationSelected = viewModel::onStationSelected,
-            onRetry = viewModel::retry,
-            verticalArrangement = Arrangement.Center,
-            header = {
+    ScreenFrame(
+        onBack = null,
+        actionBar = {
+            if (uiState.saveError) {
                 Text(
-                    text = stringResource(Res.string.onboarding_title),
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = stringResource(Res.string.station_picker_save_error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+            PillButton(
+                onClick = viewModel::onConfirm,
+                style = PillButtonStyle.Primary,
+                // Nothing to confirm until a station is picked, so a mis-tap cannot commit anything.
+                enabled = uiState.picker.selected != null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(Res.string.onboarding_continue))
+            }
+        },
+    ) { contentPadding ->
+        Column(Modifier.fillMaxSize().padding(contentPadding)) {
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                ScreenHeader(overline = APP_NAME, title = stringResource(Res.string.onboarding_title))
                 Text(
                     text = stringResource(Res.string.onboarding_intro),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(32.dp))
-            },
-            footer = {
-                Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = viewModel::onConfirm,
-                    // Nothing to confirm until a station is picked, so a mis-tap cannot commit anything.
-                    enabled = uiState.picker.selected != null,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(Res.string.onboarding_continue))
-                }
-                if (uiState.saveError) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(Res.string.station_picker_save_error),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-        )
+            }
+            StationPickerContent(
+                state = uiState.picker,
+                onPermissionResult = viewModel::onPermissionResult,
+                onStationSelected = viewModel::onStationSelected,
+                onRetry = viewModel::retry,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
+
+/** The overline above the welcome: the app's name, which is never translated. */
+private const val APP_NAME = "PollenInfo"

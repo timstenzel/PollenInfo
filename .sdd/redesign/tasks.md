@@ -122,25 +122,25 @@ badge, serif title, centred text, stacked full-width buttons with the destructiv
 
 ### Implementation steps
 
-- [ ] Add the non-tab frame: back button (existing back description, 48 dp target), header, top scrim, optional glass action bar with rounded upper corners
-- [ ] Add the pill button variants (Primary, Tonal, Outline, Text, Danger, Accent) as a shared component
-- [ ] Move Onboarding, Change station, Alarm editor and Account onto the frame and remove their `TopAppBar`s; Onboarding's Continue and Change station's / the editor's Save move into the action bar
-- [ ] Restyle the four confirmation dialogs (discard changes, delete alarm, log out, delete account with its password field) as one shared dialog style
-- [ ] Update CLAUDE.md with the non-tab frame (back button, action bar, which screens use it) and the button variants
+- [x] Add the non-tab frame: back button (existing back description, 48 dp target), header, top scrim, optional glass action bar with rounded upper corners
+- [x] Add the pill button variants (Primary, Tonal, Outline, Text, Danger, Accent) as a shared component
+- [x] Move Onboarding, Change station, Alarm editor and Account onto the frame and remove their `TopAppBar`s; Onboarding's Continue and Change station's / the editor's Save move into the action bar
+- [x] Restyle the four confirmation dialogs (discard changes, delete alarm, log out, delete account with its password field) as one shared dialog style
+- [x] Update CLAUDE.md with the non-tab frame (back button, action bar, which screens use it) and the button variants
 
 ### Acceptance criteria
 
-- [ ] Runtime: Change station, alarm editor and account show a round back button top-left that behaves as the old back arrow (including the editor's discard dialog when dirty); onboarding has none; TalkBack announces it as "Back"
-- [ ] Runtime: onboarding's "Continue" and change station's / the editor's "Save" sit in a glass bar with rounded upper corners at the bottom; long editor content scrolls behind it and fully above it; the account screen has no action bar
-- [ ] Runtime: the discard dialog shows a centred icon, "Discard changes?", "Discard" in red and "Keep editing" stacked full width; the delete-alarm, log-out and delete-account dialogs follow the same layout, the last with its password field
-- [ ] Runtime: titles of the four screens render in the serif font (Fraunces)
+- [ ] ~~Runtime: Change station, alarm editor and account show a round back button top-left that behaves as the old back arrow (including the editor's discard dialog when dirty); onboarding has none; TalkBack announces it as "Back"~~ *(skipped in part: TalkBack's speech could not be captured on the emulator. Passed on API 37: the round glass button sits top-left on all three screens, leaves Change station without saving and the account screen without logging in, opens the editor's discard dialog when dirty (button and system back alike); onboarding has none; the accessibility tree has it as one focusable clickable node labelled "Back")*
+- [x] Runtime: onboarding's "Continue" and change station's / the editor's "Save" sit in a glass bar with rounded upper corners at the bottom; long editor content scrolls behind it and fully above it; the account screen has no action bar
+- [x] Runtime: the discard dialog shows a centred icon, "Discard changes?", "Discard" in red and "Keep editing" stacked full width; the delete-alarm, log-out and delete-account dialogs follow the same layout, the last with its password field
+- [x] Runtime: titles of the four screens render in the serif font (Fraunces)
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits
 
 ## Task [04-home-redesign]
 

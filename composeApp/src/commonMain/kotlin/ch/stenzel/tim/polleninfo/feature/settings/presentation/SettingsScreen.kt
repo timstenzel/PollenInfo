@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -25,12 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -59,6 +56,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.appinfo.AppVersion
 import ch.stenzel.tim.polleninfo.core.language.AppLanguage
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
+import ch.stenzel.tim.polleninfo.core.ui.dialog.ConfirmDialog
+import ch.stenzel.tim.polleninfo.core.ui.dialog.DialogTone
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.layout.LocalBottomBarPadding
@@ -292,16 +292,16 @@ private fun AccountSection(
 /** Asks before logging out, and says the diary stays in the account. */
 @Composable
 private fun LogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.settings_account_log_out_title)) },
-        text = { Text(stringResource(Res.string.settings_account_log_out_text)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(Res.string.settings_account_log_out)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
-        },
+    ConfirmDialog(
+        icon = Icons.AutoMirrored.Filled.Logout,
+        tone = DialogTone.Neutral,
+        title = stringResource(Res.string.settings_account_log_out_title),
+        text = stringResource(Res.string.settings_account_log_out_text),
+        confirmLabel = stringResource(Res.string.settings_account_log_out),
+        confirmStyle = PillButtonStyle.Primary,
+        onConfirm = onConfirm,
+        dismissLabel = stringResource(Res.string.common_cancel),
+        onDismiss = onDismiss,
     )
 }
 
@@ -318,56 +318,42 @@ private fun DeleteAccountDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.settings_account_delete_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(Res.string.settings_account_delete_text))
-                PasswordField(
-                    value = uiState.deletePassword,
-                    onValueChange = onPasswordChange,
-                    label = Res.string.account_password_label,
-                    visible = uiState.deletePasswordVisible,
-                    onToggleVisible = onToggleVisible,
-                    showLabel = Res.string.account_show_password,
-                    hideLabel = Res.string.account_hide_password,
-                    enabled = !uiState.isDeleting,
-                    isError = uiState.deleteError != null,
+    ConfirmDialog(
+        icon = Icons.Default.Person,
+        tone = DialogTone.Destructive,
+        title = stringResource(Res.string.settings_account_delete_title),
+        text = stringResource(Res.string.settings_account_delete_text),
+        confirmLabel = stringResource(Res.string.settings_account_delete),
+        confirmStyle = PillButtonStyle.Danger,
+        onConfirm = onConfirm,
+        dismissLabel = stringResource(Res.string.common_cancel),
+        onDismiss = onDismiss,
+        confirmEnabled = uiState.canConfirmDelete,
+        confirmBusy = uiState.isDeleting,
+        dismissEnabled = !uiState.isDeleting,
+    ) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PasswordField(
+                value = uiState.deletePassword,
+                onValueChange = onPasswordChange,
+                label = Res.string.account_password_label,
+                visible = uiState.deletePasswordVisible,
+                onToggleVisible = onToggleVisible,
+                showLabel = Res.string.account_show_password,
+                hideLabel = Res.string.account_hide_password,
+                enabled = !uiState.isDeleting,
+                isError = uiState.deleteError != null,
+            )
+            uiState.deleteError?.let { error ->
+                Text(
+                    text = error.message(ErrorContext.DELETE_ACCOUNT),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
-                uiState.deleteError?.let { error ->
-                    Text(
-                        text = error.message(ErrorContext.DELETE_ACCOUNT),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                enabled = uiState.canConfirmDelete,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) {
-                if (uiState.isDeleting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = LocalContentColor.current,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(stringResource(Res.string.settings_account_delete))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !uiState.isDeleting) {
-                Text(stringResource(Res.string.common_cancel))
-            }
-        },
-    )
+        }
+    }
 }
 
 /**

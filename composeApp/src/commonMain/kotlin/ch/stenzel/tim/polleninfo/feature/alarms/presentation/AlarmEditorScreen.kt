@@ -1,9 +1,9 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,18 +24,15 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,10 +55,17 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
+import ch.stenzel.tim.polleninfo.core.ui.dialog.ConfirmDialog
+import ch.stenzel.tim.polleninfo.core.ui.dialog.DialogTone
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
 import ch.stenzel.tim.polleninfo.core.ui.format.formatTime
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenFrame
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.layout.TabCenteredContent
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
@@ -105,9 +107,9 @@ import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold
 import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold_description
 import ch.stenzel.tim.polleninfo.resources.alarm_window_end
 import ch.stenzel.tim.polleninfo.resources.alarm_window_start
-import ch.stenzel.tim.polleninfo.resources.common_back
 import ch.stenzel.tim.polleninfo.resources.common_cancel
 import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.nav_alarms
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
@@ -127,7 +129,7 @@ fun AlarmEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // The system back asks about unsaved changes just as the top bar's arrow does.
+    // The system back asks about unsaved changes just as the back button does.
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         onBackCompleted = viewModel::onBack,
@@ -163,7 +165,6 @@ fun AlarmEditorScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlarmEditorContent(
     uiState: AlarmEditorUiState,
@@ -185,45 +186,42 @@ private fun AlarmEditorContent(
     onDeleteConfirmed: () -> Unit,
     onDeleteDismissed: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
+    // The overline is the place the editor belongs to: it is opened from the Alarms tab.
+    val header = @Composable { ScreenHeader(overline = stringResource(Res.string.nav_alarms), title = title) }
+    ScreenFrame(
+        onBack = onBack,
+        actionBar = (uiState as? AlarmEditorUiState.Editing)?.let { state -> { SaveBar(state, onSave) } },
+    ) { contentPadding ->
         when (uiState) {
-            AlarmEditorUiState.Loading -> Box(modifier, contentAlignment = Alignment.Center) {
+            AlarmEditorUiState.Loading -> TabCenteredContent(contentPadding, header) {
                 CircularProgressIndicator()
             }
 
-            is AlarmEditorUiState.Error -> Column(
-                modifier = modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(Res.string.alarm_editor_load_failed),
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    uiState.error.message(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
+            is AlarmEditorUiState.Error -> TabCenteredContent(contentPadding, header) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        stringResource(Res.string.alarm_editor_load_failed),
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        uiState.error.message(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    PillButton(onClick = onRetry, style = PillButtonStyle.Primary) {
+                        Text(stringResource(Res.string.common_retry))
+                    }
+                }
             }
 
             is AlarmEditorUiState.Editing -> EditingForm(
                 state = uiState,
+                header = header,
                 onStationSelected = onStationSelected,
                 onSpeciesToggled = onSpeciesToggled,
                 onMinSeveritySelected = onMinSeveritySelected,
@@ -232,37 +230,67 @@ private fun AlarmEditorContent(
                 onTimeSelected = onTimeSelected,
                 onWindowStartSelected = onWindowStartSelected,
                 onWindowEndSelected = onWindowEndSelected,
-                onSave = onSave,
                 onDeleteRequested = onDeleteRequested,
-                modifier = modifier,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = contentPadding,
             )
         }
     }
 
     if (uiState is AlarmEditorUiState.Editing) {
         if (uiState.showDiscardDialog) {
-            AlertDialog(
-                onDismissRequest = onDiscardDismissed,
-                title = { Text(stringResource(Res.string.alarm_discard_title)) },
-                text = { Text(stringResource(Res.string.alarm_discard_text)) },
-                confirmButton = { TextButton(onClick = onDiscardConfirmed) { Text(stringResource(Res.string.alarm_discard_confirm)) } },
-                dismissButton = { TextButton(onClick = onDiscardDismissed) { Text(stringResource(Res.string.alarm_discard_keep)) } },
+            ConfirmDialog(
+                icon = Icons.Default.Edit,
+                tone = DialogTone.Neutral,
+                title = stringResource(Res.string.alarm_discard_title),
+                text = stringResource(Res.string.alarm_discard_text),
+                confirmLabel = stringResource(Res.string.alarm_discard_confirm),
+                confirmStyle = PillButtonStyle.Danger,
+                onConfirm = onDiscardConfirmed,
+                dismissLabel = stringResource(Res.string.alarm_discard_keep),
+                onDismiss = onDiscardDismissed,
             )
         }
         if (uiState.showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = onDeleteDismissed,
-                title = { Text(stringResource(Res.string.alarm_delete_title)) },
-                text = { Text(stringResource(Res.string.alarm_delete_text)) },
-                confirmButton = {
-                    TextButton(
-                        onClick = onDeleteConfirmed,
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text(stringResource(Res.string.alarm_delete_confirm)) }
-                },
-                dismissButton = { TextButton(onClick = onDeleteDismissed) { Text(stringResource(Res.string.common_cancel)) } },
+            ConfirmDialog(
+                icon = Icons.Default.Delete,
+                tone = DialogTone.Destructive,
+                title = stringResource(Res.string.alarm_delete_title),
+                text = stringResource(Res.string.alarm_delete_text),
+                confirmLabel = stringResource(Res.string.alarm_delete_confirm),
+                confirmStyle = PillButtonStyle.Danger,
+                onConfirm = onDeleteConfirmed,
+                dismissLabel = stringResource(Res.string.common_cancel),
+                onDismiss = onDeleteDismissed,
             )
         }
+    }
+}
+
+/**
+ * The action bar: why the last save or delete failed, directly above Save, and Save itself with its
+ * progress while it runs.
+ */
+@Composable
+private fun SaveBar(state: AlarmEditorUiState.Editing, onSave: () -> Unit) {
+    val failure = state.saveError?.message(ErrorContext.SAVE_ALARM)
+        ?: state.deleteError?.message(ErrorContext.DELETE_ALARM)
+    failure?.let { text ->
+        Text(
+            text,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+    PillButton(
+        onClick = onSave,
+        style = PillButtonStyle.Primary,
+        enabled = state.canSave,
+        busy = state.isSaving,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(if (state.isSaving) Res.string.alarm_saving else Res.string.alarm_save))
     }
 }
 
@@ -277,16 +305,21 @@ private fun EditingForm(
     onTimeSelected: (LocalTime) -> Unit,
     onWindowStartSelected: (LocalTime) -> Unit,
     onWindowEndSelected: (LocalTime) -> Unit,
-    onSave: () -> Unit,
     onDeleteRequested: () -> Unit,
+    header: @Composable () -> Unit,
     modifier: Modifier,
+    contentPadding: PaddingValues,
 ) {
     val form = state.form
     val enabled = !state.isBusy
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(contentPadding)
+            .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        header()
         // Locked when editing: still shown, so the alarm's type is visible, but not changeable.
         TypeToggle(selected = form.type, enabled = enabled && !form.typeLocked, onTypeSelected = onTypeSelected)
         Text(
@@ -400,43 +433,16 @@ private fun EditingForm(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        val failure = state.saveError?.message(ErrorContext.SAVE_ALARM)
-            ?: state.deleteError?.message(ErrorContext.DELETE_ALARM)
-        failure?.let { text ->
-            Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Button(
-            onClick = onSave,
-            enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        ) {
-            if (state.isSaving) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text(stringResource(Res.string.alarm_saving))
-                }
-            } else {
-                Text(stringResource(Res.string.alarm_save))
-            }
-        }
-
         if (state.canDelete) {
-            OutlinedButton(
+            PillButton(
                 onClick = onDeleteRequested,
+                style = PillButtonStyle.Danger,
                 enabled = !state.isBusy,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                icon = Icons.Default.Delete,
+                busy = state.isDeleting,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
-                if (state.isDeleting) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text(stringResource(Res.string.alarm_deleting))
-                    }
-                } else {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(stringResource(Res.string.alarm_delete), modifier = Modifier.padding(start = 8.dp))
-                }
+                Text(stringResource(if (state.isDeleting) Res.string.alarm_deleting else Res.string.alarm_delete))
             }
         }
     }
