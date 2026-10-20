@@ -27,15 +27,16 @@ import ch.stenzel.tim.polleninfo.core.ui.species.speciesIcon
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.reading_no_data
+import ch.stenzel.tim.polleninfo.resources.reading_not_reported
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * One species as a card tile: the species' icon on a pale tile, the concentration with [unit] at the
  * top end, the name, the severity word and a compact bar.
  *
- * A taxon the station does not report says "No data" with a dash and an empty bar, never "None"
- * with a 0 — those are a measurement of clean air, and a user who reacts to this taxon must not
- * mistake one for the other.
+ * A taxon the station does not report says "No data" and "not reported" under a dash, with an
+ * empty bar, never "None" with a 0 — those are a measurement of clean air, and a user who reacts to
+ * this taxon must not mistake one for the other.
  *
  * Announced as one item in the order the list rows were — name, severity word, concentration — so
  * a screen reader hears the same as before the tile layout put the number first.
@@ -74,15 +75,13 @@ fun SpeciesTile(reading: SpeciesReading, unit: String, modifier: Modifier = Modi
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.End,
                     )
-                    // The unit belongs to a number; a dash has none.
-                    if (reading.concentration != null) {
-                        Text(
-                            text = unit,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.End,
-                        )
-                    }
+                    // The unit belongs to a number; under a dash, why there is none.
+                    Text(
+                        text = if (reading.concentration != null) unit else stringResource(Res.string.reading_not_reported),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                    )
                 }
             }
             Spacer(Modifier.height(14.dp))

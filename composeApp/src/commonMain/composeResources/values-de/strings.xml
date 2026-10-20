@@ -53,6 +53,7 @@
 
     <string name="home_load_failed">Die Pollenwerte konnten nicht geladen werden.</string>
     <string name="home_driven_by">Bestimmt durch %1$s</string>
+    <string name="home_gauge_overline">Pollenbelastung jetzt</string>
     <string name="home_feeling_question">Wie fühlst du dich heute?</string>
     <string name="home_feeling_dismiss">Heute nicht</string>
 
@@ -80,6 +81,7 @@
     <string name="reading_all_species">Alle Pollenarten</string>
     <string name="reading_concentration_unit">Konzentration in %1$s</string>
     <string name="reading_no_data">Keine Daten</string>
+    <string name="reading_not_reported">nicht erfasst</string>
 
     <string name="common_retry">Erneut versuchen</string>
     <string name="common_back">Zurück</string>

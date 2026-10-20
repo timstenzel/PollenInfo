@@ -53,6 +53,7 @@
 
     <string name="home_load_failed">Non è stato possibile caricare i valori dei pollini.</string>
     <string name="home_driven_by">Polline principale: %1$s</string>
+    <string name="home_gauge_overline">Carico pollinico attuale</string>
     <string name="home_feeling_question">Come si sente oggi?</string>
     <string name="home_feeling_dismiss">Non oggi</string>
 
@@ -80,6 +81,7 @@
     <string name="reading_all_species">Tutti i pollini</string>
     <string name="reading_concentration_unit">concentrazione in %1$s</string>
     <string name="reading_no_data">Nessun dato</string>
+    <string name="reading_not_reported">non rilevato</string>
 
     <string name="common_retry">Riprova</string>
     <string name="common_back">Indietro</string>

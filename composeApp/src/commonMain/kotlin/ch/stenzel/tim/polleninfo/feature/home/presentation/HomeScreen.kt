@@ -51,6 +51,7 @@ import ch.stenzel.tim.polleninfo.core.ui.status.StatusCard
 import ch.stenzel.tim.polleninfo.resources.Res
 import ch.stenzel.tim.polleninfo.resources.common_retry
 import ch.stenzel.tim.polleninfo.resources.home_driven_by
+import ch.stenzel.tim.polleninfo.resources.home_gauge_overline
 import ch.stenzel.tim.polleninfo.resources.home_load_failed
 import ch.stenzel.tim.polleninfo.resources.home_overline
 import ch.stenzel.tim.polleninfo.resources.reading_not_current
@@ -201,6 +202,13 @@ private fun GaugeCard(content: HomeUiState.Content, age: ReadingAge, now: Instan
             modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Text(
+                text = stringResource(Res.string.home_gauge_overline).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
             SeverityGauge(content.overallSeverity)
             // The overall severity is an aggregate with no concentration of its own; without naming
             // its source, the user would have to scan the tiles to learn what is high.

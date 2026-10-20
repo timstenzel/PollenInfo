@@ -8,9 +8,10 @@ Notes that apply to every task:
 
 - **Visual only.** No ViewModel, UI-state, use-case, repository, API or navigation-graph change, and
   no existing test changes except `SeverityColorsTest` for the one deliberately changed colour. The
-  only new strings are the five tab overlines (task 02, decided with the maintainer on 2026-10-19)
-  and the alarm count in task 07. If a screen seems to need a state change or another
-  string, stop and ask.
+  only new strings are the five tab overlines (task 02, decided with the maintainer on 2026-10-19),
+  the gauge overline `home_gauge_overline` and the tile's `reading_not_reported` (task 04, decided
+  with the maintainer on 2026-10-20) and the alarm count in task 07. If a screen seems to need a
+  state change or another string, stop and ask.
 - **Decisions taken while verifying the annex (2026-10-19):**
   - Home's feeling card moves **inline** (between the gauge card and the pollen tiles), as in Figma.
     Its rules (when it shows, answers, "Not today", save error) are unchanged; the "list end grows by

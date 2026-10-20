@@ -56,6 +56,7 @@
 
     <string name="home_load_failed">Les mesures de pollen n’ont pas pu être chargées.</string>
     <string name="home_driven_by">Pollen dominant : %1$s</string>
+    <string name="home_gauge_overline">Charge pollinique actuelle</string>
     <string name="home_feeling_question">Comment vous sentez-vous aujourd’hui ?</string>
     <string name="home_feeling_dismiss">Pas aujourd’hui</string>
 
@@ -83,6 +84,7 @@
     <string name="reading_all_species">Tous les pollens</string>
     <string name="reading_concentration_unit">concentration en %1$s</string>
     <string name="reading_no_data">Sans données</string>
+    <string name="reading_not_reported">non relevé</string>
 
     <string name="common_retry">Réessayer</string>
     <string name="common_back">Retour</string>
