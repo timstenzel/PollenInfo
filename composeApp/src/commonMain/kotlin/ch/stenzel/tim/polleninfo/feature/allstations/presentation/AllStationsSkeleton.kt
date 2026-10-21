@@ -18,11 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ch.stenzel.tim.polleninfo.core.map.SwissMapProjection
 import ch.stenzel.tim.polleninfo.core.ui.layout.MeadowCard
 import ch.stenzel.tim.polleninfo.core.ui.status.ShimmerBox
 import ch.stenzel.tim.polleninfo.core.ui.status.SkeletonBlock
 import ch.stenzel.tim.polleninfo.core.ui.status.SkeletonCanvas
-import ch.stenzel.tim.polleninfo.feature.allstations.map.SwissMapProjection
 
 /**
  * All stations while the station list loads (Figma "All stations · Loading"): the map card, the

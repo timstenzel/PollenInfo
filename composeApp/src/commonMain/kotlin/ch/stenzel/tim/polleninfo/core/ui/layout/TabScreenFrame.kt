@@ -110,7 +110,7 @@ internal fun Washes(modifier: Modifier) {
 private const val ACCENT_WASH_ALPHA = 0.3f
 
 /** A circle that is solid to half its radius and then fades out — Figma's blurred blob. */
-private fun DrawScope.drawWash(color: Color, center: Offset, radius: Float) {
+internal fun DrawScope.drawWash(color: Color, center: Offset, radius: Float) {
     drawCircle(
         brush = Brush.radialGradient(
             0f to color,

@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.map
 
+import ch.stenzel.tim.polleninfo.core.map.MapPoint
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

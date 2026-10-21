@@ -1,9 +1,13 @@
 package ch.stenzel.tim.polleninfo.feature.settings.presentation
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,9 +31,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Changes the default station: the shared picker under a "Default station" header, Save in the glass
- * action bar. Not a tab, so the bottom bar is hidden. [onDone] closes the screen — after a save, or
- * from the back button; the system back gesture leaves it without saving as well.
+ * Changes the default station: the shared picker on a card under a "Default station" header, Save
+ * in the glass action bar. Not a tab, so the bottom bar is hidden. [onDone] closes the screen — after
+ * a save, or from the back button; the system back gesture leaves it without saving as well.
  */
 @Composable
 fun ChangeStationScreen(
@@ -69,25 +73,30 @@ fun ChangeStationScreen(
             }
         },
     ) { contentPadding ->
-        Column(Modifier.fillMaxSize().padding(contentPadding)) {
-            Column(Modifier.padding(horizontal = 24.dp)) {
-                // The overline is the place this screen belongs to: it is opened from Settings.
-                ScreenHeader(
-                    overline = stringResource(Res.string.nav_settings),
-                    title = stringResource(Res.string.change_station_title),
-                )
-                Text(
-                    text = stringResource(Res.string.change_station_intro),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(contentPadding)
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        ) {
+            // The overline is the place this screen belongs to: it is opened from Settings.
+            ScreenHeader(
+                overline = stringResource(Res.string.nav_settings),
+                title = stringResource(Res.string.change_station_title),
+            )
+            Text(
+                text = stringResource(Res.string.change_station_intro),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(20.dp))
             StationPickerContent(
                 state = uiState.picker,
                 onPermissionResult = viewModel::onPermissionResult,
                 onStationSelected = viewModel::onStationSelected,
                 onRetry = viewModel::retry,
-                modifier = Modifier.weight(1f),
+                inCard = true,
             )
         }
     }

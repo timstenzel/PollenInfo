@@ -319,23 +319,23 @@ a card, the location notes as warning banners and "Save" in the action bar.
 
 ### Implementation steps
 
-- [ ] Add the onboarding illustration (decorative, using the existing border and station projection)
-- [ ] Restyle the shared station picker content, its location notes as banners and its load error as an inline card
-- [ ] Restyle Change station around the picker card
+- [x] Add the onboarding illustration (decorative, using the existing border and station projection) *(`OnboardingIllustration` + `OnboardingWashes` via a new `ScreenFrame(washes = …)` slot; the gold halo marks the current pick, dots appear once the list has loaded. `SWISS_BORDER`/`GeoPoint` and `SwissMapProjection`/`MapPoint` moved to `core/map` with their tests — only the package lines changed — because a feature may not import another; values taken from the script that drew the Figma frames, as the Figma MCP was rate-limited)*
+- [x] Restyle the shared station picker content, its location notes as banners and its load error as an inline card *(`SelectField` dropdown above the tonal "Use my location", as in Figma; shimmer while loading; the unused `header`/`footer` slots removed)*
+- [x] Restyle Change station around the picker card *(`inCard`: dropdown and shortcut on a `surface` card, the note below it)*
 
 ### Acceptance criteria
 
-- [ ] Runtime (fresh install): onboarding shows the illustration, picker and "Continue"; completing it opens Home as before
-- [ ] Runtime: with the backend stopped at first launch, the error card with "Retry" replaces the dropdown and "Continue" is disabled; "Retry" after starting the backend shows the dropdown
-- [ ] Runtime: with location permission denied, "Use my location" shows the permission note as a warning banner; picking from the dropdown still cancels a running lookup
-- [ ] Runtime: TalkBack skips the illustration
+- [x] Runtime (fresh install): onboarding shows the illustration, picker and "Continue"; completing it opens Home as before *(API 37, light and dark: outline, 15 dots, grains, washes; Continue disabled until a pick, then the halo moves to the picked station; Continue opened Home for Luzern. German: title wraps to two lines, nothing clipped; Change station in German light and dark fits too)*
+- [x] Runtime: with the backend stopped at first launch, the error card with "Retry" replaces the dropdown and "Continue" is disabled; "Retry" after starting the backend shows the dropdown *(server unreachable via airplane mode on a fresh install: "The station list could not be loaded." + "Couldn’t reach the server. …" with tonal Retry, Continue node `enabled=false`, outline without dots; airplane mode off + Retry: dropdown, shortcut and dots)*
+- [x] Runtime: with location permission denied, "Use my location" shows the permission note as a warning banner; picking from the dropdown still cancels a running lookup *("Don’t allow": permission note as a banner under the button; Change station: "unavailable" note as a banner under the card. A lookup held running with an enabled test network provider that had no fix: spinner, button disabled; picking Bern stopped it at once, and 12 s later — after injecting a Zürich fix — the pick was still Bern with no note)*
+- [x] Runtime: TalkBack skips the illustration *(checked in the accessibility node tree (`uiautomator dump`), not by listening to TalkBack: the first node is the "POLLENINFO" overline, nothing for the canvas)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `StationPickerTest`, `OnboardingViewModelTest` and `ChangeStationViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `StationPickerTest`, `OnboardingViewModelTest` and `ChangeStationViewModelTest` unchanged) *(804 tests, 0 failures; `SwissBorderTest`/`SwissMapProjectionTest` run from `core.map`)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass *(only AGP's accepted `Configuration.setVisible` deprecation)*
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits *(only KDoc comments)*
 
 ## Task [10-account-and-settings-redesign]
 

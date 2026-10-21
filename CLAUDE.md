@@ -255,6 +255,7 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `preferences` | `SelectedStationRepository`, `NotificationPermissionPreferences`, `CrashReportingPreferences`, `DeviceRegistrationRepository` |
 | `crashreporting` | `CrashReporter` (platform-bound: `FirebaseCrashReporter` / iOS `NoCrashReporter`), `CrashReportingSync` |
 | `stationpicker` | `StationPicker` state holder + `StationPickerContent`, `FindNearestStationUseCase` |
+| `map` | `SWISS_BORDER`, `GeoPoint`, `SwissMapProjection` (All stations' map, the tab icon, onboarding's illustration) |
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
@@ -476,7 +477,7 @@ Details live in the ViewModels and their tests; these are the decisions that are
   reading pill and a `SpeciesTileGrid`. Loading is `AllStationsSkeleton`, a full-screen error a
   `StatusCard` with Retry. Selection is `Content.selectedAbbr`; the scroll to it is an event
   (`ScrollToStation`, list index offset by the heading item). Never touches the stored station.
-- **Map** (`feature/allstations/map/`, pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
+- **Map** (`feature/allstations/map/`, border and projection in `core/map/`; pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
   1:10m, Douglas–Peucker 0.01°), lakes `SWISS_LAKES` (0.003°; Bodensee and Lago Maggiore omitted on
   request; landmarks only), equirectangular projection scaled by cos 46.8° — border, lakes, dots
   and the tab icon all go through the same `project`. Tap = **nearest** dot within `TAP_RADIUS`
@@ -534,6 +535,13 @@ Details live in the ViewModels and their tests; these are the decisions that are
   `SettingsEvent.CrashReportsSaveFailed` (snackbar). The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
   per language — **do not rephrase** (French keeps "Source:" without the space). Links go through
   `LocalUriHandler`.
+- **Onboarding and Change station** share `StationPickerContent`, a block of the screen's scrolling
+  content: `SelectField` dropdown, then the tonal "Use my location", a location failure as a
+  `Banner` below; a shimmer while loading; a failed list is an inline card with Retry in their place
+  (Continue stays disabled, nothing is picked). Change station puts the two on a `surface` card
+  (`inCard`). Onboarding opens with `OnboardingIllustration` (decorative `Canvas`: outline and
+  station dots through `SwissMapProjection`, gold halo on the current pick, grains — dots only once
+  the list has loaded) and its own `OnboardingWashes` via `ScreenFrame(washes = …)`.
 
 ### Firebase and push (Android)
 

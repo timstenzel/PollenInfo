@@ -1,5 +1,7 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.map
 
+import ch.stenzel.tim.polleninfo.core.map.MapPoint
+
 /**
  * The station a tap on the map means: the abbreviation of the dot nearest to [tap] whose distance is
  * at most [radiusPx], or `null` when every dot is farther away — a tap on empty map does nothing.

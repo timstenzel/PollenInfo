@@ -1,9 +1,13 @@
 package ch.stenzel.tim.polleninfo.feature.onboarding.presentation
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -13,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.StationPickerContent
+import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.StationPickerState
 import ch.stenzel.tim.polleninfo.core.stationpicker.presentation.selected
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
@@ -27,9 +32,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The first-launch setup: the shared picker under the welcome header, Continue in the glass action
- * bar. Deliberately no back button: this is a one-time step, not a place in the app the user
- * navigates around, so there is nowhere to go back to.
+ * The first-launch setup: the Swiss map illustration, the welcome header and the shared picker,
+ * Continue in the glass action bar. Deliberately no back button: this is a one-time step, not a place
+ * in the app the user navigates around, so there is nowhere to go back to.
  */
 @Composable
 fun OnboardingScreen(
@@ -69,23 +74,29 @@ fun OnboardingScreen(
                 Text(stringResource(Res.string.onboarding_continue))
             }
         },
+        washes = { OnboardingWashes(it) },
     ) { contentPadding ->
-        Column(Modifier.fillMaxSize().padding(contentPadding)) {
-            Column(Modifier.padding(horizontal = 24.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding)) {
+            val picker = uiState.picker
+            OnboardingIllustration(
+                stations = (picker as? StationPickerState.Content)?.stations.orEmpty(),
+                selectedAbbr = picker.selected?.abbr,
+            )
+            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
                 ScreenHeader(overline = APP_NAME, title = stringResource(Res.string.onboarding_title))
                 Text(
                     text = stringResource(Res.string.onboarding_intro),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(16.dp))
+                StationPickerContent(
+                    state = picker,
+                    onPermissionResult = viewModel::onPermissionResult,
+                    onStationSelected = viewModel::onStationSelected,
+                    onRetry = viewModel::retry,
+                )
             }
-            StationPickerContent(
-                state = uiState.picker,
-                onPermissionResult = viewModel::onPermissionResult,
-                onStationSelected = viewModel::onStationSelected,
-                onRetry = viewModel::retry,
-                modifier = Modifier.weight(1f),
-            )
         }
     }
 }

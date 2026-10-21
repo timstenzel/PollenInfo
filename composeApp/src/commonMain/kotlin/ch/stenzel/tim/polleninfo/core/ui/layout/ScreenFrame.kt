@@ -47,11 +47,15 @@ import org.jetbrains.compose.resources.stringResource
  * padding that keeps it clear of them: the safe top and sides plus the back button's row, and at the
  * bottom the action bar's measured height or, without one, the safe bottom (keyboard included). A
  * scrolling screen applies it inside its scroll; the first thing it shows is a [ScreenHeader].
+ *
+ * [washes] draws the soft blobs behind everything; a screen with its own composition (onboarding,
+ * around its illustration) replaces the standard ones.
  */
 @Composable
 fun ScreenFrame(
     onBack: (() -> Unit)?,
     actionBar: (@Composable ColumnScope.() -> Unit)? = null,
+    washes: @Composable (Modifier) -> Unit = { Washes(it) },
     content: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
     val hazeState = rememberHazeState()
@@ -82,7 +86,7 @@ fun ScreenFrame(
             val body = subcompose(ContentSlot) {
                 // The washes are part of the blur source, so the glass shows them softly as well.
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
-                    Washes(Modifier.fillMaxSize())
+                    washes(Modifier.fillMaxSize())
                     content(contentPadding)
                 }
             }.map { it.measure(constraints) }

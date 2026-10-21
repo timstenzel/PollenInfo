@@ -1,4 +1,4 @@
-package ch.stenzel.tim.polleninfo.feature.allstations.map
+package ch.stenzel.tim.polleninfo.core.map
 
 /** A WGS84 position in decimal degrees, as the station list and [SWISS_BORDER] carry it. */
 data class GeoPoint(val latitude: Double, val longitude: Double)

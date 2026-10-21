@@ -1,4 +1,4 @@
-package ch.stenzel.tim.polleninfo.feature.allstations.map
+package ch.stenzel.tim.polleninfo.core.map
 
 import ch.stenzel.tim.polleninfo.core.station.allStations
 import kotlin.math.abs
