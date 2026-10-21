@@ -365,7 +365,7 @@ snackbar. The Meadow text field (including `PasswordField`) and checkbox are com
 
 - [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `AccountFormStateTest`, `AccountViewModelTest` and `SettingsViewModelTest` unchanged) *(805 tests, 0 failures — one new `PaletteContrastTest` case)*
 - [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass *(failed: `checkTranslations` passes, but `lintRelease` reports 1 error unrelated to this task — `AndroidGradlePluginVersion`: "A newer version of Gradle than 9.8.1 is available: 9.8.2" on `gradle-wrapper.properties`, since Gradle 9.8.2 came out. With that one check disabled temporarily (reverted) lint passes with no finding. Needs the maintainer's call: raise the wrapper or disable the check)*
+- [x] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass *(first run failed on `AndroidGradlePluginVersion` only — Gradle 9.8.2 had come out; the maintainer had the wrapper raised to 9.8.2 (own commit), after which lint, translations, the app tests (805), the iOS compile and the server tests (513) pass, with only AGP's accepted `Configuration.setVisible` deprecation)*
 - [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits *(only KDoc/comment lines)*
 
 ## Task [11-cross-screen-verification-and-docs]
