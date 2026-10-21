@@ -10,11 +10,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -189,22 +190,19 @@ private fun DayCircles(days: Set<DayOfWeek>, enabled: Boolean, dates: DateWordin
                 enabled -> colors.primary to colors.onPrimary
                 else -> colors.outlineVariant to colors.onSurface
             }
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .sizeIn(minWidth = DAY_SIZE, minHeight = DAY_SIZE)
-                    .clip(CircleShape)
-                    .background(fill)
-                    .then(if (chosen) Modifier else Modifier.border(1.dp, colors.outlineVariant, CircleShape)),
-            ) {
-                Text(
-                    text = dates.weekdayShort(day),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ink,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 2.dp),
-                )
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .widthIn(max = DAY_SIZE)
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(CircleShape)
+                        .background(fill)
+                        .then(if (chosen) Modifier else Modifier.border(1.dp, colors.outlineVariant, CircleShape)),
+                ) {
+                    DayLabel(text = dates.weekdayShort(day), style = MaterialTheme.typography.labelMedium, color = ink)
+                }
             }
         }
     }

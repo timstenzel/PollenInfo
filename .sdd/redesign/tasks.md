@@ -377,22 +377,22 @@ line with the redesign.
 
 ### Implementation steps
 
-- [ ] Walk the Figma "Screens" order (36 states) in German, French, Italian and English, light and dark; record each frame as matching or with a named deviation; fix clipping and layout defects
-- [ ] Repeat Home, Alarms and the alarm editor at the largest font size; fix overlaps
-- [ ] TalkBack and touch-target pass over every screen; fix missing or changed descriptions and targets under 48 dp
-- [ ] Review CLAUDE.md and README end to end for stale statements (title bars, `NavigationBar`, dynamic colour, floating feeling card, palette validator, map edge colour)
+- [x] Walk the Figma "Screens" order (36 states) in German, French, Italian and English, light and dark; record each frame as matching or with a named deviation; fix clipping and layout defects *(scripted walk on API 37: English light and dark compared side by side with all 72 Figma frames (cropped from one render of the page); German, French and Italian light, 46 shots each. Error states via airplane mode, loading states by pausing the local backend process, the outdated reading by moving the emulator clock 4 h ahead, the crash-report save failure from task 10. No clipping or truncation found in any language; checklist in the handover)*
+- [x] Repeat Home, Alarms and the alarm editor at the largest font size; fix overlaps *(200 %: Home's "All species" heading was squeezed into one letter per line by the unit beside it → `SpeciesListHeading` is a `FlowRow`, the unit wraps below; the weekday circles on the cards and in the editor cut their labels ("Wed" → "We") and ran into each other → each day gets a seventh of the row with a round circle of at most its size and a `DayLabel` that shrinks to fit (`TextAutoSize`, floor 8 sp on screen whatever the font scale); normal size unchanged)*
+- [x] TalkBack and touch-target pass over every screen; fix missing or changed descriptions and targets under 48 dp *(script over the accessibility node tree of every screen and dialog: interactive nodes under 48 dp and interactive nodes without any name. Found: the gold "Create alarm" button was unnamed — Material's icon-plus-text extended FAB clears its label's semantics and names itself by the icon, whose description was `null` (the same code is on `develop`, so it predates the redesign) → the icon carries `alarm_create`. Every `contentDescription`, `stateDescription`, `onClickLabel`, heading and live region removed since `develop` exists again in its new place)*
+- [x] Review CLAUDE.md and README end to end for stale statements (title bars, `NavigationBar`, dynamic colour, floating feeling card, palette validator, map edge colour) *(CLAUDE.md was already current from the screen tasks; it now also notes `DayLabel` and the FAB's icon label. README: Home's feature row described "one bar per pollen type" → gauge and tiles; a "Meadow design" feature bullet added)*
 
 ### Acceptance criteria
 
-- [ ] Runtime: no text is clipped or truncated on any screen or dialog in any of the four languages, and every screen title renders in the serif font
-- [ ] Runtime: at the largest font size, Home, Alarms and the alarm editor show all text without overlap
-- [ ] Runtime: every element that had a spoken description before the redesign still has one (TalkBack pass), and tabs, back button, face buttons, chips, weekday circles and switches have touch targets of at least 48 dp (Layout Inspector)
-- [ ] Handover: a checklist of all 36 Figma states, each marked "matches" or listing its named deviation for the maintainer
-- [ ] Repository: `git diff origin/develop -- composeApp/src/commonMain/composeResources` shows only the alarm-count string added (in all four languages); CLAUDE.md and README contain no statement contradicted by the redesign
+- [x] Runtime: no text is clipped or truncated on any screen or dialog in any of the four languages, and every screen title renders in the serif font *(4 × 46 screenshots reviewed: long French and German texts wrap (e.g. "Comment vous sentez-vous aujourd’hui ?" on three lines, "Bulletin quotidien à 07:30" on two) but nothing is cut; every title in Fraunces. Ellipses exist only for station names in the alarm card and the map tag)*
+- [x] Runtime: at the largest font size, Home, Alarms and the alarm editor show all text without overlap *(200 % after the two fixes above: heading and unit on separate lines, all weekday labels complete inside their circles; "grains/m3" wraps inside the tiles, not cut. Once, right after a reinstall and a font change, the app stayed on the empty startup surface for about a minute; not reproducible in seven further tries — noted for the maintainer)*
+- [x] Runtime: every element that had a spoken description before the redesign still has one (TalkBack pass), and tabs, back button, face buttons, chips, weekday circles and switches have touch targets of at least 48 dp (Layout Inspector) *(checked in the accessibility node tree (`uiautomator dump`) instead of listening to TalkBack and instead of Layout Inspector: no interactive node without a name once the FAB was fixed; tabs 60 × 48 dp, back button 48 × 48 dp, face buttons, chips, weekday circles and switches ≥ 48 dp. Only Material's own time-picker dial labels (0/3/6/9 h, 32 × 48 dp; the dial is dragged) are smaller, unchanged from before the redesign)*
+- [x] Handover: a checklist of all 36 Figma states, each marked "matches" or listing its named deviation for the maintainer *(in the handover message)*
+- [x] Repository: `git diff origin/develop -- composeApp/src/commonMain/composeResources` shows only the alarm-count string added (in all four languages); CLAUDE.md and README contain no statement contradicted by the redesign *(the diff holds exactly the strings approved in the notes at the top of this file, in all four languages — the five tab overlines, `home_gauge_overline`, `reading_not_reported`, `all_stations_list_heading`, `diary_feeling_legend`, `alarm_count`, `alarm_paused_label`, `alarm_tag_minimum`, `alarm_tag_any` — and one comment changed; no other key. This criterion predates those approvals)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations` passes
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` passes
-- [ ] `./gradlew :androidApp:assembleDebug` and `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` pass, and the merged-manifest `grep`s match only debug
+- [x] `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations` passes *(805 tests, 0 failures, forced rerun)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [x] `./gradlew :androidApp:lintRelease` passes *(only AGP's accepted `Configuration.setVisible` deprecation)*
+- [x] `./gradlew :androidApp:assembleDebug` and `./gradlew :androidApp:assembleRelease -Ppolleninfo.uploadCrashlyticsMapping=false` pass, and the merged-manifest `grep`s match only debug *(both greps list only `merged_manifest/debug/…`)*

@@ -31,7 +31,7 @@ The app has five tabs:
 
 | Tab | What it does |
 | --- | --- |
-| **Home** | The current reading of your station: the overall severity and one bar per pollen type, how old the reading is (with a clear warning once it is three hours old or more), pull-to-refresh, and once a day the question *"How do you feel today?"* |
+| **Home** | The current reading of your station: the worst severity as a large word in a half-circle gauge, which pollen type drives it, and a tile per pollen type (level, concentration, bar), how old the reading is (with a clear warning once it is three hours old or more), pull-to-refresh, and once a day the question *"How do you feel today?"* |
 | **All stations** | All 15 Swiss stations at a glance: a map of Switzerland with one coloured dot per station and a list that fills in station by station. Tap a dot or a row to see that station's full reading. |
 | **Diary** | Your answers to *"How do you feel today?"* drawn against the daily pollen levels of a station you choose, over the last week, month or year — one line per pollen type, filterable. Needs an account. |
 | **Alarms** | Up to ten alarms per install, each either a **daily report** (e.g. "at 08:00, Mon–Fri") or a **threshold alert** (e.g. "between 07:00 and 21:00, when birch or grasses reach High"). Delivered as push notifications on Android. |
@@ -48,6 +48,10 @@ And throughout:
   coarse location fix; the coordinates never leave the device.
 - **Accounts without tracking** — email and password only, used for nothing but logging in. Readings,
   All stations and alarms need no account; alarms belong to the install, anonymously.
+- **Meadow design** — the app's own natural palette (cream, sage, forest green, pollen gold) in a
+  light and a dark theme that follow the phone's setting, the same on Android and iOS: serif titles
+  inside the content instead of a top bar, a frosted-glass tab bar the content scrolls behind,
+  skeletons while loading and illustrated cards for errors.
 - **Accessibility** — every severity is a word as well as a colour, colour palettes are checked for
   contrast in light and dark mode, and charts and maps have spoken descriptions.
 

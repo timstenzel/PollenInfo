@@ -506,7 +506,7 @@ Details live in the ViewModels and their tests; these are the decisions that are
   `alarm_tag_any`); the card is one focus stop, its switch ("Alarm for …") another. A paused card
   dims only its fill and type tile (`PAUSED_ALPHA`) — dimming its text would break 4.5:1 — and
   shows the `alarm_paused_label` overline. The header carries the `alarm_count` chip ("3 of 10")
-  once there are alarms. The gold create button and the snackbar (inverse colours) float in one
+  once there are alarms. The gold create button (Material's extended FAB names itself by its icon, so the icon carries `alarm_create`) and the snackbar (inverse colours) float in one
   column above the tab bar, the button above the snackbar — no `Scaffold`. Gate, empty state and
   load error are `StatusCard`s (the empty state's button is the screen's one `Accent`); loading is
   `AlarmsSkeleton`.
@@ -517,7 +517,7 @@ Details live in the ViewModels and their tests; these are the decisions that are
 - **Alarm editor**: leaving goes through `onBack()` (discard dialog when `isDirty`), using
   `NavigationBackHandler` (`navigationevent-compose`). The type is two `TypeCards` (one radio
   group); an existing alarm's type is locked — neither card selectable, the other one dimmed with a
-  lock. Days are `DayToggles` (one checkbox per circle, spoken by its full name); times are
+  lock. Days are `DayToggles` (one checkbox per circle, spoken by its full name; each circle keeps its size and its `DayLabel` shrinks to fit at a large font size, as on the cards); times are
   `TimeField`s (`SelectField` opening the Meadow time picker: overline, large hour/minute boxes,
   24-hour dial, Cancel/OK); an invalid window turns the end field red. A save or delete error sits
   in the action bar above Save. Loading is `AlarmEditorSkeleton`, a load error a `StatusCard` with

@@ -8,16 +8,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Check
@@ -45,10 +48,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
 import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
 import ch.stenzel.tim.polleninfo.core.ui.field.SelectField
@@ -164,29 +171,50 @@ internal fun DayToggles(
         DayOfWeek.entries.forEach { day ->
             val chosen = day in days
             val dayName = dates.weekdayFull(day)
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .minimumInteractiveComponentSize()
-                    .sizeIn(minWidth = DAY_SIZE, minHeight = DAY_SIZE)
-                    .alpha(if (enabled) 1f else DISABLED_ALPHA)
-                    .clip(CircleShape)
-                    .background(if (chosen) colors.primary else colors.surfaceContainerLowest)
-                    .then(if (chosen) Modifier else Modifier.border(1.dp, colors.outlineVariant, CircleShape))
-                    .toggleable(value = chosen, enabled = enabled, role = Role.Checkbox, onValueChange = { onDayToggled(day) })
-                    .semantics { contentDescription = dayName },
-            ) {
-                Text(
-                    text = dates.weekdayShort(day),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (chosen) colors.onPrimary else colors.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 2.dp),
-                )
+            // Each day has a seventh of the row; its circle stays round at DAY_SIZE (smaller only on a
+            // very narrow screen), and the label shrinks to fit it at a large font size.
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .widthIn(max = DAY_SIZE)
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .alpha(if (enabled) 1f else DISABLED_ALPHA)
+                        .clip(CircleShape)
+                        .background(if (chosen) colors.primary else colors.surfaceContainerLowest)
+                        .then(if (chosen) Modifier else Modifier.border(1.dp, colors.outlineVariant, CircleShape))
+                        .toggleable(value = chosen, enabled = enabled, role = Role.Checkbox, onValueChange = { onDayToggled(day) })
+                        .semantics { contentDescription = dayName },
+                ) {
+                    DayLabel(
+                        text = dates.weekdayShort(day),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (chosen) colors.onPrimary else colors.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * A weekday's short name inside its circle, on one line: at a large font size it shrinks until it
+ * fits rather than being cut. Shared with the alarm card's day row.
+ */
+@Composable
+internal fun DayLabel(text: String, style: TextStyle, color: Color) {
+    // The floor is meant on screen, so it is divided by the font scale (sp would grow with it).
+    val minSize = (DAY_LABEL_MIN_SIZE.value / LocalDensity.current.fontScale).sp
+    BasicText(
+        text = text,
+        style = style.copy(color = color, textAlign = TextAlign.Center),
+        maxLines = 1,
+        softWrap = false,
+        autoSize = TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+        modifier = Modifier.padding(horizontal = 3.dp),
+    )
 }
 
 /**
@@ -267,6 +295,9 @@ internal fun TimeField(
 }
 
 private val DAY_SIZE = 42.dp
+
+/** The smallest a [DayLabel] shrinks to, at any font scale. */
+private val DAY_LABEL_MIN_SIZE = 8.sp
 private const val LOCKED_ALPHA = 0.5f
 private const val SELECTED_TILE_ALPHA = 0.16f
 private const val DISABLED_ALPHA = 0.38f

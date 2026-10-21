@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,13 +41,20 @@ import org.jetbrains.compose.resources.stringResource
  * The unit is stated once here, so the numbers on the tiles can stay bare and scannable. [titleStyle]
  * lets Home set the heading in its serif.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SpeciesListHeading(unit: String, titleStyle: TextStyle = MaterialTheme.typography.titleMedium) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+    // The unit sits at the end of the heading's line; where both don't fit (a large font, a long
+    // language) it wraps below rather than squeezing the heading.
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        itemVerticalAlignment = Alignment.Bottom,
+    ) {
         Text(
             text = stringResource(Res.string.reading_all_species),
             style = titleStyle,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.padding(end = 12.dp),
         )
         Text(
             text = stringResource(Res.string.reading_concentration_unit, unit),

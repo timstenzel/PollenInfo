@@ -418,10 +418,13 @@ private fun FloatingControls(
 @Composable
 private fun CreateAlarmButton(enabled: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val label = stringResource(Res.string.alarm_create)
     ExtendedFloatingActionButton(
         onClick = { if (enabled) onClick() },
-        icon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp)) },
-        text = { Text(stringResource(Res.string.alarm_create), style = MaterialTheme.typography.labelLarge) },
+        // Material clears the label's semantics and names the button by its icon, so the icon
+        // carries the label; without it a screen reader announces an unnamed button.
+        icon = { Icon(Icons.Default.Add, contentDescription = label, modifier = Modifier.size(22.dp)) },
+        text = { Text(label, style = MaterialTheme.typography.labelLarge) },
         shape = CircleShape,
         // Composited, because a translucent button floating over the list would show the cards through it.
         containerColor = if (enabled) {
