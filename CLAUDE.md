@@ -475,7 +475,8 @@ Details live in the ViewModels and their tests; these are the decisions that are
   chevron) scrolls and pulls to refresh. Stale rows show a warning icon and "Reading not current"
   in their line. The selected row is `primaryContainer` with a `primary` edge and expands to the
   reading pill and a `SpeciesTileGrid`. Loading is `AllStationsSkeleton`, a full-screen error a
-  `StatusCard` with Retry. Selection is `Content.selectedAbbr`; the scroll to it is an event
+  `StatusCard` with Retry. The overline ("15 stations · MeteoSwiss") shows in every state: the loaded
+  count, or `KNOWN_STATION_COUNT` (15) before that. Selection is `Content.selectedAbbr`; the scroll to it is an event
   (`ScrollToStation`, list index offset by the heading item). Never touches the stored station.
 - **Map** (`feature/allstations/map/`, border and projection in `core/map/`; pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
   1:10m, Douglas–Peucker 0.01°), lakes `SWISS_LAKES` (0.003°; Bodensee and Lago Maggiore omitted on

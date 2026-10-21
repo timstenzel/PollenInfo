@@ -169,8 +169,9 @@ private fun AllStationsContent(
     TabScreenFrame { contentPadding ->
         val header = @Composable {
             ScreenHeader(
-                // The count is only known once the station list is; until then the line stays empty.
-                overline = (uiState as? AllStationsUiState.Content)?.stations?.size?.let { count ->
+                // The loaded list's count; while loading or after an error the network's known size,
+                // so the line is always there and the title never moves (decided with the maintainer).
+                overline = ((uiState as? AllStationsUiState.Content)?.stations?.size ?: KNOWN_STATION_COUNT).let { count ->
                     pluralStringResource(Res.plurals.all_stations_overline, count, count)
                 },
                 // The tab's own name, so what is announced and what is shown cannot disagree.
@@ -564,3 +565,6 @@ private const val MAP_MAX_HEIGHT_FRACTION = 0.4f
 
 /** Shared by the expand animation and the scroll that waits for it to settle. */
 private const val EXPAND_DURATION_MILLIS = 250
+
+/** MeteoSwiss's pollen network (`PollenStation` on the server), shown until the list has loaded. */
+private const val KNOWN_STATION_COUNT = 15
