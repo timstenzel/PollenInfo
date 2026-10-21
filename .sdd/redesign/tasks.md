@@ -349,24 +349,24 @@ snackbar. The Meadow text field (including `PasswordField`) and checkbox are com
 
 ### Implementation steps
 
-- [ ] Restyle the account form (text and password fields, checkbox card), its error banner and the warning banner
-- [ ] Restyle Settings: account card (logged in) and log-in row (logged out), grouped rows, privacy switch row (keeps `toggleable` with `Role.Switch`), data source with the unchanged attribution, impressum, deletion note and version
-- [ ] Restyle the crash-report save-failed snackbar
+- [x] Restyle the account form (text and password fields, checkbox card), its error banner and the warning banner *(new `core/ui/field/MeadowTextField` (same box as `SelectField`, focused/error edges, hint or error below; `PasswordField` builds on it) and `core/ui/selection/MeadowCheckbox`; `Banner` gains `icon = null` and `iconTint`; key badge on the log-in form. Values from the script that drew the Figma frames, as the Figma MCP was rate-limited)*
+- [x] Restyle Settings: account card (logged in) and log-in row (logged out), grouped rows, privacy switch row (keeps `toggleable` with `Role.Switch`), data source with the unchanged attribution, impressum, deletion note and version *(no new strings: row subtitles are the existing action wordings; "Logged in as" is split off the existing sentence when the address ends it, in all four languages; logged out, the card says "Not logged in" with a "Log in" pill (not drawn in Figma); the deletion note sits under the impressum card; three new pairs in `PaletteContrastTest`)*
+- [x] Restyle the crash-report save-failed snackbar *(inverse colours, medium shape, as on Alarms)*
 
 ### Acceptance criteria
 
-- [ ] Runtime: a wrong password shows "Couldn't log in. The email address or password is incorrect." as a banner under the fields; on Create account, mismatching passwords outline the repeat field in red with "The passwords don't match." below, followed by the no-recovery warning and the consent checkbox
-- [ ] Runtime: logged in, Settings shows the account card with the email and "Log out", then grouped rows for default station, language, privacy, data source, impressum and account deletion, and the version line
-- [ ] Runtime: log out and delete account open their dialogs (the latter with a password field) and work as before
-- [ ] Runtime: with a failed save forced by a temporary local change (the preference write is on-device, so a stopped backend does not trigger it; the change is not committed), the switch flips back and the snackbar above the bar says "Could not save your choice. Please try again."
-- [ ] Runtime: the MeteoSwiss attribution text is unchanged in all four languages ("Source:" without space in French); TalkBack announces the crash-report row as a switch with its state
+- [x] Runtime: a wrong password shows "Couldn't log in. The email address or password is incorrect." as a banner under the fields; on Create account, mismatching passwords outline the repeat field in red with "The passwords don't match." below, followed by the no-recovery warning and the consent checkbox *(API 37, light and dark: banner with the red error icon directly under the password field; register form with "secret12x" against "secret123" as described; German register form fits)*
+- [x] Runtime: logged in, Settings shows the account card with the email and "Log out", then grouped rows for default station, language, privacy, data source, impressum and account deletion, and the version line *(light and dark after registering a fresh account; logged out the card shows "Not logged in" + "Log in" and no deletion group; German fits)*
+- [x] Runtime: log out and delete account open their dialogs (the latter with a password field) and work as before *(log out → dialog → "Not logged in"; delete with a wrong password: "Couldn’t delete the account. The password is incorrect." in the dialog; with the right one: `204 DELETE /users/me`, a later log-in answered `401`. A first attempt returned 500 because the long-running local `:server:run` served stale classes (`ClassNotFoundException: ErrorBody`); after restarting the backend it worked — not an app issue)*
+- [x] Runtime: with a failed save forced by a temporary local change (the preference write is on-device, so a stopped backend does not trigger it; the change is not committed), the switch flips back and the snackbar above the bar says "Could not save your choice. Please try again." *(a temporary `check(...)` in `DataStoreCrashReportingPreferences.setEnabled`, reverted with `git checkout`: the switch stayed on, the snackbar showed above the tab bar)*
+- [x] Runtime: the MeteoSwiss attribution text is unchanged in all four languages ("Source:" without space in French); TalkBack announces the crash-report row as a switch with its state *(on screen "Source: MeteoSwiss", "Quelle: MeteoSchweiz", "Source: MétéoSuisse", "Fonte: MeteoSvizzera", identical to the resources, which are unchanged. The switch was checked in the accessibility node tree (`uiautomator dump`), not by listening — TalkBack's speech is not logged on this image: one focusable checkable node over the whole row, `checked` following the state, label and description inside it; the row code (`toggleable`, `Role.Switch`) is unchanged)*
 
 ### Quality gates
 
-- [ ] `./gradlew :composeApp:testAndroidHostTest` passes (including `AccountFormStateTest`, `AccountViewModelTest` and `SettingsViewModelTest` unchanged)
-- [ ] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
-- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass
-- [ ] The hard-coded-text `grep` from CLAUDE.md finds no new hits
+- [x] `./gradlew :composeApp:testAndroidHostTest` passes (including `AccountFormStateTest`, `AccountViewModelTest` and `SettingsViewModelTest` unchanged) *(805 tests, 0 failures — one new `PaletteContrastTest` case)*
+- [x] `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` passes
+- [ ] `./gradlew :androidApp:lintRelease` and `./gradlew :composeApp:checkTranslations` pass *(failed: `checkTranslations` passes, but `lintRelease` reports 1 error unrelated to this task — `AndroidGradlePluginVersion`: "A newer version of Gradle than 9.8.1 is available: 9.8.2" on `gradle-wrapper.properties`, since Gradle 9.8.2 came out. With that one check disabled temporarily (reverted) lint passes with no finding. Needs the maintainer's call: raise the wrapper or disable the check)*
+- [x] The hard-coded-text `grep` from CLAUDE.md finds no new hits *(only KDoc/comment lines)*
 
 ## Task [11-cross-screen-verification-and-docs]
 

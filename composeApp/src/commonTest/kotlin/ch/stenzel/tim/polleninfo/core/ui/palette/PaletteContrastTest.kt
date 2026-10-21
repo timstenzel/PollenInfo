@@ -8,6 +8,8 @@ import ch.stenzel.tim.polleninfo.core.ui.severity.severityColor
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesColor
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.PAUSED_ALPHA
 import ch.stenzel.tim.polleninfo.feature.alarms.presentation.selectedTile
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.LEAD_ALPHA
+import ch.stenzel.tim.polleninfo.feature.settings.presentation.TINT_ALPHA
 import ch.stenzel.tim.polleninfo.theme.MeadowColors
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColorScheme
 import ch.stenzel.tim.polleninfo.theme.MeadowDarkColors
@@ -159,6 +161,19 @@ class PaletteContrastTest {
         )
     }
 
+    // Account and Settings: the account card's dimmed "Logged in as" and its button's label on the
+    // tinted pill over the green; the red icon of "Delete account" on its sunken tile. The fields,
+    // the checkbox (primary, onSurfaceVariant edge), the consent card, the banners, the red row title
+    // (error on raised) and the snackbar are covered above.
+    private fun Scheme.settingsPairs(): List<Pair> {
+        val pill = colors.onPrimary.copy(alpha = TINT_ALPHA).compositeOver(colors.primary)
+        return listOf(
+            Pair("Logged in as (onPrimary ${(LEAD_ALPHA * 100).toInt()} %)", "primary", colors.onPrimary.copy(alpha = LEAD_ALPHA).compositeOver(colors.primary), colors.primary, TEXT),
+            Pair("Log out (onPrimary)", "account card pill", colors.onPrimary, pill, TEXT),
+            Pair("delete icon (error)", "sunken", colors.error, colors.surfaceContainerHighest, GRAPHICS),
+        )
+    }
+
     private fun assertAllMeet(pairs: Scheme.() -> List<Pair>) {
         val failures = schemes.flatMap { scheme ->
             scheme.pairs().mapNotNull { pair ->
@@ -219,6 +234,11 @@ class PaletteContrastTest {
     }
 
     @Test
+    fun `the account card and the Settings rows are readable`() {
+        assertAllMeet { settingsPairs() }
+    }
+
+    @Test
     fun `every pair list covers both schemes and all seven species and five severities`() {
         // Guards the tables themselves: an empty list would pass every check above.
         schemes.forEach { scheme ->
@@ -231,6 +251,7 @@ class PaletteContrastTest {
             assertTrue(scheme.diaryPairs().size == 7 * 2 + 2, scheme.name)
             assertTrue(scheme.alarmsPairs().size == 4, scheme.name)
             assertTrue(scheme.alarmEditorPairs().size == 4, scheme.name)
+            assertTrue(scheme.settingsPairs().size == 3, scheme.name)
         }
     }
 

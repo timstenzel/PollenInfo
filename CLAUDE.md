@@ -260,9 +260,9 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
 | `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
 | `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
-| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken), `MeadowFilterChip` + `ChipLabel` (pill chips, filled `primary` when selected, no check mark) |
-| `ui/field` | `SelectField` (label above value on raised with a hairline edge and a trailing icon, for values picked from a menu or picker; red edge and label on error) |
-| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains (`grains = true` on any tone, e.g. Alarms' notifications gate), `centered = false` for a gate that lists points), `Banner` (warning that is not an error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
+| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken), `MeadowFilterChip` + `ChipLabel` (pill chips, filled `primary` when selected, no check mark), `MeadowCheckbox` (the box only; the row around it is `toggleable` with `Role.Checkbox`) |
+| `ui/field` | `SelectField` (label above value on raised with a hairline edge and a trailing icon, for values picked from a menu or picker; red edge and label on error), `MeadowTextField` (the same box for typed text: `primary` 2 dp edge while focused, hint or error below; `PasswordField` builds on it) |
+| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains (`grains = true` on any tone, e.g. Alarms' notifications gate), `centered = false` for a gate that lists points), `Banner` (warning that is not an error; `icon = null` for a caution, `iconTint = error` for a failed action, e.g. Account's log-in error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
 | `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
@@ -522,13 +522,13 @@ Details live in the ViewModels and their tests; these are the decisions that are
   24-hour dial, Cancel/OK); an invalid window turns the end field red. A save or delete error sits
   in the action bar above Save. Loading is `AlarmEditorSkeleton`, a load error a `StatusCard` with
   Retry. Windows across midnight are out of scope.
-- **Account**: after a successful login/registration, offer the credentials to `CredentialStore.save`
+- **Account**: `MeadowTextField`/`PasswordField`s, a request error as a `Banner` (red error icon) under the fields, the no-recovery caution as an icon-less `Banner`, the consent as a raised card with `MeadowCheckbox`; the log-in form opens with a key badge. After a successful login/registration, offer the credentials to `CredentialStore.save`
   (except a login made with the credential the manager just handed over); `Done` follows whatever
   happens. In `LOGIN` mode, `offer()` first. `logout()` clears locally **whatever the server
   answers**. A `401` on an authenticated call → `sessions.clear()` (only if the refused session is
   still stored). `AndroidCredentialStore` follows the current `ComponentActivity` via
   `ActivityLifecycleCallbacks` (weakly) and logs exceptions by type only, never with credentials.
-- **Settings** observes the station, the session and the crash-report choice; the station name falls
+- **Settings** observes the station, the session and the crash-report choice; layout: the green account card (email and "Log out", or "Not logged in" and "Log in"; "Logged in as" is split off `settings_account_logged_in_as` only where the address ends the sentence), then one overline + raised card per group (station, language, privacy, data source, impressum, and "Delete account" in red while logged in), each row an icon tile, title, subtitle (the row's action wording) and a chevron or open-link icon, the deletion note under the impressum card, the version line; the station name falls
   back to the stored one, never an error. The Privacy section (crash-report switch, whole row
   `toggleable` with `Role.Switch`) shows only when `CrashReporter.isAvailable`; the switch only writes
   `CrashReportingPreferences`, never the reporter; a failed write puts the switch back and sends
