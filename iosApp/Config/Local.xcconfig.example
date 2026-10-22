@@ -1,0 +1,18 @@
+// Per-developer settings for installing on your own iPhone with a free Apple ID ("Personal Team").
+// Copy this file to Local.xcconfig (git-ignored, never committed) and fill in what you need.
+// Without Local.xcconfig, both builds keep the committed identifiers and addresses, and build
+// for the Simulator only.
+
+// Your team ID: Xcode → Settings → Accounts → your Apple ID → Personal Team. Also shown in
+// Keychain Access as the "(XXXXXXXXXX)" of your "Apple Development" certificate.
+DEVELOPMENT_TEAM = ABCDE12345
+
+// A throwaway identifier of your own. A Personal Team install registers the identifier with Apple,
+// so never use the app's final one (ch.stenzel.tim.polleninfo). Debug appends ".debug".
+BUNDLE_ID_BASE = ch.example.yourname.polleninfo
+
+// Debug only: a backend address your iPhone can reach, e.g. the Mac's address in the same Wi-Fi
+// (System Settings → Wi-Fi → Details → IP address) while `./gradlew :server:run` runs.
+// Release ignores it and always uses https://api.polleninfo.ch.
+// In xcconfig `//` starts a comment, hence `$()` between the slashes.
+// API_BASE_URL = http:/$()/192.168.1.20:8080

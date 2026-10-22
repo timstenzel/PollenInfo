@@ -114,23 +114,23 @@ reachable from the phone.
 
 ### Implementation steps
 
-- [ ] Include an optional, git-ignored local settings file from both configurations: Debug's backend address placed before the include (overridable), Release's after it (always production).
-- [ ] Commit an example file documenting the signing team, base identifier and Debug backend address.
-- [ ] Ignore the local settings file in git.
-- [ ] Try the Debug build against the Mac's LAN address on the iPhone; if iOS's Local Network prompt appears or blocks requests, raise with the maintainer whether to add a Debug-only local-network usage text (not covered by the requirements yet).
-- [ ] Document the Personal Team setup and the seven-day expiry in README and CLAUDE.md; add checklist rows for device install and LAN backend.
+- [x] Include an optional, git-ignored local settings file from both configurations: Debug's backend address placed before the include (overridable), Release's after it (always production).
+- [x] Commit an example file documenting the signing team, base identifier and Debug backend address.
+- [x] Ignore the local settings file in git.
+- [ ] ~~Try the Debug build against the Mac's LAN address on the iPhone; if iOS's Local Network prompt appears or blocks requests, raise with the maintainer whether to add a Debug-only local-network usage text (not covered by the requirements yet).~~ *(skipped: no iPhone connected and no signing identity on this Mac. Verified on the Simulator that a Local `API_BASE_URL` reaches the Debug Info.plist with `NSAllowsLocalNetworking`. Raised with the maintainer: iOS will likely show its Local Network prompt with the system's generic text; whether to add a Debug-only `NSLocalNetworkUsageDescription` is open. Checklist row 6.)*
+- [x] Document the Personal Team setup and the seven-day expiry in README and CLAUDE.md; add checklist rows for device install and LAN backend.
 
 ### Acceptance criteria
 
-- [ ] Without a local settings file, `xcodebuild -showBuildSettings` for Debug and Release shows the identifiers and addresses from task 01.
-- [ ] With a local file setting a throwaway base identifier and team, `xcodebuild -showBuildSettings` for Debug and Release shows only the throwaway `PRODUCT_BUNDLE_IDENTIFIER`s, and both builds install and launch on the maintainer's iPhone.
-- [ ] With a local Debug backend address set to the Mac's LAN IP, the Debug app on the iPhone shows readings from the local backend.
-- [ ] With a backend address in the local file, the processed Release Info.plist still contains `https://api.polleninfo.ch`.
-- [ ] `git check-ignore iosApp/Config/Local.xcconfig` exits 0, and `git ls-files iosApp/Config` lists the example but not the local file.
+- [x] Without a local settings file, `xcodebuild -showBuildSettings` for Debug and Release shows the identifiers and addresses from task 01. *(Debug `ch.stenzel.tim.polleninfo.debug` / `http://localhost:8080`, Release `ch.stenzel.tim.polleninfo` / `https://api.polleninfo.ch`, no `DEVELOPMENT_TEAM`.)*
+- [ ] ~~With a local file setting a throwaway base identifier and team, `xcodebuild -showBuildSettings` for Debug and Release shows only the throwaway `PRODUCT_BUNDLE_IDENTIFIER`s, and both builds install and launch on the maintainer's iPhone.~~ *(skipped in part: no iPhone connected and no signing identity here. Build settings verified with a test `Local.xcconfig`: `ch.example.throwaway.polleninfo.debug` / `ch.example.throwaway.polleninfo`, team `TEST123456` in both. Install and launch on the iPhone: checklist row 5, for the maintainer.)*
+- [ ] ~~With a local Debug backend address set to the Mac's LAN IP, the Debug app on the iPhone shows readings from the local backend.~~ *(skipped: no iPhone connected. The built Debug Info.plist has `API_BASE_URL = http://192.168.1.20:8080` and `NSAllowsLocalNetworking = true`. Checklist row 6, for the maintainer.)*
+- [x] With a backend address in the local file, the processed Release Info.plist still contains `https://api.polleninfo.ch`. *(Simulator Release build with a test `Local.xcconfig` setting `http://192.168.1.20:8080`: `plutil -extract API_BASE_URL` → `https://api.polleninfo.ch`, no `NSAppTransportSecurity`.)*
+- [x] `git check-ignore iosApp/Config/Local.xcconfig` exits 0, and `git ls-files iosApp/Config` lists the example but not the local file. *(exit 0; `Base`, `Debug`, `Local.xcconfig.example`, `Release`.)*
 
 ### Quality gates
 
-- [ ] Common quality gates pass.
+- [x] Common quality gates pass. *(JVM and iOS Simulator test tasks and iOS compile pass (no Kotlin changed, up to date); `xcodebuild` Debug and Release `BUILD SUCCEEDED`, 0 warnings; only placeholders (`ABCDE12345`, `ch.example.yourname`, `192.168.1.20`) in the example and README; checklist rows 5–7 recorded.)*
 
 ---
 

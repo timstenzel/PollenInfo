@@ -291,8 +291,8 @@ get(API_BASE_URL)) }`) so tests point them at a `MockEngine` host.
 | --- | --- |
 | Android release | `https://api.polleninfo.ch` always |
 | Android debug | `http://10.0.2.2:8080`, or Gradle property `polleninfo.apiBaseUrl` (set in `~/.gradle/gradle.properties`, never the project's) |
-| iOS debug | `http://localhost:8080` (`iosApp/Config/Debug.xcconfig`) |
-| iOS release | `https://api.polleninfo.ch` always (`iosApp/Config/Release.xcconfig`) |
+| iOS debug | `http://localhost:8080` (`iosApp/Config/Debug.xcconfig`), or `API_BASE_URL` in the git-ignored `iosApp/Config/Local.xcconfig` |
+| iOS release | `https://api.polleninfo.ch` always (`iosApp/Config/Release.xcconfig`, assigned after the `Local.xcconfig` include) |
 
 - Cleartext (`usesCleartextTraffic`) and `ACCESS_LOCAL_NETWORK` are declared **only** in
   `androidApp/src/debug/AndroidManifest.xml`. Verify with `grep -l 'usesCleartextTraffic\|ACCESS_LOCAL_NETWORK'
@@ -315,6 +315,13 @@ The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written
 | `CFBundleDevelopmentRegion` | `en` | English fallback |
 | `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (whole number) | `IosAppInfo` (version line hidden otherwise) |
 
+- **Own iPhone (free Apple ID, "Personal Team"):** both configurations end with `#include?
+  "Local.xcconfig"` (git-ignored; `Local.xcconfig.example` documents it): `DEVELOPMENT_TEAM`, a
+  throwaway `BUNDLE_ID_BASE` (a Personal Team install registers the identifier with Apple — **never**
+  the final `ch.stenzel.tim.polleninfo`) and, Debug only, an `API_BASE_URL` the phone can reach (the
+  Mac's LAN address; `NSAllowsLocalNetworking` covers it). Release re-assigns production after the
+  include. Never commit a team, a personal identifier or a private address. A Personal Team install
+  expires after seven days — reinstall from Xcode.
 - Notifications need no key. The backend address comes from the build configuration
   (`API_BASE_URL` in `iosApp/Config/*.xcconfig` → `Info.plist` → `MainViewController(apiBaseUrl)`).
 - **Password autofill:** Associated Domains entitlement `webcredentials:api.polleninfo.ch`

@@ -72,3 +72,6 @@ postgres_superuser_password
 
 # Android Studio "Generate Signed APK" output (keep mapping.txt of a shipped build elsewhere).
 androidApp/release/
+
+# Per-developer iPhone signing and backend settings (iosApp/Config/Local.xcconfig.example documents them).
+iosApp/Config/Local.xcconfig

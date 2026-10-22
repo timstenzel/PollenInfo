@@ -178,7 +178,7 @@ The full contract, with every status code, is in [`CLAUDE.md`](CLAUDE.md#rest-ap
 - JDK 21 (Android Studio's bundled JBR works)
 - Android SDK (Android Studio)
 - Docker — Docker Desktop, OrbStack or Colima — for the development database and the server tests
-- Full Xcode only if you want to run the iOS tests (there is no iOS app project yet)
+- Full Xcode only for the iPhone app and the iOS tests
 
 ### Run the backend
 
@@ -218,9 +218,24 @@ adb shell pm grant ch.stenzel.tim.polleninfo.debug android.permission.ACCESS_LOC
 
 ### iOS
 
-The shared code compiles for `iosArm64` and `iosSimulatorArm64`, but the Xcode wrapper does not
-exist yet. The `Info.plist` keys and entitlements it will need are listed in
-[`CLAUDE.md`](CLAUDE.md#ios-wrapper-configuration).
+Open [`iosApp/iosApp.xcodeproj`](iosApp) in Xcode and run the `iosApp` scheme on an iPhone
+Simulator; the build compiles the shared Kotlin code itself. Debug ("PollenInfo (debug)") talks to
+`http://localhost:8080`, Release ("PollenInfo") always to `https://api.polleninfo.ch`.
+
+**On your own iPhone** with a free Apple ID ("Personal Team"):
+
+1. Add your Apple ID in Xcode → Settings → Accounts.
+2. Copy [`iosApp/Config/Local.xcconfig.example`](iosApp/Config/Local.xcconfig.example) to
+   `iosApp/Config/Local.xcconfig` (git-ignored) and set your team ID and a throwaway base identifier
+   — never the app's final `ch.stenzel.tim.polleninfo`, which an install would register with Apple.
+3. For the debug build against your Mac, set `API_BASE_URL` there to the Mac's address in the same
+   Wi-Fi (e.g. `http:/$()/192.168.1.20:8080`) and run `./gradlew :server:run`. Release ignores it.
+4. Connect the iPhone, turn on Developer Mode (Settings → Privacy & Security), pick it as the run
+   destination and run. The first time, trust your developer profile under Settings → General →
+   VPN & Device Management.
+
+A Personal Team install expires after seven days; run it from Xcode again. The `Info.plist` keys
+and entitlements the app needs are listed in [`CLAUDE.md`](CLAUDE.md#ios-wrapper-configuration).
 
 ---
 
