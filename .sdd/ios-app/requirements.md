@@ -202,6 +202,7 @@ installable on the iOS Simulator and on the maintainer's own iPhone using a free
 - When the paid account is available, removing two lines from the private settings file makes the builds use the real identifier; nothing in the repository needs to change for that.
 - Whether the GitHub-hosted macOS runners offer the pinned Xcode version must be checked during implementation; if not, the newest available version that builds without warnings is pinned and the choice recorded.
 - The location prompt text is the one piece of translated text outside the shared translation check; it is reviewed by hand against the project's language style rules.
+- **Accepted limitation** (decided 2026-10-22): iOS words the location prompt in the device language. A language chosen only in PollenInfo's Settings does not change it; the app cannot influence this.
 
 ---
 

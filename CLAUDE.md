@@ -310,7 +310,7 @@ The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written
 | --- | --- | --- |
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` (debug only) | Cleartext dev backend |
 | `NSLocalNetworkUsageDescription` | English sentence (debug only, not translated — developer-facing) | iOS's Local Network prompt when an iPhone reaches the Mac's LAN backend |
-| `NSLocationWhenInUseUsageDescription` | English sentence; de/fr/it in `iosApp/iosApp/InfoPlist.xcstrings` (outside `checkTranslations`, reviewed by hand). iOS words the prompt in the **device** language, not the app language chosen in Settings | **Mandatory** — without it `CLLocationManager` silently never prompts |
+| `NSLocationWhenInUseUsageDescription` | English sentence; de/fr/it in `iosApp/iosApp/InfoPlist.xcstrings` (outside `checkTranslations`, reviewed by hand). iOS words the prompt in the **device** language, not the app language chosen in Settings (accepted limitation) | **Mandatory** — without it `CLLocationManager` silently never prompts |
 | `NSLocationDefaultAccuracyReduced` | `true` | Coarse location only |
 | `CFBundleLocalizations` | `en`, `de`, `fr`, `it` | `IosLanguageRepository` |
 | `CFBundleDevelopmentRegion` | `en` | English fallback |
