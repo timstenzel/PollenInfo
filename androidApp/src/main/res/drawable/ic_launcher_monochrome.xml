@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Themed-icon layer (API 33+): the launcher tints it and uses only its alpha. Same grain as
-  ic_launcher_foreground, with the three aperture pores cut out of the body (evenOdd) instead of
-  painted in a second colour, which a single-tone layer could not show.
+  Themed-icon layer (API 33+): the launcher tints it and uses only its alpha. The gauge of
+  ic_launcher_foreground in one colour, as Figma's monochrome layer: the filled segments opaque, the
+  track at 35 %, the grain's pores cut out (evenOdd) and the small grains at their own alpha.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -10,38 +10,40 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <group android:pivotX="54" android:pivotY="54" android:rotation="0">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="60">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="120">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="180">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="240">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="300">
-        <path android:fillColor="#FFFFFF"
-            android:pathData="M50.5,35 Q54,21 57.5,35 Z" />
-    </group>
+    <!-- Segments, left to right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M22.39,61.9 A31.64,31.64 0 0,1 30.67,41.9 L37.36,48.03 A22.57,22.57 0 0,0 31.45,62.3 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32.62,39.95 A31.64,31.64 0 0,1 52.62,31.67 L53.02,40.73 A22.57,22.57 0 0,0 38.75,46.64 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55.38,31.67 A31.64,31.64 0 0,1 75.38,39.95 L69.25,46.64 A22.57,22.57 0 0,0 54.98,40.73 Z" />
+    <path
+        android:fillAlpha="0.35"
+        android:fillColor="#FFFFFF"
+        android:pathData="M77.33,41.9 A31.64,31.64 0 0,1 85.61,61.9 L76.55,62.3 A22.57,22.57 0 0,0 70.64,48.03 Z" />
 
-    <!-- Body (centre 54,54, r=19) with the pores at (69,54), (46.5,67), (46.5,41), r=3, as holes -->
+    <!-- Grain (r 7.59) with its three pores (r 1.52) cut out -->
     <path
         android:fillColor="#FFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M54,35 A19,19 0 1,0 54,73 A19,19 0 1,0 54,35 Z
-            M69,51 A3,3 0 1,0 69,57 A3,3 0 1,0 69,51 Z
-            M46.5,64 A3,3 0 1,0 46.5,70 A3,3 0 1,0 46.5,64 Z
-            M46.5,38 A3,3 0 1,0 46.5,44 A3,3 0 1,0 46.5,38 Z" />
+        android:pathData="M46.41,63.28 A7.59,7.59 0 1,0 61.59,63.28 A7.59,7.59 0 1,0 46.41,63.28 Z
+            M56.28,63.28 A1.52,1.52 0 1,0 59.32,63.28 A1.52,1.52 0 1,0 56.28,63.28 Z
+            M50.58,66.57 A1.52,1.52 0 1,0 53.62,66.57 A1.52,1.52 0 1,0 50.58,66.57 Z
+            M50.58,59.99 A1.52,1.52 0 1,0 53.62,59.99 A1.52,1.52 0 1,0 50.58,59.99 Z" />
 
+    <!-- Small grains -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41.98,49.57 A2.32,2.32 0 1,0 46.62,49.57 A2.32,2.32 0 1,0 41.98,49.57 Z" />
+    <path
+        android:fillAlpha="0.8"
+        android:fillColor="#FFFFFF"
+        android:pathData="M62.65,46.41 A1.48,1.48 0 1,0 65.61,46.41 A1.48,1.48 0 1,0 62.65,46.41 Z" />
+    <path
+        android:fillAlpha="0.6"
+        android:fillColor="#FFFFFF"
+        android:pathData="M59.59,54.32 A1.06,1.06 0 1,0 61.71,54.32 A1.06,1.06 0 1,0 59.59,54.32 Z" />
 </vector>
