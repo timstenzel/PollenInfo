@@ -55,20 +55,20 @@ Android behaviour.
 
 ### Implementation steps
 
-- [ ] Run `./gradlew :composeApp:iosSimulatorArm64Test` and collect failures.
-- [ ] Fix each iOS-only failure in `iosMain` or, if the defect is in shared code, in a way that keeps Android behaviour identical; shared fixes keep or gain a common test.
-- [ ] Note in a test comment any test that documents probably-wrong behaviour (project rule).
+- [x] Run `./gradlew :composeApp:iosSimulatorArm64Test` and collect failures. *(807 tests on an iPhone 17 Simulator, iOS 27.0: no failure.)*
+- [x] Fix each iOS-only failure in `iosMain` or, if the defect is in shared code, in a way that keeps Android behaviour identical; shared fixes keep or gain a common test. *(None to fix.)*
+- [x] Note in a test comment any test that documents probably-wrong behaviour (project rule). *(No test changed; none found.)*
 
 ### Acceptance criteria
 
-- [ ] `./gradlew :composeApp:iosSimulatorArm64Test` passes locally.
-- [ ] `./gradlew :composeApp:testAndroidHostTest` still passes with the same number of tests or more.
-- [ ] Every shared-code change made here is covered by a common test that fails without it.
+- [x] `./gradlew :composeApp:iosSimulatorArm64Test` passes locally.
+- [x] `./gradlew :composeApp:testAndroidHostTest` still passes with the same number of tests or more. *(807, the same as on iOS.)*
+- [x] Every shared-code change made here is covered by a common test that fails without it. *(No shared code changed.)*
 
 ### Quality gates
 
-- [ ] Common quality gates pass.
-- [ ] No test is deleted or disabled to make the suite pass.
+- [x] Common quality gates pass.
+- [x] No test is deleted or disabled to make the suite pass.
 
 ---
 
