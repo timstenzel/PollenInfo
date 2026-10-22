@@ -142,23 +142,23 @@ and denying keeps the list usable. The iOS location code runs here for the first
 
 ### Implementation steps
 
-- [ ] Add the location usage description, reduced-accuracy key, `CFBundleLocalizations` (en, de, fr, it) and development region en to the Info.plist.
-- [ ] Add the Info.plist string catalog with the four approved location texts.
-- [ ] Run onboarding on the Simulator (simulated location in Switzerland), allowing and denying; fix any defect in the iOS location provider or permission requester.
-- [ ] Replace the "compile-verified only" remarks on the iOS location code with what was checked; add checklist rows.
+- [x] Add the location usage description, reduced-accuracy key, `CFBundleLocalizations` (en, de, fr, it) and development region en to the Info.plist.
+- [x] Add the Info.plist string catalog with the four approved location texts. *(`iosApp/iosApp/InfoPlist.xcstrings`; `de`, `fr`, `it` added to the project's known regions; the built app has `en/de/fr/it.lproj/InfoPlist.strings`.)*
+- [x] Run onboarding on the Simulator (simulated location in Switzerland), allowing and denying; fix any defect in the iOS location provider or permission requester. *(Driven by a throwaway XCUITest runner in the scratchpad, not committed. No defect in the provider or requester. One finding outside the app's control: iOS words the prompt in the device language, not the app language chosen in PollenInfo's Settings — see the first criterion.)*
+- [x] Replace the "compile-verified only" remarks on the iOS location code with what was checked; add checklist rows. *(Rows 8–14; CLAUDE.md's platform-implementations line and `Info.plist` table updated.)*
 
 ### Acceptance criteria
 
-- [ ] On a fresh install, choosing location in onboarding shows the iOS prompt with the English text; with the app language set to German, French or Italian (and relaunched), the prompt shows that language's text.
-- [ ] Allowing location with a simulated position near Zurich suggests the Zurich station.
-- [ ] Denying location shows the shared "not allowed" message and the station list stays usable.
-- [ ] With Simulator location set to None, picking a station while the lookup runs keeps that station after the 10 s timeout.
-- [ ] After completing onboarding and relaunching, Home opens with the chosen station.
+- [ ] On a fresh install, choosing location in onboarding shows the iOS prompt with the English text; with the app language set to German, French or Italian (and relaunched), the prompt shows that language's text. *(failed in part: English passes on a fresh install. With the **device** language set to German, French or Italian, the prompt shows that language's text (requirement 11 as worded). With the device in English and German chosen in PollenInfo's Settings, then a relaunch, the app is German and iOS Settings lists its language as German, but the prompt stays English: iOS words it in the device language. The app cannot change this. Checklist row 10, raised with the maintainer.)*
+- [x] Allowing location with a simulated position near Zurich suggests the Zurich station. *(`simctl location set 47.3769,8.5417`, "Allow While Using App" → `Station, Zürich`.)*
+- [x] Denying location shows the shared "not allowed" message and the station list stays usable. *("Location permission is off. Enable it in Settings to find your nearest station."; then picking Bern → `Station, Bern`, message cleared.)*
+- [x] With Simulator location set to None, picking a station while the lookup runs keeps that station after the 10 s timeout. *(`simctl location clear` plus a Simulator reboot (otherwise the last fix is reused). Alone, the lookup ends in "Your location could not be determined…"; with Bern picked while the button was disabled (lookup running), 13 s later still `Station, Bern` and no message.)*
+- [x] After completing onboarding and relaunching, Home opens with the chosen station. *(Luzern picked, Continue, app terminated and relaunched → Home shows Luzern; server log `GET /pollen/stations/PLZ/measurements`.)*
 
 ### Quality gates
 
-- [ ] Common quality gates pass (including `StationPickerTest` within `iosSimulatorArm64Test`).
-- [ ] The four location texts follow the language style rules (Swiss "ss", "du"; formal fr/it; typographic apostrophes; U+202F before French `? ! ;` if any).
+- [x] Common quality gates pass (including `StationPickerTest` within `iosSimulatorArm64Test`). *(807/807 on the JVM and on the iOS Simulator; iOS compile passes; `xcodebuild` Debug and Release `BUILD SUCCEEDED`, 0 warnings; no team, identifier or address in the diff; checklist rows 8–14 recorded.)*
+- [x] The four location texts follow the language style rules (Swiss "ss", "du"; formal fr/it; typographic apostrophes; U+202F before French `? ! ;` if any). *(de: "Dein/dein", no "ß"; fr: "Votre", no `? ! ;`; it: "Sua/Suo"; no apostrophes in any text.)*
 
 ---
 

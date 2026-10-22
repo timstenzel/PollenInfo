@@ -17,9 +17,9 @@ import kotlin.coroutines.resume
 /**
  * Coarse location from `CLLocationManager` at reduced accuracy.
  *
- * Untested by construction: this project has no iOS app wrapper, so the code is compile-verified
- * only and will first execute when someone creates it. It depends on two `Info.plist` keys the
- * wrapper must supply — see `CLAUDE.md`.
+ * Checked by hand on the iOS Simulator (`iosApp/CHECKLIST.md`): a simulated position near Zurich
+ * suggests Zürich, no position at all ends in the shared timeout, and a station picked meanwhile is
+ * kept. It depends on two `Info.plist` keys of the wrapper — see `CLAUDE.md`.
  *
  * `.restricted` is mapped to [CoarseLocationResult.PermissionDenied] like `.denied`, which sends the
  * user to Settings for something they may not be able to change. Knowingly imprecise, and preferred

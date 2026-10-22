@@ -310,7 +310,7 @@ The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written
 | --- | --- | --- |
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` (debug only) | Cleartext dev backend |
 | `NSLocalNetworkUsageDescription` | English sentence (debug only, not translated — developer-facing) | iOS's Local Network prompt when an iPhone reaches the Mac's LAN backend |
-| `NSLocationWhenInUseUsageDescription` | A sentence | **Mandatory** — without it `CLLocationManager` silently never prompts |
+| `NSLocationWhenInUseUsageDescription` | English sentence; de/fr/it in `iosApp/iosApp/InfoPlist.xcstrings` (outside `checkTranslations`, reviewed by hand). iOS words the prompt in the **device** language, not the app language chosen in Settings | **Mandatory** — without it `CLLocationManager` silently never prompts |
 | `NSLocationDefaultAccuracyReduced` | `true` | Coarse location only |
 | `CFBundleLocalizations` | `en`, `de`, `fr`, `it` | `IosLanguageRepository` |
 | `CFBundleDevelopmentRegion` | `en` | English fallback |
@@ -404,7 +404,8 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
 - Platform callback APIs are bridged with `suspendCancellableCoroutine` so cancellation reaches the
   platform.
 - Platform implementations (permission controllers, `FirebasePushTokenProvider`, messaging service,
-  channels, `AndroidCredentialStore`) are checked by hand; iOS ones are compile-verified only.
+  channels, `AndroidCredentialStore`) are checked by hand; on iOS, location (provider and permission
+  requester) is checked by hand on the Simulator, the others are compile-verified only.
 
 ### Location
 

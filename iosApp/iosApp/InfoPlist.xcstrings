@@ -1,0 +1,36 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Location permission prompt. Keep in step with the English value in Info.plist.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Standort wird einmalig verwendet, um die nächste Pollenmessstation vorzuschlagen. Er verlässt dein Telefon nie."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your location is used once to suggest the nearest pollen station. It never leaves your phone."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre position est utilisée une seule fois pour proposer la station pollinique la plus proche. Elle ne quitte jamais votre téléphone."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La Sua posizione viene usata una sola volta per proporre la stazione pollinica più vicina. Non lascia mai il Suo telefono."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
