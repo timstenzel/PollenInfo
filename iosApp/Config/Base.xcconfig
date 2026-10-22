@@ -1,0 +1,12 @@
+// Settings shared by Debug and Release. Technical target settings live in the Xcode project;
+// identity, names, version and backend address live here and in Debug/Release.xcconfig.
+
+// The app's final identifier. Debug appends ".debug" so both builds install side by side.
+BUNDLE_ID_BASE = ch.stenzel.tim.polleninfo
+
+// Keep in step with appVersionName in androidApp/build.gradle.kts.
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// No team is committed; builds for the Simulator need none.
+DEVELOPMENT_TEAM =

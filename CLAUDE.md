@@ -49,6 +49,8 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Server tests (needs Docker) | `./gradlew :server:test` |
 | Both | `./gradlew :composeApp:testAndroidHostTest :server:test` |
 | iOS sources compile | `./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` |
+| App tests on an iOS Simulator | `./gradlew :composeApp:iosSimulatorArm64Test` |
+| iPhone app (Simulator, unsigned) | `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` (`Release` likewise) |
 | Translations | `./gradlew :composeApp:checkTranslations` (part of `check`) |
 | Android Lint (all Android code) | `./gradlew :androidApp:lintRelease` (fails on any warning) |
 | Dev database up / reset | `docker compose -f deploy/compose.dev.yaml up -d` / `… down -v` |
@@ -59,8 +61,12 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 | Server image | `./gradlew :server:installDist` then `docker build -t polleninfo-server:local server` |
 
 - `commonTest` is the single source of app tests; `testAndroidHostTest` runs it on the JVM.
-  `iosSimulatorArm64Test` needs full Xcode (only CLT here) — compile the iOS test sources instead.
-  Prefer targeted tasks over `./gradlew check`.
+  `iosSimulatorArm64Test` runs it on an iOS Simulator (needs full Xcode). Prefer targeted tasks
+  over `./gradlew check`.
+- The Xcode build runs Gradle itself (build phase "Compile Kotlin", JDK from `JAVA_HOME`, else
+  `/usr/libexec/java_home`, else Android Studio's JBR). Only the declarations listed in
+  `composeApp/objc-entry-points.txt` are exported to Swift (today `MainViewController`); list a new
+  one there before calling it from Swift — exporting the whole API makes Swift warn on Compose's types.
 - Configuration cache is on; after odd build-script behaviour add `--no-configuration-cache`.
 - Without Docker, non-database server tests pass when run alone (`--tests '*PollenRoutesTest'`);
   database tests fail with "The database tests need Docker". Inspect the dev DB:
@@ -281,7 +287,8 @@ get(API_BASE_URL)) }`) so tests point them at a `MockEngine` host.
 | --- | --- |
 | Android release | `https://api.polleninfo.ch` always |
 | Android debug | `http://10.0.2.2:8080`, or Gradle property `polleninfo.apiBaseUrl` (set in `~/.gradle/gradle.properties`, never the project's) |
-| iOS | `http://localhost:8080` in `MainViewController` |
+| iOS debug | `http://localhost:8080` (`iosApp/Config/Debug.xcconfig`) |
+| iOS release | `https://api.polleninfo.ch` always (`iosApp/Config/Release.xcconfig`) |
 
 - Cleartext (`usesCleartextTraffic`) and `ACCESS_LOCAL_NETWORK` are declared **only** in
   `androidApp/src/debug/AndroidManifest.xml`. Verify with `grep -l 'usesCleartextTraffic\|ACCESS_LOCAL_NETWORK'
@@ -292,7 +299,8 @@ get(API_BASE_URL)) }`) so tests point them at a `MockEngine` host.
 
 ### iOS wrapper configuration
 
-There is no `iosApp` Xcode project yet. Whoever creates it must add:
+The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written preprocessed
+`iosApp/iosApp/Info.plist`, manual checks in `iosApp/CHECKLIST.md`). Its `Info.plist` needs:
 
 | `Info.plist` key | Value | Needed by |
 | --- | --- | --- |
@@ -303,8 +311,8 @@ There is no `iosApp` Xcode project yet. Whoever creates it must add:
 | `CFBundleDevelopmentRegion` | `en` | English fallback |
 | `CFBundleShortVersionString` / `CFBundleVersion` | e.g. `1.0.0` / `1` (whole number) | `IosAppInfo` (version line hidden otherwise) |
 
-- Notifications need no key. A release build should pass `https://api.polleninfo.ch` to
-  `appModules(…)` in `MainViewController` (e.g. from a build setting).
+- Notifications need no key. The backend address comes from the build configuration
+  (`API_BASE_URL` in `iosApp/Config/*.xcconfig` → `Info.plist` → `MainViewController(apiBaseUrl)`).
 - **Password autofill:** Associated Domains entitlement `webcredentials:api.polleninfo.ch`
   (`?mode=developer` while testing) and `https://api.polleninfo.ch/.well-known/apple-app-site-association`
   serving `{"webcredentials":{"apps":["<TEAM_ID>.<bundle id>"]}}` as `application/json` — a Caddy

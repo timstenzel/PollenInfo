@@ -1,0 +1,7 @@
+#include "Base.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(BUNDLE_ID_BASE)
+PRODUCT_DISPLAY_NAME = PollenInfo
+
+// Always production. In xcconfig `//` starts a comment, hence `$()` between the slashes.
+API_BASE_URL = https:/$()/api.polleninfo.ch

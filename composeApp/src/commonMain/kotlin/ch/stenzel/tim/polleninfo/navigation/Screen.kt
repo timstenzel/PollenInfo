@@ -1,6 +1,9 @@
 package ch.stenzel.tim.polleninfo.navigation
 
+import androidx.navigation.NavType
 import ch.stenzel.tim.polleninfo.feature.account.domain.model.AccountMode
+import kotlin.reflect.KType
+import kotlin.reflect.typeOf
 import kotlinx.serialization.Serializable
 
 sealed interface Screen {
@@ -51,5 +54,10 @@ sealed interface Screen {
      * tab, so the bottom bar is hidden on it.
      */
     @Serializable
-    data class Account(val mode: AccountMode = AccountMode.LOGIN) : Screen
+    data class Account(val mode: AccountMode = AccountMode.LOGIN) : Screen {
+        companion object {
+            /** Registers [mode]'s [AccountModeNavType]; pass it to `composable<Account>`. */
+            val typeMap: Map<KType, NavType<*>> = mapOf(typeOf<AccountMode>() to AccountModeNavType)
+        }
+    }
 }

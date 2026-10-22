@@ -45,6 +45,10 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            // Export only the entry point to Swift (see the file); the link task re-runs when it changes.
+            val entryPoints = file("objc-entry-points.txt")
+            binaryOption("objcExportEntryPointsPath", entryPoints.absolutePath)
+            linkTaskProvider.configure { inputs.file(entryPoints) }
         }
     }
 

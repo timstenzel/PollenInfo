@@ -1,0 +1,5 @@
+// The Kotlin declarations exported to Swift (Kotlin/Native binary option objcExportEntryPointsPath,
+// set in build.gradle.kts). Swift calls only the entry point (iosApp/iosApp/PollenInfoApp.swift);
+// exporting the whole public API would pull in Compose's and Skiko's types, whose header makes
+// Swift warn. Format: "<function|property|callable> <package.name>", `*` as a wildcard name.
+function ch.stenzel.tim.polleninfo.MainViewController

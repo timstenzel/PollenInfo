@@ -1,0 +1,11 @@
+#include "Base.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(BUNDLE_ID_BASE).debug
+PRODUCT_DISPLAY_NAME = PollenInfo (debug)
+
+// The local backend (`./gradlew :server:run`); the Simulator shares the Mac's network.
+// In xcconfig `//` starts a comment, hence `$()` between the slashes.
+API_BASE_URL = http:/$()/localhost:8080
+
+// Lets Info.plist allow plain HTTP to local hosts (NSAllowsLocalNetworking) in Debug only.
+INFOPLIST_PREPROCESSOR_DEFINITIONS = POLLENINFO_LOCAL_NETWORKING=1

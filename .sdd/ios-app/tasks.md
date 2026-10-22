@@ -22,28 +22,28 @@ settings file, so the final identifier is never registered with Apple.
 
 ### Implementation steps
 
-- [ ] Create the Xcode project with one iPhone app target, a file-system-synchronized source group, deployment target iOS 18.x (lowest that links without Skiko warnings), simulator `x86_64` excluded, portrait and both landscape orientations. Do not set an app icon name yet (task 08), so no missing-icon warning appears.
-- [ ] Add the "Compile Kotlin" build phase running the shared framework embed task, with the JDK lookup order `JAVA_HOME` → `/usr/libexec/java_home` → Android Studio's bundled JBR, and a clear failure message when none is found.
-- [ ] Add the SwiftUI entry point that reads the backend address from the app's Info.plist and hosts the shared main view controller full-screen (ignoring safe areas; Compose pads itself).
-- [ ] Change the shared iOS entry point to take the backend address as a parameter and remove the hard-coded constant.
-- [ ] Add `Base`/`Debug`/`Release` build configuration files: base identifier with `.debug` suffix in Debug, display names "PollenInfo (debug)" / "PollenInfo", backend address per configuration, the Debug-only preprocessing flag for local networking, `MARKETING_VERSION = 1.0.0` and `CURRENT_PROJECT_VERSION = 1`.
-- [ ] Hand-write the preprocessed Info.plist (backend address, display name, version keys from build settings, orientations, 120 Hz key, local-networking exception guarded by the Debug-only flag) and a minimal `UILaunchScreen`.
-- [ ] Create the manual checklist skeleton (columns: item, Simulator result, iPhone result) with rows for launch and backend per configuration.
-- [ ] Update CLAUDE.md: iOS row of the base-URL table, iOS build commands, and drop "only CLT here".
+- [x] Create the Xcode project with one iPhone app target, a file-system-synchronized source group, deployment target iOS 18.x (lowest that links without Skiko warnings), simulator `x86_64` excluded, portrait and both landscape orientations. Do not set an app icon name yet (task 08), so no missing-icon warning appears.
+- [x] Add the "Compile Kotlin" build phase running the shared framework embed task, with the JDK lookup order `JAVA_HOME` → `/usr/libexec/java_home` → Android Studio's bundled JBR, and a clear failure message when none is found.
+- [x] Add the SwiftUI entry point that reads the backend address from the app's Info.plist and hosts the shared main view controller full-screen (ignoring safe areas; Compose pads itself).
+- [x] Change the shared iOS entry point to take the backend address as a parameter and remove the hard-coded constant.
+- [x] Add `Base`/`Debug`/`Release` build configuration files: base identifier with `.debug` suffix in Debug, display names "PollenInfo (debug)" / "PollenInfo", backend address per configuration, the Debug-only preprocessing flag for local networking, `MARKETING_VERSION = 1.0.0` and `CURRENT_PROJECT_VERSION = 1`.
+- [x] Hand-write the preprocessed Info.plist (backend address, display name, version keys from build settings, orientations, 120 Hz key, local-networking exception guarded by the Debug-only flag) and a minimal `UILaunchScreen`.
+- [x] Create the manual checklist skeleton (columns: item, Simulator result, iPhone result) with rows for launch and backend per configuration.
+- [x] Update CLAUDE.md: iOS row of the base-URL table, iOS build commands, and drop "only CLT here".
 
 ### Acceptance criteria
 
-- [ ] With the local backend running, the Debug app on an iPhone Simulator shows onboarding, and after picking a station Home shows readings served by the local backend.
-- [ ] The Release app on the Simulator shows readings from `https://api.polleninfo.ch`.
-- [ ] The processed Release Info.plist contains no App Transport Security exception; the Debug one contains `NSAllowsLocalNetworking`.
-- [ ] Built bundle identifiers are `ch.stenzel.tim.polleninfo.debug` (Debug) and `ch.stenzel.tim.polleninfo` (Release); both apps appear side by side on the Simulator home screen as "PollenInfo (debug)" and "PollenInfo".
-- [ ] `env -u JAVA_HOME xcodebuild … -configuration Debug … build` succeeds.
-- [ ] `grep -rn 'localhost:8080\|api.polleninfo.ch' composeApp/src` finds nothing.
+- [ ] ~~With the local backend running, the Debug app on an iPhone Simulator shows onboarding, and after picking a station Home shows readings served by the local backend.~~ *(skipped: no Simulator UI or tapping tool on this Mac, so the station could not be picked by hand. Verified instead: onboarding shows with the station list from the local backend; with the station stored in the preferences file, Home shows Zürich's reading and the server logs `GET /pollen/stations/PZH/measurements`. The maintainer should pick a station in onboarding once.)*
+- [x] The Release app on the Simulator shows readings from `https://api.polleninfo.ch`.
+- [x] The processed Release Info.plist contains no App Transport Security exception; the Debug one contains `NSAllowsLocalNetworking`.
+- [x] Built bundle identifiers are `ch.stenzel.tim.polleninfo.debug` (Debug) and `ch.stenzel.tim.polleninfo` (Release); both apps appear side by side on the Simulator home screen as "PollenInfo (debug)" and "PollenInfo".
+- [x] `env -u JAVA_HOME xcodebuild … -configuration Debug … build` succeeds.
+- [x] `grep -rn 'localhost:8080\|api.polleninfo.ch' composeApp/src` finds nothing.
 
 ### Quality gates
 
-- [ ] Common quality gates pass (except `iosSimulatorArm64Test`, task 02).
-- [ ] `grep -c '/\*' iosApp/iosApp/Info.plist` prints 0.
+- [x] Common quality gates pass (except `iosSimulatorArm64Test`, task 02).
+- [x] `grep -c '/\*' iosApp/iosApp/Info.plist` prints 0.
 
 ---
 
