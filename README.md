@@ -31,7 +31,7 @@ The app has five tabs:
 
 | Tab | What it does |
 | --- | --- |
-| **Home** | The current reading of your station: the overall severity and one bar per pollen type, how old the reading is (with a clear warning once it is three hours old or more), pull-to-refresh, and once a day the question *"How do you feel today?"* |
+| **Home** | The current reading of your station: the worst severity as a large word in a half-circle gauge, which pollen type drives it, and a tile per pollen type (level, concentration, bar), how old the reading is (with a clear warning once it is three hours old or more), pull-to-refresh, and once a day the question *"How do you feel today?"* |
 | **All stations** | All 15 Swiss stations at a glance: a map of Switzerland with one coloured dot per station and a list that fills in station by station. Tap a dot or a row to see that station's full reading. |
 | **Diary** | Your answers to *"How do you feel today?"* drawn against the daily pollen levels of a station you choose, over the last week, month or year — one line per pollen type, filterable. Needs an account. |
 | **Alarms** | Up to ten alarms per install, each either a **daily report** (e.g. "at 08:00, Mon–Fri") or a **threshold alert** (e.g. "between 07:00 and 21:00, when birch or grasses reach High"). Delivered as push notifications on Android. |
@@ -48,6 +48,10 @@ And throughout:
   coarse location fix; the coordinates never leave the device.
 - **Accounts without tracking** — email and password only, used for nothing but logging in. Readings,
   All stations and alarms need no account; alarms belong to the install, anonymously.
+- **Meadow design** — the app's own natural palette (cream, sage, forest green, pollen gold) in a
+  light and a dark theme that follow the phone's setting, the same on Android and iOS: serif titles
+  inside the content instead of a top bar, a frosted-glass tab bar the content scrolls behind,
+  skeletons while loading and illustrated cards for errors.
 - **Accessibility** — every severity is a word as well as a colour, colour palettes are checked for
   contrast in light and dark mode, and charts and maps have spoken descriptions.
 
@@ -102,7 +106,7 @@ what the server computed.
 | --- | --- | --- |
 | [`androidApp`](androidApp) | Android application | The APK: `MainActivity`, the manifest, icons, build types and the backend address per build, Firebase config, Crashlytics mapping upload, R8 rules |
 | [`composeApp`](composeApp) | KMP library (Android, iOS) | All app code: UI, ViewModels, repositories, REST client, push service, platform actuals, all app tests |
-| [`theme`](theme) | KMP library (Android, iOS) | Material 3 colours and typography, plus the severity, species and map palettes |
+| [`theme`](theme) | KMP library (Android, iOS) | The Meadow theme: colour schemes, extended colours, bundled fonts and type scale, shapes, plus the severity, species and map palettes |
 | [`server`](server) | Kotlin/JVM (Ktor + Netty) | REST API, station / species / threshold domain, MeteoSwiss fetching, alarm scheduler, accounts and diary, PostgreSQL store |
 
 ### Inside the app
@@ -157,7 +161,7 @@ The full contract, with every status code, is in [`CLAUDE.md`](CLAUDE.md#rest-ap
 | Area | Choice |
 | --- | --- |
 | Language | Kotlin 2.4 |
-| App UI | Compose Multiplatform 1.12, Material 3 |
+| App UI | Compose Multiplatform 1.12, Material 3 with the own "Meadow" theme (no dynamic colour); bundled fonts Fraunces and Plus Jakarta Sans (SIL Open Font License) |
 | App plumbing | Ktor Client, Koin, kotlinx.serialization, kotlinx-datetime, DataStore, Navigation Compose |
 | Android | AGP 9.4, minSdk 26, targetSdk 37, Firebase Cloud Messaging, Firebase Crashlytics (release builds only), Credential Manager |
 | Server | Ktor 3.6 on Netty, Exposed, HikariCP, Flyway, Bouncy Castle (Argon2id), Logback |

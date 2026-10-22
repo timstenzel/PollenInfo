@@ -71,16 +71,18 @@ fun summaryOf(
     dates: DateWording,
     wording: AlarmSummaryWording,
 ): String {
-    val type = when (val schedule = alarm.schedule) {
-        is AlarmSchedule.Daily -> wording.dailyReport.fill(formatTime(schedule.at))
-        is AlarmSchedule.Threshold -> wording.thresholdAlert.fill(formatTime(schedule.from), formatTime(schedule.until))
-    }
     val summary = listOf(
-        type,
+        typeSummary(alarm, wording),
         daysSummary(alarm.days, dates, wording),
         speciesSummary(alarm.species, speciesNames, wording) + severitySuffix(alarm.minSeverity, severityLabels),
     ).joinToString(SEPARATOR)
     return if (alarm.enabled) summary else wording.paused.fill(summary)
+}
+
+/** The type and its time, e.g. `Daily report at 08:00` or `Threshold alert 07:00–21:00`. */
+fun typeSummary(alarm: Alarm, wording: AlarmSummaryWording): String = when (val schedule = alarm.schedule) {
+    is AlarmSchedule.Daily -> wording.dailyReport.fill(formatTime(schedule.at))
+    is AlarmSchedule.Threshold -> wording.thresholdAlert.fill(formatTime(schedule.from), formatTime(schedule.until))
 }
 
 /**
@@ -99,7 +101,11 @@ fun PollenSeverity.minimumLabel(): String = stringResource(minimumLabelResource(
 fun PollenSeverity.minimumLabelResource(): StringResource =
     if (this == PollenSeverity.NONE) Res.string.alarm_minimum_any else labelResource()
 
-private fun speciesSummary(
+/**
+ * The selected pollen types as [summaryOf] names them: in [speciesNames]' order, unknown ids as
+ * themselves, "All pollen types" when every known type is selected.
+ */
+fun speciesSummary(
     selected: Set<String>,
     speciesNames: Map<String, String>,
     wording: AlarmSummaryWording,

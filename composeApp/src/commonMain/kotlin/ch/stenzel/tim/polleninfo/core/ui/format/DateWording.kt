@@ -39,6 +39,17 @@ data class DateWording(
     /** "4 Sep" — the Diary's week and month axis. */
     fun shortDate(date: LocalDate): String = dayMonth(date.day, monthsShort[date.month.number - 1])
 
+    /**
+     * "14 Oct – 20 Oct" — the period of the Diary's chart. Each end carries its year when the two
+     * fall in different years ("21 Oct 2025 – 19 Oct 2026"), so a year's window is not ambiguous.
+     */
+    fun dateRange(from: LocalDate, until: LocalDate): String =
+        if (from.year == until.year) {
+            "${shortDate(from)} – ${shortDate(until)}"
+        } else {
+            "${shortDate(from)} ${from.year} – ${shortDate(until)} ${until.year}"
+        }
+
     /** "Oct" — the Diary's year axis, whose ticks are month starts. */
     fun monthOnly(date: LocalDate): String = monthsShort[date.month.number - 1]
 

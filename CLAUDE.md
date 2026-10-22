@@ -163,23 +163,53 @@ own hourly bands would be guesswork). History uses daily means, so it doesn't sk
 
 ### Colours and bars
 
+- **Theme "Meadow"** (`:theme`, common code, the same on Android and iOS): `PollenInfoTheme` applies
+  `MeadowLightColorScheme` / `MeadowDarkColorScheme` (`Color.kt`, Figma token named beside each
+  value) following the system light/dark setting — **no dynamic (wallpaper) colour**. Card =
+  `surfaceContainerLowest` ("raised"), track/skeleton/segment background = `surfaceContainerHighest`
+  ("sunken"); Material's `outline` is a derived 3:1 component edge, Figma's hairline is
+  `outlineVariant`. Colours Material has no role for are `MeadowColors` (`wash`, `glass`, `accent` +
+  `onAccent` pollen gold, `warningContainer` + `onWarningContainer`, `mapLand`), read with
+  `MaterialTheme.meadowColors`. Shapes `PollenInfoShapes` (12/20/28/36 dp; pills `CircleShape`).
+- **Fonts** are bundled Compose resources of `:theme` (`composeResources/font/`, `Res` in
+  `ch.stenzel.tim.polleninfo.theme.resources`): Fraunces SemiBold (72 pt) for `display*`/`headline*`,
+  Plus Jakarta Sans (Regular/Medium/SemiBold/Bold) for the rest; `pollenInfoTypography()` holds the
+  scale. `labelSmall` is the overline — the caller upper-cases the text. The OFL licence texts sit
+  beside them (`*_ofl.txt`; the generator also gives them `Res.font` accessors — not fonts, never use).
 - Palettes outside Material live in `:theme`: `SeverityPalette.kt`, `SpeciesPalette.kt` (Diary
-  lines), `MapPalette.kt` (lakes). Each colour has an **explicit light and dark value** with its
-  WCAG contrast against `surfaceLight`/`surfaceDark` recorded beside it (severity ≥ 3:1, species ≥
-  3.5:1). Species hues stay in cyan→magenta so no line reads as a severity; **re-run a palette
-  validator on any change**.
+  lines), `MapPalette.kt` (lakes: a **flat fill**, no edge line). Each colour has an **explicit light
+  and dark value** with its WCAG contrast recorded beside it. Species hues stay in cyan→magenta so no
+  line reads as a severity (re-check the colour-vision distances in `SpeciesPalette.kt` if one changes).
+- **`PaletteContrastTest`** (`commonTest`, `core/ui/palette`, pure `contrastRatio`) is the palette
+  check, replacing any manual validator: every severity colour ≥ 3:1 on surface, raised, sunken,
+  background, wash and map land; every species colour ≥ 3.5:1 on the diary chart card, which
+  **must stay `surface`** (on raised, dark Ash is 3.11:1), and ≥ 3:1 on raised and background (the
+  Diary's tick chips), the dashed feeling line (`primary`) ≥ 3.5:1 on it too; body text (`onSurface`,
+  `onSurfaceVariant`) and on-primary/on-accent/on-warning ≥ 4.5:1; button labels (`primary`,
+  `error`, on-primary-container) ≥ 4.5:1 and the dialog badge icon and the back arrow on glass ≥ 3:1
+  — both schemes. **Add every new foreground/background pairing to it.**
 - `:theme` never sees `PollenSeverity`; the mapping is `core/ui/severity/SeverityColors.kt`, and it
   picks light/dark by **luminance of `colorScheme.surface`**, not `isSystemInDarkTheme()` (same rule
   for species and lake colours).
 - `SeverityBar` fills to **fixed stops** (NONE 4 %, then 25/50/75/100 %; 0 % muted track = no
-  reading), one solid colour, never interpolated. Colour never carries meaning alone — every bar sits
-  beside its word. Map dots use the same `PollenSeverity.color()` — no separate dot colour function.
+  reading) over a `surfaceContainerHighest` track, one solid colour, never interpolated. Colour never
+  carries meaning alone — every bar and dot sits beside its word. All stations' row dots and map
+  dots use the same `PollenSeverity.color()` — no separate dot colour function; a row without a
+  level (loading, no reading) gets a grey ring, the map a grey (loading) or hollow (no reading) dot.
+- **`SeverityGauge`** (Home's hero): four arc segments over a half circle, the first
+  `gaugeFilledSegments(severity)` (pure, `SeverityGaugeTest`: none for no reading and NONE, then 1–4
+  for LOW–VERY_HIGH) in the severity colour, the rest in the track colour, a soft glow of that colour
+  behind and the severity word (`displayLarge`) in the middle. Arcs and glow are decorative. Unlike
+  the bar, NONE fills nothing — the word sits inside the gauge, so it cannot read as "no reading".
 
 ### Reading age
 
 `readingAgeOf(measuredAt, now)` (`core/measurement/domain/model/ReadingAge.kt`, pure) at render time:
 `< STALE_AFTER` (3 h) → `Fresh(localTime)` caption; otherwise `Stale.Today(localTime)` or
-`Stale.Earlier(localDate)` in `errorContainer` colours. Device time zone. "Refreshed 10:42"
+`Stale.Earlier(localDate)` as a warning. Home shows it as `ReadingAgePill` (sage when fresh, the
+`meadowColors.warningContainer` colours when stale) plus a `Banner` "These readings are not
+current." when stale. All stations' expanded row shows the same pill; its collapsed row says
+"Reading not current" in its line beside a warning icon. Device time zone. "Refreshed 10:42"
 (`refreshedLabel`) is `Content.refreshedAt` — when the app last *received* a reading, from an
 injected `kotlin.time.Clock` — a different fact from `measuredAt`, never a warning.
 
@@ -225,9 +255,15 @@ module. Code moves to `core/<area>` (same `data/`/`domain/` layering) once a sec
 | `preferences` | `SelectedStationRepository`, `NotificationPermissionPreferences`, `CrashReportingPreferences`, `DeviceRegistrationRepository` |
 | `crashreporting` | `CrashReporter` (platform-bound: `FirebaseCrashReporter` / iOS `NoCrashReporter`), `CrashReportingSync` |
 | `stationpicker` | `StationPicker` state holder + `StationPickerContent`, `FindNearestStationUseCase` |
+| `map` | `SWISS_BORDER`, `GeoPoint`, `SwissMapProjection` (All stations' map, the tab icon, onboarding's illustration) |
 | `location`, `notifications`, `language`, `credentials`, `appinfo` | Platform-bound interfaces (see below) |
 | `result`, `network`, `di`, `startup` | `Result`/`AppError`; `API_BASE_URL`, `createHttpClient`, `checkSuccess()`; Koin; startup gate |
-| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SpeciesRow`, `ReadingAgeView`, `speciesColor`/`speciesName`, `Feeling.label()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
+| `ui/severity`, `ui/species`, `ui/feeling`, `ui/format`, `ui/error`, `ui/password` | Shared composables and wording: `SeverityBar`, `SeverityGauge`, `SpeciesTile`/`SpeciesTileGrid`/`SpeciesListHeading`, `ReadingAgePill`, `speciesColor`/`speciesName`/`speciesIcon`, `Feeling.label()`/`icon()`, `DateWording`, `ResourceText`, `AppError.message()`, `PasswordField` |
+| `ui/layout` | `TabScreenFrame`, `ScreenFrame` (non-tab), `GlassBar`, `ScreenHeader`, `TabCenteredContent`, `TabPullToRefreshBox`, `LocalBottomBarPadding`, `MeadowCard` (raised card with Figma's card shadow) |
+| `ui/selection` | `SegmentedToggle` (single choice as a pill, e.g. Week/Month/Year), `DropdownPill` (compact dropdown in a row of controls; its label is only spoken), `MeadowFilterChip` + `ChipLabel` (pill chips, filled `primary` when selected, no check mark), `MeadowCheckbox` (the box only; the row around it is `toggleable` with `Role.Checkbox`) |
+| `ui/field` | `SelectField` (label above value on raised with a hairline edge and a trailing icon, for values picked from a menu or picker; red edge and label on error), `MeadowTextField` (the same box for typed text: `primary` 2 dp edge while focused, hint or error below; `PasswordField` builds on it) |
+| `ui/status` | `StatusCard` + `StatusTone` (error, empty and gate states; `Neutral` adds pollen-gold grains (`grains = true` on any tone, e.g. Alarms' notifications gate), `centered = false` for a gate that lists points), `Banner` (warning that is not an error; `icon = null` for a caution, `iconTint = error` for a failed action, e.g. Account's log-in error), `ShimmerBox` + `SkeletonBlock`/`SkeletonCanvas` (loading skeletons) |
+| `ui/button`, `ui/dialog` | `PillButton` + `PillButtonStyle`; `ConfirmDialog` + `DialogTone` |
 
 Fakes sit next to their subjects in `commonTest` (`FakeStationRepository`, `MeasurementFixtures.kt`,
 `HistoryFixtures.kt`, `FakeDiaryRepository` (enforces first-answer-is-final, has gates),
@@ -375,12 +411,45 @@ every consumer is tested against a fake. Keep them trivial; logic belongs in a c
   ALARMS, SETTINGS). Icon-only, so the `nav_*` `contentDescription` is the only name. The bar shows
   exactly when `TopLevelDestination.current(isOnRoute)` is non-null; non-tab screens (`Onboarding`,
   `AlarmEditor`, `ChangeStation`, `Account`, `Example`) hide it.
+- **Glass bar** (`navigation/GlassNavigationBar` on `core/ui/layout/GlassBar`, shared with the
+  non-tab action bar): 36 dp upper corners, `meadowColors.glass` tint, `outline` hairline along the
+  top; the current tab sits on a 60×44 `primary` pill. Each tab is a `Role.Tab` `selectable` named
+  by its `nav_*` description. The blur is Haze (`haze` + `haze-blur`, pinned in the catalog): the
+  `NavHost` is the `hazeSource`, the bar the `hazeBlur`; below Android 12 Haze draws the tint alone
+  with its alpha boosted, which keeps the icons readable.
 - **`navigateToTab`**: `popUpTo<Screen.Home> { saveState = true }`, `launchSingleTop`,
   `restoreState`. Pop to `Screen.Home`, **not** `findStartDestination()` — after a fresh install the
   start destination (Onboarding) is already popped and the `popUpTo` would be silently ignored.
   Reselecting the current tab does nothing. Each tab keeps its ViewModel.
-- **Insets:** the outer `Scaffold` has `contentWindowInsets = WindowInsets(0)`; each screen's own
-  `Scaffold` handles the top; the `NavHost` gets `.padding(innerPadding).consumeWindowInsets(innerPadding)`.
+- **Insets:** the outer `Scaffold` has `contentWindowInsets = WindowInsets(0)` and does **not** pad
+  the `NavHost` — content draws behind the glass bar. Its bottom padding (the bar's height,
+  navigation-bar inset included; zero without a bar) reaches the screens as
+  `core/ui/layout/LocalBottomBarPadding`. Non-tab screens handle their insets in `ScreenFrame`.
+- **Tab screens have no top bar.** `TabScreenFrame` draws the background, the decorative washes and
+  a status-bar scrim, and hands its content the padding for the safe top and sides plus
+  `LocalBottomBarPadding`; the content starts with `ScreenHeader(overline, title)` (overline
+  `labelSmall` upper-cased in code, title `displayMedium`, a heading). Loading/error/message states
+  use `TabCenteredContent`, pull-to-refresh under the status bar uses `TabPullToRefreshBox`.
+  **Bottom padding rule:** every list end, floating card, FAB and `SnackbarHost` on a tab adds
+  `LocalBottomBarPadding`, or it ends up behind the bar.
+- **Non-tab screens have no top bar either.** `ScreenFrame(onBack, actionBar)` (Onboarding, Change
+  station, Alarm editor, Account) draws the same background and washes, a **back button** when
+  `onBack` is given — a 44 dp glass circle top-left (48 dp target), `common_back` description, doing
+  what the old top-bar arrow did; Onboarding has none — and a scrim under the status bar and the
+  back button. The optional **action bar** is a `GlassBar` at the bottom holding the screen's main
+  button full width (plus any error said about it, directly above): **only** Onboarding (Continue),
+  Change station (Save) and the alarm editor (Save); Account keeps its button in the form. The
+  content draws behind both and is handed padding for the back button's row and the bar's measured
+  height (or the safe bottom, keyboard included, without a bar). The overline names where the screen
+  belongs (`nav_settings`, `nav_alarms`, `settings_section_account`; Onboarding the untranslated
+  "PollenInfo").
+- **Buttons** are `core/ui/button/PillButton(style)`: 52 dp pills in `Primary` (main action),
+  `Tonal`, `Outline`, `Text` (least emphasis, e.g. Cancel), `Danger` (red outline, destructive) and
+  `Accent` (pollen gold, at most one per screen); `busy` shows the progress spinner in the label.
+- **Confirmation dialogs** are `core/ui/dialog/ConfirmDialog`: centred icon badge (`DialogTone.Neutral`
+  sage, `Destructive` warm with a red icon), serif title (a heading), centred text, optional extra
+  content (the delete-account password field), confirm and a `Text` dismiss stacked full width. Used
+  by discard changes, delete alarm, log out and delete account.
 - **Adding a tab:** a `Screen` object, a `TopLevelDestination` entry (icon + `nav_*` string in all
   four languages), its `composable<Screen.X>`, and update `TopLevelDestinationTest`.
 
@@ -392,49 +461,88 @@ Details live in the ViewModels and their tests; these are the decisions that are
   decorative). The feeling prompt shows once per Swiss day: logged out, a tap sends
   `HomeEvent.OpenAccount` and records nothing; logged in, it waits for `today()` (re-asked on every
   load, refresh and session change) and hides on success or a `SignedOutException`. Dismissal is
-  per phone. List bottom padding grows by the card's measured height.
+  per phone. The card is **inline** (green `primary` card between the gauge card and the tiles; faces
+  worst left to best right, `Feeling`'s declaration order), so the list end needs only
+  `LocalBottomBarPadding`; a save error shows as a `Banner` inside it. Species are a two-column grid
+  of `SpeciesTile`s, worst first. Loading is `HomeSkeleton` (shimmer) under the real station name;
+  an error is a `StatusCard` with the existing wording and Retry.
 - **All stations** fans out one `/measurements` request per station in parallel (no batch
   endpoint); a failure is `Unavailable` for that row only. Full-screen `Error` only if the station
   list fails or **every** station is `Unavailable`. A refresh replaces all rows at once with the
-  round's final result. Stale rows show a warning icon (slot reserved on every row). Selection is
-  `Content.selectedAbbr`; the scroll to it is an event (`ScrollToStation`). Never touches the
-  stored station.
-- **Map** (`feature/allstations/map/`, pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
+  round's final result. The map card (with the five-level legend, silent to screen readers) stays
+  fixed above the list; only the list (heading "Stations" + "Refreshed …" as its first item, then
+  one rounded row per station: dot, name, "level · driving type", reserved stale-icon slot,
+  chevron) scrolls and pulls to refresh. Stale rows show a warning icon and "Reading not current"
+  in their line. The selected row is `primaryContainer` with a `primary` edge and expands to the
+  reading pill and a `SpeciesTileGrid`. Loading is `AllStationsSkeleton`, a full-screen error a
+  `StatusCard` with Retry. The overline ("15 stations · MeteoSwiss") shows in every state: the loaded
+  count, or `KNOWN_STATION_COUNT` (15) before that. Selection is `Content.selectedAbbr`; the scroll to it is an event
+  (`ScrollToStation`, list index offset by the heading item). Never touches the stored station.
+- **Map** (`feature/allstations/map/`, border and projection in `core/map/`; pure Kotlin, tested): border `SWISS_BORDER` (Natural Earth
   1:10m, Douglas–Peucker 0.01°), lakes `SWISS_LAKES` (0.003°; Bodensee and Lago Maggiore omitted on
   request; landmarks only), equirectangular projection scaled by cos 46.8° — border, lakes, dots
   and the tab icon all go through the same `project`. Tap = **nearest** dot within `TAP_RADIUS`
   24 dp (`nearestStation`, ties → alphabetically first). One `clearAndSetSemantics` node, no focus
-  stop per dot.
+  stop per dot. Land `meadowColors.mapLand`, border `primary` at 55 %, 12 dp dots in a 2 dp ring of
+  the card colour; the selected dot is 18 dp in a halo of its colour with a "Name · Level" `primary`
+  tag above it (below it when there is no room, kept inside the map sideways).
 - **Diary** is gated on a session (`SignedOut` fetches nothing). Each load fetches the history and
   `entries(from, until)` **in parallel**, window computed on the phone with
   `historyWindow(range, swissToday(clock))`; either failing is `Error` (a chart without the feeling
   line would read as "no answers"). Station, range and checked types are ViewModel fields, never
   persisted; the station dropdown never writes the stored station. Feelings share the y-axis via
   `Feeling.level` (higher is worse). The chart never bridges a missing day; today is never plotted.
-  `DiaryChartGeometry` and `diaryChartDescription` are pure.
+  `DiaryChartGeometry` and `diaryChartDescription` are pure. Layout: intro line, `DropdownPill` +
+  `SegmentedToggle` (wrapping when they don't fit), the chart card titled with
+  `DateWording.dateRange` plus the "Your feeling" legend, then one tick chip per type in its line
+  colour (unmeasured: disabled, dimmed, "Not measured here"), then the disclaimer. The chart keeps
+  feeling words on its right axis (decided with the maintainer, unlike Figma); week ticks are
+  weekdays. Loading is `DiarySkeleton`, the gate a start-aligned neutral `StatusCard` with the four
+  points, an error a `StatusCard` with Retry.
 - **Alarms**: permission gate first; the list loads only on the first `ENABLED` (no backend
   contact or registration before). `onResume()` reloads quietly. The switch is optimistic (full `PUT`,
   flip back + `ToggleFailed` event on failure). Limit `MAX_ALARMS` = 10 (backend's limit).
+  Each alarm is an `AlarmCard` worded from `AlarmSummary`'s parts (`typeSummary`, `daysSummary` —
+  spoken for the weekday circles — `speciesSummary`; the minimum tag `alarm_tag_minimum` /
+  `alarm_tag_any`); the card is one focus stop, its switch ("Alarm for …") another. A paused card
+  dims only its fill and type tile (`PAUSED_ALPHA`) — dimming its text would break 4.5:1 — and
+  shows the `alarm_paused_label` overline. The header carries the `alarm_count` chip ("3 of 10")
+  once there are alarms. The gold create button (Material's extended FAB names itself by its icon, so the icon carries `alarm_create`) and the snackbar (inverse colours) float in one
+  column above the tab bar, the button above the snackbar — no `Scaffold`. Gate, empty state and
+  load error are `StatusCard`s (the empty state's button is the screen's one `Accent`); loading is
+  `AlarmsSkeleton`.
 - **`AlarmRepositoryImpl` registers lazily** via one `withDevice { }`: no token → push address →
   `POST /devices`. A `401` clears the token, registers once and retries once, behind a `Mutex`
   (a newer stored token is reused). A `404` on a single alarm is `AlarmNotFoundException` — no
   re-registration. `updateToken` is not a `withDevice` call: without a stored token it does nothing.
 - **Alarm editor**: leaving goes through `onBack()` (discard dialog when `isDirty`), using
-  `NavigationBackHandler` (`navigationevent-compose`). An existing alarm's type is locked. Windows
-  across midnight are out of scope.
-- **Account**: after a successful login/registration, offer the credentials to `CredentialStore.save`
+  `NavigationBackHandler` (`navigationevent-compose`). The type is two `TypeCards` (one radio
+  group); an existing alarm's type is locked — neither card selectable, the other one dimmed with a
+  lock. Days are `DayToggles` (one checkbox per circle, spoken by its full name; each circle keeps its size and its `DayLabel` shrinks to fit at a large font size, as on the cards); times are
+  `TimeField`s (`SelectField` opening the Meadow time picker: overline, large hour/minute boxes,
+  24-hour dial, Cancel/OK); an invalid window turns the end field red. A save or delete error sits
+  in the action bar above Save. Loading is `AlarmEditorSkeleton`, a load error a `StatusCard` with
+  Retry. Windows across midnight are out of scope.
+- **Account**: `MeadowTextField`/`PasswordField`s, a request error as a `Banner` (red error icon) under the fields, the no-recovery caution as an icon-less `Banner`, the consent as a raised card with `MeadowCheckbox`; the log-in form opens with a key badge. After a successful login/registration, offer the credentials to `CredentialStore.save`
   (except a login made with the credential the manager just handed over); `Done` follows whatever
   happens. In `LOGIN` mode, `offer()` first. `logout()` clears locally **whatever the server
   answers**. A `401` on an authenticated call → `sessions.clear()` (only if the refused session is
   still stored). `AndroidCredentialStore` follows the current `ComponentActivity` via
   `ActivityLifecycleCallbacks` (weakly) and logs exceptions by type only, never with credentials.
-- **Settings** observes the station, the session and the crash-report choice; the station name falls
+- **Settings** observes the station, the session and the crash-report choice; layout: the green account card (email and "Log out", or "Not logged in" and "Log in"; "Logged in as" is split off `settings_account_logged_in_as` only where the address ends the sentence), then one overline + raised card per group (station, language, privacy, data source, impressum, and "Delete account" in red while logged in), each row an icon tile, title, subtitle (the row's action wording) and a chevron or open-link icon, the deletion note under the impressum card, the version line; the station name falls
   back to the stored one, never an error. The Privacy section (crash-report switch, whole row
   `toggleable` with `Role.Switch`) shows only when `CrashReporter.isAvailable`; the switch only writes
   `CrashReportingPreferences`, never the reporter; a failed write puts the switch back and sends
   `SettingsEvent.CrashReportsSaveFailed` (snackbar). The MeteoSwiss attribution (`settings_data_source_attribution`) is prescribed
   per language — **do not rephrase** (French keeps "Source:" without the space). Links go through
   `LocalUriHandler`.
+- **Onboarding and Change station** share `StationPickerContent`, a block of the screen's scrolling
+  content: `SelectField` dropdown, then the tonal "Use my location", a location failure as a
+  `Banner` below; a shimmer while loading; a failed list is an inline card with Retry in their place
+  (Continue stays disabled, nothing is picked). Change station puts the two on a `surface` card
+  (`inCard`). Onboarding opens with `OnboardingIllustration` (decorative `Canvas`: outline and
+  station dots through `SwissMapProjection`, gold halo on the current pick, grains — dots only once
+  the list has loaded) and its own `OnboardingWashes` via `ScreenFrame(washes = …)`.
 
 ### Firebase and push (Android)
 

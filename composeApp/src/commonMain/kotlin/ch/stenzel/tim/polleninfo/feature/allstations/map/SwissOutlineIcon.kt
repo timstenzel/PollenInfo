@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import ch.stenzel.tim.polleninfo.core.map.SWISS_BORDER
+import ch.stenzel.tim.polleninfo.core.map.SwissMapProjection
 
 /**
  * A small outline of Switzerland for the All stations tab, drawn from [SWISS_BORDER] through

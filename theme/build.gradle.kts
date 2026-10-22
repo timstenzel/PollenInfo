@@ -21,6 +21,11 @@ kotlin {
         compileSdk = 37
         minSdk = 26
 
+        // Compose resources (the fonts) are packaged as Android assets only with this on.
+        androidResources {
+            enable = true
+        }
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_21)
         }
@@ -42,6 +47,13 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            // The bundled fonts (Fraunces, Plus Jakarta Sans) are Compose resources.
+            implementation(libs.compose.components.resources)
         }
     }
+}
+
+compose.resources {
+    // `Res` under the module's package rather than the default derived from the module name.
+    packageOfResClass = "ch.stenzel.tim.polleninfo.theme.resources"
 }

@@ -14,7 +14,7 @@ class SeverityColorsTest {
             listOf(
                 Color(0xFF6B6B60),
                 Color(0xFF2E7D32),
-                Color(0xFFB08000),
+                Color(0xFFA07400),
                 Color(0xFFB4500F),
                 Color(0xFFB3261E),
             ),

@@ -1,5 +1,6 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.map
 
+import ch.stenzel.tim.polleninfo.core.map.GeoPoint
 import ch.stenzel.tim.polleninfo.core.station.allStations
 import kotlin.math.PI
 import kotlin.math.cos

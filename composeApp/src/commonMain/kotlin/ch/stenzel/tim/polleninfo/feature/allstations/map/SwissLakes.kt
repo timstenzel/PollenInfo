@@ -1,5 +1,8 @@
 package ch.stenzel.tim.polleninfo.feature.allstations.map
 
+import ch.stenzel.tim.polleninfo.core.map.GeoPoint
+import ch.stenzel.tim.polleninfo.core.map.SwissMapProjection
+
 /** One lake as a closed ring of WGS84 points (first point == last). [name] is for reading the data. */
 internal data class Lake(val name: String, val outline: List<GeoPoint>)
 

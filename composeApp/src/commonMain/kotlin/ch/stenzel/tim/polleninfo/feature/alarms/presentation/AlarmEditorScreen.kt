@@ -1,9 +1,10 @@
 package ch.stenzel.tim.polleninfo.feature.alarms.presentation
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,47 +13,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -60,11 +42,20 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.stenzel.tim.polleninfo.core.measurement.domain.model.PollenSeverity
 import ch.stenzel.tim.polleninfo.core.station.domain.model.Station
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButton
+import ch.stenzel.tim.polleninfo.core.ui.button.PillButtonStyle
+import ch.stenzel.tim.polleninfo.core.ui.dialog.ConfirmDialog
+import ch.stenzel.tim.polleninfo.core.ui.dialog.DialogTone
 import ch.stenzel.tim.polleninfo.core.ui.error.ErrorContext
 import ch.stenzel.tim.polleninfo.core.ui.error.message
-import ch.stenzel.tim.polleninfo.core.ui.format.formatTime
+import ch.stenzel.tim.polleninfo.core.ui.field.SelectField
 import ch.stenzel.tim.polleninfo.core.ui.format.rememberDateWording
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenFrame
+import ch.stenzel.tim.polleninfo.core.ui.layout.ScreenHeader
+import ch.stenzel.tim.polleninfo.core.ui.selection.ChipLabel
+import ch.stenzel.tim.polleninfo.core.ui.selection.MeadowFilterChip
 import ch.stenzel.tim.polleninfo.core.ui.species.speciesName
+import ch.stenzel.tim.polleninfo.core.ui.status.StatusCard
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmSchedule
 import ch.stenzel.tim.polleninfo.feature.alarms.domain.model.AlarmType
 import ch.stenzel.tim.polleninfo.resources.Res
@@ -97,17 +88,15 @@ import ch.stenzel.tim.polleninfo.resources.alarm_section_station
 import ch.stenzel.tim.polleninfo.resources.alarm_section_time
 import ch.stenzel.tim.polleninfo.resources.alarm_section_window
 import ch.stenzel.tim.polleninfo.resources.alarm_swiss_time
-import ch.stenzel.tim.polleninfo.resources.alarm_time_description
-import ch.stenzel.tim.polleninfo.resources.alarm_time_picker_confirm
-import ch.stenzel.tim.polleninfo.resources.alarm_type_daily
+
+
 import ch.stenzel.tim.polleninfo.resources.alarm_type_daily_description
-import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold
 import ch.stenzel.tim.polleninfo.resources.alarm_type_threshold_description
 import ch.stenzel.tim.polleninfo.resources.alarm_window_end
 import ch.stenzel.tim.polleninfo.resources.alarm_window_start
-import ch.stenzel.tim.polleninfo.resources.common_back
 import ch.stenzel.tim.polleninfo.resources.common_cancel
 import ch.stenzel.tim.polleninfo.resources.common_retry
+import ch.stenzel.tim.polleninfo.resources.nav_alarms
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.jetbrains.compose.resources.stringResource
@@ -127,7 +116,7 @@ fun AlarmEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // The system back asks about unsaved changes just as the top bar's arrow does.
+    // The system back asks about unsaved changes just as the back button does.
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         onBackCompleted = viewModel::onBack,
@@ -163,7 +152,6 @@ fun AlarmEditorScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlarmEditorContent(
     uiState: AlarmEditorUiState,
@@ -185,45 +173,32 @@ private fun AlarmEditorContent(
     onDeleteConfirmed: () -> Unit,
     onDeleteDismissed: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.common_back))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        val modifier = Modifier.fillMaxSize().padding(padding)
+    // The overline is the place the editor belongs to: it is opened from the Alarms tab.
+    val header = @Composable { ScreenHeader(overline = stringResource(Res.string.nav_alarms), title = title) }
+    ScreenFrame(
+        onBack = onBack,
+        actionBar = (uiState as? AlarmEditorUiState.Editing)?.let { state -> { SaveBar(state, onSave) } },
+    ) { contentPadding ->
         when (uiState) {
-            AlarmEditorUiState.Loading -> Box(modifier, contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            AlarmEditorUiState.Loading -> EditorColumn(contentPadding, header, Modifier.fillMaxSize()) {
+                AlarmEditorSkeleton(Modifier.fillMaxWidth())
             }
 
-            is AlarmEditorUiState.Error -> Column(
-                modifier = modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(Res.string.alarm_editor_load_failed),
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    uiState.error.message(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
+            is AlarmEditorUiState.Error -> EditorColumn(contentPadding, header, Modifier.fillMaxSize()) {
+                StatusCard(
+                    title = stringResource(Res.string.alarm_editor_load_failed),
+                    body = uiState.error.message(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PillButton(onClick = onRetry, style = PillButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(Res.string.common_retry))
+                    }
+                }
             }
 
             is AlarmEditorUiState.Editing -> EditingForm(
                 state = uiState,
+                header = header,
                 onStationSelected = onStationSelected,
                 onSpeciesToggled = onSpeciesToggled,
                 onMinSeveritySelected = onMinSeveritySelected,
@@ -232,37 +207,71 @@ private fun AlarmEditorContent(
                 onTimeSelected = onTimeSelected,
                 onWindowStartSelected = onWindowStartSelected,
                 onWindowEndSelected = onWindowEndSelected,
-                onSave = onSave,
                 onDeleteRequested = onDeleteRequested,
-                modifier = modifier,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = contentPadding,
             )
         }
     }
 
     if (uiState is AlarmEditorUiState.Editing) {
         if (uiState.showDiscardDialog) {
-            AlertDialog(
-                onDismissRequest = onDiscardDismissed,
-                title = { Text(stringResource(Res.string.alarm_discard_title)) },
-                text = { Text(stringResource(Res.string.alarm_discard_text)) },
-                confirmButton = { TextButton(onClick = onDiscardConfirmed) { Text(stringResource(Res.string.alarm_discard_confirm)) } },
-                dismissButton = { TextButton(onClick = onDiscardDismissed) { Text(stringResource(Res.string.alarm_discard_keep)) } },
+            ConfirmDialog(
+                icon = Icons.Default.Edit,
+                tone = DialogTone.Neutral,
+                title = stringResource(Res.string.alarm_discard_title),
+                text = stringResource(Res.string.alarm_discard_text),
+                confirmLabel = stringResource(Res.string.alarm_discard_confirm),
+                confirmStyle = PillButtonStyle.Danger,
+                onConfirm = onDiscardConfirmed,
+                dismissLabel = stringResource(Res.string.alarm_discard_keep),
+                onDismiss = onDiscardDismissed,
             )
         }
         if (uiState.showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = onDeleteDismissed,
-                title = { Text(stringResource(Res.string.alarm_delete_title)) },
-                text = { Text(stringResource(Res.string.alarm_delete_text)) },
-                confirmButton = {
-                    TextButton(
-                        onClick = onDeleteConfirmed,
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) { Text(stringResource(Res.string.alarm_delete_confirm)) }
-                },
-                dismissButton = { TextButton(onClick = onDeleteDismissed) { Text(stringResource(Res.string.common_cancel)) } },
+            ConfirmDialog(
+                icon = Icons.Default.Delete,
+                tone = DialogTone.Destructive,
+                title = stringResource(Res.string.alarm_delete_title),
+                text = stringResource(Res.string.alarm_delete_text),
+                confirmLabel = stringResource(Res.string.alarm_delete_confirm),
+                confirmStyle = PillButtonStyle.Danger,
+                onConfirm = onDeleteConfirmed,
+                dismissLabel = stringResource(Res.string.common_cancel),
+                onDismiss = onDeleteDismissed,
             )
         }
+    }
+}
+
+/**
+ * The action bar: why the last save or delete failed, directly above Save, and Save itself with its
+ * progress while it runs.
+ */
+@Composable
+private fun SaveBar(state: AlarmEditorUiState.Editing, onSave: () -> Unit) {
+    val failure = state.saveError?.message(ErrorContext.SAVE_ALARM)
+        ?: state.deleteError?.message(ErrorContext.DELETE_ALARM)
+    failure?.let { text ->
+        Row(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 14.dp)) {
+            // Decorative: the red sentence says what went wrong.
+            Icon(
+                Icons.Default.Error,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 1.dp, end = 10.dp).size(18.dp),
+            )
+            Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    PillButton(
+        onClick = onSave,
+        style = PillButtonStyle.Primary,
+        enabled = state.canSave,
+        busy = state.isSaving,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(if (state.isSaving) Res.string.alarm_saving else Res.string.alarm_save))
     }
 }
 
@@ -277,18 +286,16 @@ private fun EditingForm(
     onTimeSelected: (LocalTime) -> Unit,
     onWindowStartSelected: (LocalTime) -> Unit,
     onWindowEndSelected: (LocalTime) -> Unit,
-    onSave: () -> Unit,
     onDeleteRequested: () -> Unit,
+    header: @Composable () -> Unit,
     modifier: Modifier,
+    contentPadding: PaddingValues,
 ) {
     val form = state.form
     val enabled = !state.isBusy
-    Column(
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    EditorColumn(contentPadding, header, modifier) {
         // Locked when editing: still shown, so the alarm's type is visible, but not changeable.
-        TypeToggle(selected = form.type, enabled = enabled && !form.typeLocked, onTypeSelected = onTypeSelected)
+        TypeCards(selected = form.type, locked = form.typeLocked, enabled = enabled, onTypeSelected = onTypeSelected)
         Text(
             stringResource(
                 when (form.type) {
@@ -300,183 +307,159 @@ private fun EditingForm(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        SectionHeading(stringResource(Res.string.alarm_section_station))
-        StationDropdown(
-            stations = state.stations,
-            selectedAbbr = form.stationAbbr,
-            enabled = enabled,
-            onStationSelected = onStationSelected,
-        )
-
-        SectionHeading(stringResource(Res.string.alarm_section_species))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.species.forEach { species ->
-                FilterChip(
-                    selected = species.id in form.species,
-                    onClick = { onSpeciesToggled(species.id) },
-                    label = { Text(speciesName(species.id, species.name)) },
-                    enabled = enabled,
-                )
-            }
+        Section(stringResource(Res.string.alarm_section_station)) {
+            StationDropdown(
+                stations = state.stations,
+                selectedAbbr = form.stationAbbr,
+                enabled = enabled,
+                onStationSelected = onStationSelected,
+            )
         }
-        if (form.species.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_species))
 
-        SectionHeading(
+        Section(stringResource(Res.string.alarm_section_species)) {
+            ChipRow {
+                state.species.forEach { species ->
+                    MeadowFilterChip(
+                        selected = species.id in form.species,
+                        onClick = { onSpeciesToggled(species.id) },
+                        enabled = enabled,
+                    ) { ChipLabel(speciesName(species.id, species.name)) }
+                }
+            }
+            if (form.species.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_species))
+        }
+
+        Section(
             stringResource(
                 when (form.type) {
                     AlarmType.DAILY -> Res.string.alarm_section_minimum_daily
                     AlarmType.THRESHOLD -> Res.string.alarm_section_minimum_threshold
                 },
             ),
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            form.severityOptions.forEach { severity ->
-                FilterChip(
-                    selected = severity == form.minSeverity,
-                    onClick = { onMinSeveritySelected(severity) },
-                    label = { Text(severity.minimumLabel()) },
-                    enabled = enabled,
-                )
+        ) {
+            ChipRow {
+                form.severityOptions.forEach { severity ->
+                    MeadowFilterChip(
+                        selected = severity == form.minSeverity,
+                        onClick = { onMinSeveritySelected(severity) },
+                        enabled = enabled,
+                    ) { ChipLabel(severity.minimumLabel()) }
+                }
             }
+            Note(
+                when {
+                    form.type == AlarmType.THRESHOLD ->
+                        stringResource(Res.string.alarm_minimum_note_threshold, form.minSeverity.minimumLabel())
+                    form.minSeverity == PollenSeverity.NONE -> stringResource(Res.string.alarm_minimum_note_any)
+                    else -> stringResource(Res.string.alarm_minimum_note_daily, form.minSeverity.minimumLabel())
+                },
+            )
         }
-        Text(
-            when {
-                form.type == AlarmType.THRESHOLD ->
-                    stringResource(Res.string.alarm_minimum_note_threshold, form.minSeverity.minimumLabel())
-                form.minSeverity == PollenSeverity.NONE -> stringResource(Res.string.alarm_minimum_note_any)
-                else -> stringResource(Res.string.alarm_minimum_note_daily, form.minSeverity.minimumLabel())
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
-        SectionHeading(stringResource(Res.string.alarm_section_days))
-        val dates = rememberDateWording()
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DayOfWeek.entries.forEach { day ->
-                FilterChip(
-                    selected = day in form.days,
-                    onClick = { onDayToggled(day) },
-                    // "Mon" would be read as a word; the full name is what a screen reader says. Set
-                    // on the label, which the chip merges into its own node, so it stays one stop.
-                    label = {
-                        Text(dates.weekdayShort(day), modifier = Modifier.semantics { contentDescription = dates.weekdayFull(day) })
-                    },
-                    enabled = enabled,
-                )
-            }
+        Section(stringResource(Res.string.alarm_section_days)) {
+            DayToggles(days = form.days, enabled = enabled, dates = rememberDateWording(), onDayToggled = onDayToggled)
+            if (form.days.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_days))
         }
-        if (form.days.isEmpty()) ValidationHint(stringResource(Res.string.alarm_hint_no_days))
 
         when (val schedule = form.schedule) {
-            is AlarmSchedule.Daily -> {
-                SectionHeading(stringResource(Res.string.alarm_section_time))
-                TimeField(label = stringResource(Res.string.alarm_report_time), time = schedule.at, enabled = enabled, onTimeSelected = onTimeSelected)
+            is AlarmSchedule.Daily -> Section(stringResource(Res.string.alarm_section_time)) {
+                TimeField(
+                    label = stringResource(Res.string.alarm_report_time),
+                    time = schedule.at,
+                    enabled = enabled,
+                    onTimeSelected = onTimeSelected,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Note(stringResource(Res.string.alarm_swiss_time))
             }
-            is AlarmSchedule.Threshold -> {
-                SectionHeading(stringResource(Res.string.alarm_section_window))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            is AlarmSchedule.Threshold -> Section(stringResource(Res.string.alarm_section_window)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TimeField(
                         label = stringResource(Res.string.alarm_window_start),
                         time = schedule.from,
                         enabled = enabled,
                         onTimeSelected = onWindowStartSelected,
+                        modifier = Modifier.weight(1f),
                     )
-                    // Decorative: each button names its own end of the window.
-                    Text("–", modifier = Modifier.clearAndSetSemantics {})
+                    // The end is the field that is wrong when the window is not valid.
                     TimeField(
                         label = stringResource(Res.string.alarm_window_end),
                         time = schedule.until,
                         enabled = enabled,
                         onTimeSelected = onWindowEndSelected,
+                        modifier = Modifier.weight(1f),
+                        isError = !form.isWindowValid,
                     )
                 }
                 if (!form.isWindowValid) ValidationHint(stringResource(Res.string.alarm_hint_window))
-            }
-        }
-        Text(
-            stringResource(Res.string.alarm_swiss_time),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        val failure = state.saveError?.message(ErrorContext.SAVE_ALARM)
-            ?: state.deleteError?.message(ErrorContext.DELETE_ALARM)
-        failure?.let { text ->
-            Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Button(
-            onClick = onSave,
-            enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        ) {
-            if (state.isSaving) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text(stringResource(Res.string.alarm_saving))
-                }
-            } else {
-                Text(stringResource(Res.string.alarm_save))
+                Note(stringResource(Res.string.alarm_swiss_time))
             }
         }
 
         if (state.canDelete) {
-            OutlinedButton(
+            PillButton(
                 onClick = onDeleteRequested,
+                style = PillButtonStyle.Danger,
                 enabled = !state.isBusy,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                busy = state.isDeleting,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             ) {
-                if (state.isDeleting) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text(stringResource(Res.string.alarm_deleting))
-                    }
-                } else {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(stringResource(Res.string.alarm_delete), modifier = Modifier.padding(start = 8.dp))
-                }
+                Text(stringResource(if (state.isDeleting) Res.string.alarm_deleting else Res.string.alarm_delete))
             }
         }
     }
 }
 
-/** Daily report or threshold alert, as two segments; each announces its own selected state. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** The editor's scrolling column, clear of the back button and the action bar, with its margins. */
 @Composable
-private fun TypeToggle(
-    selected: AlarmType,
-    enabled: Boolean,
-    onTypeSelected: (AlarmType) -> Unit,
+private fun EditorColumn(
+    contentPadding: PaddingValues,
+    header: @Composable () -> Unit,
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
-    val options = listOf(AlarmType.DAILY to stringResource(Res.string.alarm_type_daily), AlarmType.THRESHOLD to stringResource(Res.string.alarm_type_threshold))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, (type, label) ->
-            SegmentedButton(
-                selected = type == selected,
-                onClick = { onTypeSelected(type) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                enabled = enabled,
-            ) {
-                Text(label)
-            }
-        }
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(contentPadding)
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        header()
+        content()
+    }
+}
+
+/** A titled part of the form: its heading, then its controls and what is said about them. */
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { heading() },
+        )
+        content()
     }
 }
 
 @Composable
-private fun SectionHeading(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(top = 8.dp).semantics { heading() },
-    )
+private fun ChipRow(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) { content() }
+}
+
+@Composable
+private fun Note(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
 private fun ValidationHint(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -492,15 +475,13 @@ private fun StationDropdown(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = it },
     ) {
-        OutlinedTextField(
+        SelectField(
+            label = stringResource(Res.string.alarm_section_station),
             value = stations.firstOrNull { it.abbr == selectedAbbr }?.name ?: selectedAbbr,
-            onValueChange = {},
-            readOnly = true,
+            trailingIcon = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
             enabled = enabled,
-            label = { Text(stringResource(Res.string.alarm_section_station)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled)
                 .fillMaxWidth(),
         )
         ExposedDropdownMenu(
@@ -520,50 +501,3 @@ private fun StationDropdown(
         }
     }
 }
-
-/** A button showing [time] that opens a 24-hour time picker in a dialog. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TimeField(
-    label: String,
-    time: LocalTime,
-    enabled: Boolean,
-    onTimeSelected: (LocalTime) -> Unit,
-) {
-    var showPicker by rememberSaveable { mutableStateOf(false) }
-    val description = stringResource(Res.string.alarm_time_description, label, formatTime(time))
-    OutlinedButton(
-        onClick = { showPicker = true },
-        enabled = enabled,
-        // Read as "Report time 08:00" rather than a bare time.
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(formatTime(time), modifier = Modifier.padding(start = 8.dp))
-    }
-
-    if (showPicker) {
-        val pickerState = rememberTimePickerState(
-            initialHour = time.hour,
-            initialMinute = time.minute,
-            is24Hour = true,
-        )
-        AlertDialog(
-            onDismissRequest = { showPicker = false },
-            title = { Text(label) },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onTimeSelected(LocalTime(pickerState.hour, pickerState.minute))
-                        showPicker = false
-                    },
-                ) { Text(stringResource(Res.string.alarm_time_picker_confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text(stringResource(Res.string.common_cancel)) }
-            },
-        )
-    }
-}
-

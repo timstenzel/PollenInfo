@@ -63,6 +63,9 @@ kotlin {
             // The multiplatform `NavigationBackHandler`, so the alarm editor's system back can ask
             // about unsaved changes on both platforms.
             implementation(libs.navigationevent.compose)
+            // Blurs the tab content behind the glass bottom bar.
+            implementation(libs.haze)
+            implementation(libs.haze.blur)
 
             implementation(libs.navigation.compose)
 

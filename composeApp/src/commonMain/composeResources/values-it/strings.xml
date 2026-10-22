@@ -7,6 +7,15 @@
     <string name="nav_alarms">Allarmi</string>
     <string name="nav_settings">Impostazioni</string>
 
+    <string name="home_overline">La sua stazione</string>
+    <plurals name="all_stations_overline">
+        <item quantity="one">%1$d stazione · MeteoSvizzera</item>
+        <item quantity="other">%1$d stazioni · MeteoSvizzera</item>
+    </plurals>
+    <string name="diary_overline">Il suo stato e i pollini</string>
+    <string name="alarm_overline">Notifiche</string>
+    <string name="settings_overline">Preferenze</string>
+
     <string name="settings_title">Impostazioni</string>
     <string name="settings_section_language">Lingua</string>
     <string name="settings_language_action">Cambiare la lingua</string>
@@ -44,11 +53,13 @@
 
     <string name="home_load_failed">Non è stato possibile caricare i valori dei pollini.</string>
     <string name="home_driven_by">Polline principale: %1$s</string>
+    <string name="home_gauge_overline">Carico pollinico attuale</string>
     <string name="home_feeling_question">Come si sente oggi?</string>
     <string name="home_feeling_dismiss">Non oggi</string>
 
     <!-- All stations -->
     <string name="all_stations_load_failed">Non è stato possibile caricare le stazioni.</string>
+    <string name="all_stations_list_heading">Stazioni</string>
     <string name="all_stations_row_loading">Caricamento…</string>
     <string name="all_stations_row_no_reading">Nessun valore</string>
     <string name="all_stations_detail_loading">Caricamento del valore di questa stazione…</string>
@@ -71,6 +82,7 @@
     <string name="reading_all_species">Tutti i pollini</string>
     <string name="reading_concentration_unit">concentrazione in %1$s</string>
     <string name="reading_no_data">Nessun dato</string>
+    <string name="reading_not_reported">non rilevato</string>
 
     <string name="common_retry">Riprova</string>
     <string name="common_back">Indietro</string>
@@ -181,9 +193,10 @@
     <string name="diary_range_week">Settimana</string>
     <string name="diary_range_month">Mese</string>
     <string name="diary_range_year">Anno</string>
-    <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.*</string>
+    <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.</string>
     <string name="diary_no_entries_hint">Risponda a «%1$s» nella scheda %2$s per vedere qui la Sua linea.</string>
     <string name="diary_species_heading">Tipi di polline</string>
+    <string name="diary_feeling_legend">Il suo stato</string>
     <string name="diary_not_measured">Non misurato qui</string>
     <string name="diary_disclaimer">* Questa non è una diagnosi medica. Se sospetta un’allergia ai pollini, si rivolga a un medico.</string>
     <string name="diary_load_failed">Non è stato possibile caricare lo storico dei pollini.</string>
@@ -211,6 +224,10 @@
     <string name="alarm_empty_body">Crei un allarme per ricevere un bollettino pollinico giornaliero o un avviso quando un tipo di polline raggiunge il livello che sceglie.</string>
     <string name="alarm_create">Crea allarme</string>
     <string name="alarm_paused">In pausa · %1$s</string>
+    <string name="alarm_paused_label">In pausa</string>
+    <string name="alarm_count">%1$d di %2$d</string>
+    <string name="alarm_tag_minimum">da %1$s</string>
+    <string name="alarm_tag_any">Ogni giorno scelto</string>
     <string name="alarm_switch_description">Allarme per %1$s</string>
     <string name="alarm_edit_action">Modifica allarme</string>
     <string name="alarm_push_unavailable_title">Le notifiche push non sono ancora disponibili su questo dispositivo</string>

@@ -10,6 +10,15 @@
     <string name="nav_alarms">Alarmes</string>
     <string name="nav_settings">Paramètres</string>
 
+    <string name="home_overline">Votre station</string>
+    <plurals name="all_stations_overline">
+        <item quantity="one">%1$d station · MétéoSuisse</item>
+        <item quantity="other">%1$d stations · MétéoSuisse</item>
+    </plurals>
+    <string name="diary_overline">Votre ressenti et le pollen</string>
+    <string name="alarm_overline">Notifications</string>
+    <string name="settings_overline">Préférences</string>
+
     <string name="settings_title">Paramètres</string>
     <string name="settings_section_language">Langue</string>
     <string name="settings_language_action">Modifier la langue</string>
@@ -47,11 +56,13 @@
 
     <string name="home_load_failed">Les mesures de pollen n’ont pas pu être chargées.</string>
     <string name="home_driven_by">Pollen dominant : %1$s</string>
+    <string name="home_gauge_overline">Charge pollinique actuelle</string>
     <string name="home_feeling_question">Comment vous sentez-vous aujourd’hui ?</string>
     <string name="home_feeling_dismiss">Pas aujourd’hui</string>
 
     <!-- All stations -->
     <string name="all_stations_load_failed">Les stations n’ont pas pu être chargées.</string>
+    <string name="all_stations_list_heading">Stations</string>
     <string name="all_stations_row_loading">Chargement…</string>
     <string name="all_stations_row_no_reading">Sans mesure</string>
     <string name="all_stations_detail_loading">Chargement de la mesure de cette station…</string>
@@ -74,6 +85,7 @@
     <string name="reading_all_species">Tous les pollens</string>
     <string name="reading_concentration_unit">concentration en %1$s</string>
     <string name="reading_no_data">Sans données</string>
+    <string name="reading_not_reported">non relevé</string>
 
     <string name="common_retry">Réessayer</string>
     <string name="common_back">Retour</string>
@@ -184,9 +196,10 @@
     <string name="diary_range_week">Semaine</string>
     <string name="diary_range_month">Mois</string>
     <string name="diary_range_year">Année</string>
-    <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.*</string>
+    <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.</string>
     <string name="diary_no_entries_hint">Répondez à « %1$s » dans l’onglet %2$s pour voir votre courbe ici.</string>
     <string name="diary_species_heading">Types de pollen</string>
+    <string name="diary_feeling_legend">Votre ressenti</string>
     <string name="diary_not_measured">Non mesuré ici</string>
     <string name="diary_disclaimer">* Ceci n’est pas un diagnostic médical. Si vous soupçonnez une allergie au pollen, veuillez consulter un médecin.</string>
     <string name="diary_load_failed">L’historique des pollens n’a pas pu être chargé.</string>
@@ -214,6 +227,10 @@
     <string name="alarm_empty_body">Créez une alarme pour recevoir un bulletin pollinique quotidien, ou un avertissement lorsqu’un type de pollen atteint le niveau de votre choix.</string>
     <string name="alarm_create">Créer une alarme</string>
     <string name="alarm_paused">En pause · %1$s</string>
+    <string name="alarm_paused_label">En pause</string>
+    <string name="alarm_count">%1$d sur %2$d</string>
+    <string name="alarm_tag_minimum">à partir de %1$s</string>
+    <string name="alarm_tag_any">Chaque jour choisi</string>
     <string name="alarm_switch_description">Alarme pour %1$s</string>
     <string name="alarm_edit_action">Modifier l’alarme</string>
     <string name="alarm_push_unavailable_title">Les notifications push ne sont pas encore disponibles sur cet appareil</string>
