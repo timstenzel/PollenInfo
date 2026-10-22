@@ -31,6 +31,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The debug build of PollenInfo connects to the development backend on your local network.</string>
 #endif
 	<key>UIApplicationSceneManifest</key>
 	<dict>

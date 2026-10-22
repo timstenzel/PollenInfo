@@ -309,6 +309,7 @@ The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written
 | `Info.plist` key | Value | Needed by |
 | --- | --- | --- |
 | `NSAppTransportSecurity.NSAllowsLocalNetworking` | `true` (debug only) | Cleartext dev backend |
+| `NSLocalNetworkUsageDescription` | English sentence (debug only, not translated — developer-facing) | iOS's Local Network prompt when an iPhone reaches the Mac's LAN backend |
 | `NSLocationWhenInUseUsageDescription` | A sentence | **Mandatory** — without it `CLLocationManager` silently never prompts |
 | `NSLocationDefaultAccuracyReduced` | `true` | Coarse location only |
 | `CFBundleLocalizations` | `en`, `de`, `fr`, `it` | `IosLanguageRepository` |
