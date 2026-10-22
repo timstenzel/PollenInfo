@@ -1,0 +1,100 @@
+# The iPhone app's pipeline: the shared test suite on an iOS Simulator and the Xcode wrapper built
+# unsigned for the Simulator in Debug and Release, on every pull request that touches the wrapper,
+# shared app code or shared build configuration. Nothing is signed or published (no paid Apple
+# Developer account yet).
+#
+# Triggered by every pull request into develop or main and every push to main, with no path filter,
+# so its gate always reports and can be a required check. The `changes` job first runs the
+# self-test of .github/scripts/changed-components.sh (the one path -> component mapping, shared
+# with server.yml and android.yml), then asks it whether the iPhone app changed; when it did not,
+# the gate is skipped, which GitHub counts as passed. See deploy/README.md.
+name: iOS
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+
+# Least privilege: every job reads the repository and nothing more.
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.detect.outputs.ios }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A broken mapping must fail every pipeline, not silently skip a gate.
+      - name: Test the change detection
+        run: .github/scripts/changed-components-test.sh
+
+      # Pull request: everything since its base; push to main: everything since the previous tip.
+      - name: Detect the changed components
+        id: detect
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: .github/scripts/changed-components.sh "$BASE" HEAD
+
+  # A fixed runner image and a fixed Xcode, so an image update cannot change the build unnoticed.
+  # Xcode 26.6 is the newest stable Xcode GitHub offers (Xcode 27 only on a preview image); raise
+  # both together and record the choice in deploy/README.md, "iOS pipeline".
+  ios-tests:
+    name: ios-tests
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      XCODE_APP: /Applications/Xcode_26.6.app
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK and Gradle
+        uses: ./.github/actions/setup-jvm
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch "$XCODE_APP"
+          xcodebuild -version
+
+      # All of commonTest on an iOS Simulator, the counterpart of testAndroidHostTest.
+      - name: Run the shared tests on an iOS Simulator
+        run: ./gradlew :composeApp:iosSimulatorArm64Test
+
+      # The Xcode build runs Gradle itself (build phase "Compile Kotlin", JDK from JAVA_HOME).
+      - name: Build the iPhone app for the Simulator (Debug)
+        run: >-
+          xcodebuild
+          -project iosApp/iosApp.xcodeproj
+          -scheme iosApp
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build the iPhone app for the Simulator (Release)
+        run: >-
+          xcodebuild
+          -project iosApp/iosApp.xcodeproj
+          -scheme iosApp
+          -configuration Release
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build

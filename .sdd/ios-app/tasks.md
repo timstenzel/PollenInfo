@@ -81,27 +81,27 @@ in every pipeline.
 
 ### Implementation steps
 
-- [ ] Rename the Android gate to `android-tests` (and the release job's dependency) and remove the iOS compile job from the Android workflow; update its header comment.
-- [ ] Add the iOS workflow: same triggers and least-privilege permissions as the others, own concurrency group, a change-detection job, and `ios-tests` on a pinned macOS runner (not `macos-latest`) with a pinned Xcode selected by `xcode-select`, running the iOS Simulator test task and unsigned Debug and Release Simulator builds; all actions pinned by commit SHA. Check which Xcode the runner offers; if not the local one, pin the newest available that builds without warnings and record the choice.
-- [ ] Update the change-detection mapping: iOS wrapper and iOS workflow → ios; Android workflow → android only; header comment updated.
-- [ ] Add the table-driven self-test (temporary git repo, commits made with an explicit throwaway identity and signing off; bash 3.2 compatible — no associative arrays, no `mapfile`): one case per mapping row, docs-only, mixed, all-zero base, unresolvable base, and Android workflow → android only. Run it as the first step of every workflow's change-detection job.
-- [ ] Update CLAUDE.md, README and the deploy runbook: three workflows, `android-tests` / `ios-tests`, required-checks list, the self-test.
-- [ ] Write the PR description reminder for the maintainer to replace the required checks.
+- [x] Rename the Android gate to `android-tests` (and the release job's dependency) and remove the iOS compile job from the Android workflow; update its header comment.
+- [x] Add the iOS workflow: same triggers and least-privilege permissions as the others, own concurrency group, a change-detection job, and `ios-tests` on a pinned macOS runner (not `macos-latest`) with a pinned Xcode selected by `xcode-select`, running the iOS Simulator test task and unsigned Debug and Release Simulator builds; all actions pinned by commit SHA. Check which Xcode the runner offers; if not the local one, pin the newest available that builds without warnings and record the choice. *(Xcode 27 only on the preview image `xcode-27`; pinned `macos-26` + Xcode 26.6, the newest stable, recorded in `deploy/README.md`, "iOS". Whether 26.6 builds without warnings shows on the first CI run.)*
+- [x] Update the change-detection mapping: iOS wrapper and iOS workflow → ios; Android workflow → android only; header comment updated.
+- [x] Add the table-driven self-test (temporary git repo, commits made with an explicit throwaway identity and signing off; bash 3.2 compatible — no associative arrays, no `mapfile`): one case per mapping row, docs-only, mixed, all-zero base, unresolvable base, and Android workflow → android only. Run it as the first step of every workflow's change-detection job.
+- [x] Update CLAUDE.md, README and the deploy runbook: three workflows, `android-tests` / `ios-tests`, required-checks list, the self-test.
+- [x] Write the PR description reminder for the maintainer to replace the required checks. *(For the handover's "For the reviewer": "Before merging, replace the required checks `android-gate` and `ios-compile` with `android-tests` and `ios-tests` in the rulesets `develop` and `main` (Settings → Rules → Rulesets); otherwise the old checks never report and block the merge.")*
 
 ### Acceptance criteria
 
-- [ ] The self-test passes locally (with `/bin/bash` on macOS) and fails with an expected-vs-actual message when one mapping row is deliberately broken.
-- [ ] On the pull request, `ios-tests` runs and passes, including both Xcode builds; `android-tests` and the Server pipeline pass; the release job depends on `android-tests`.
-- [ ] A shared test that fails only on iOS makes `ios-tests` fail (checked once with a temporary failing test on a scratch branch, then removed).
-- [ ] `grep -rn 'android-gate\|ios-compile' .github README.md deploy CLAUDE.md` finds nothing.
-- [ ] The PR description tells the maintainer to replace the required checks `android-gate`/`ios-compile` with `android-tests`/`ios-tests` before merging.
-- [ ] The iOS workflow names a fixed macOS runner image and a fixed Xcode version, and the chosen version is recorded in the runbook.
+- [x] The self-test passes locally (with `/bin/bash` on macOS) and fails with an expected-vs-actual message when one mapping row is deliberately broken. *(bash 3.2.57: 28 cases pass; with `iosApp/*` removed from the ios row in a copy: `FAIL: iosApp/iosApp/iOSApp.swift`, `expected: ios=true` / `actual: ios=false`, exit 1.)*
+- [ ] ~~On the pull request, `ios-tests` runs and passes, including both Xcode builds; `android-tests` and the Server pipeline pass; the release job depends on `android-tests`.~~ *(skipped: the workflows run only on pull requests, which the maintainer opens; no `gh` here. Locally: the same Gradle task and both `xcodebuild`s pass, `release` has `needs: [changes, android-tests]`. Check on the PR.)*
+- [ ] ~~A shared test that fails only on iOS makes `ios-tests` fail (checked once with a temporary failing test on a scratch branch, then removed).~~ *(skipped: needs a pull request to trigger the workflow, which the assistant may not open. The step runs `iosSimulatorArm64Test`, whose failure fails the job; the maintainer can confirm once with a throwaway PR.)*
+- [x] `grep -rn 'android-gate\|ios-compile' .github README.md deploy CLAUDE.md` finds nothing. *(exit 1, no output.)*
+- [ ] ~~The PR description tells the maintainer to replace the required checks `android-gate`/`ios-compile` with `android-tests`/`ios-tests` before merging.~~ *(skipped: the description is written at the handover after task 09; the reminder text is recorded in the step above.)*
+- [x] The iOS workflow names a fixed macOS runner image and a fixed Xcode version, and the chosen version is recorded in the runbook. *(`runs-on: macos-26`, `XCODE_APP: /Applications/Xcode_26.6.app` + `xcode-select`; `deploy/README.md` "iOS" records Xcode 26.6 and why.)*
 
 ### Quality gates
 
-- [ ] Common quality gates pass.
-- [ ] Every action in the new workflow is pinned by commit SHA; the workflow grants `contents: read` only.
-- [ ] Both scripts use `set -euo pipefail` and pass `bash -n`.
+- [x] Common quality gates pass. *(Re-run with `--rerun`: 807/807 on the JVM and on the iOS Simulator; iOS compile up to date; `xcodebuild` Debug and Release `BUILD SUCCEEDED` with 0 warnings; only the accepted `Configuration.setVisible` deprecation; no team, identifier or address in the diff.)*
+- [x] Every action in the new workflow is pinned by commit SHA; the workflow grants `contents: read` only.
+- [x] Both scripts use `set -euo pipefail` and pass `bash -n`.
 
 ---
 

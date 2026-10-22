@@ -1,12 +1,12 @@
-# The app's pipeline: the Android gate on every pull request that touches app code, the iOS
-# compile gate on every pull request that touches shared app code or shared build configuration,
-# and on a push to main that changed the app, a signed release published as a GitHub prerelease.
+# The Android app's pipeline: the Android gate on every pull request that touches app code, and on a
+# push to main that changed the app, a signed release published as a GitHub prerelease. The iPhone
+# app has its own pipeline, ios.yml.
 #
 # Triggered by every pull request into develop or main and every push to main, with no path filter,
-# so its gates always report and can be required checks. The `changes` job asks
-# .github/scripts/changed-components.sh (the one path -> component mapping, shared with
-# server.yml) whether the app (android) and the shared code (ios) changed; a gate whose component did
-# not change is skipped, which GitHub counts as passed. See deploy/README.md.
+# so its gate always reports and can be a required check. The `changes` job first runs the
+# self-test of .github/scripts/changed-components.sh (the one path -> component mapping, shared
+# with server.yml and ios.yml), then asks it whether the Android app changed; when it did not, the
+# gate is skipped, which GitHub counts as passed. See deploy/README.md.
 name: Android
 
 on:
@@ -30,13 +30,16 @@ jobs:
     timeout-minutes: 5
     outputs:
       android: ${{ steps.detect.outputs.android }}
-      ios: ${{ steps.detect.outputs.ios }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # A broken mapping must fail every pipeline, not silently skip a gate.
+      - name: Test the change detection
+        run: .github/scripts/changed-components-test.sh
 
       # Pull request: everything since its base; push to main: everything since the previous tip.
       - name: Detect the changed components
@@ -45,8 +48,8 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: .github/scripts/changed-components.sh "$BASE" HEAD
 
-  android-gate:
-    name: android-gate
+  android-tests:
+    name: android-tests
     needs: changes
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-24.04
@@ -97,27 +100,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Compiles the shared code and its tests for the iOS simulator, so JVM-only code in commonMain
-  # fails the pull request. No Xcode project is involved (there is none yet); publishing to
-  # TestFlight comes with the iOS feature.
-  ios-compile:
-    name: ios-compile
-    needs: changes
-    if: needs.changes.outputs.ios == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 45
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up JDK and Gradle
-        uses: ./.github/actions/setup-jvm
-
-      - name: Compile the shared code and its tests for the iOS simulator
-        run: ./gradlew :composeApp:compileTestKotlinIosSimulatorArm64
-
   # A merged release that changed the app: a signed APK and app bundle, the R8 mapping uploaded to
   # Crashlytics, and a GitHub prerelease tagged android-v<versionName>-<versionCode> holding the APK,
   # the bundle and mapping.txt. The signing secrets live in the environment android-release, which
@@ -125,7 +107,7 @@ jobs:
   # signing".
   release:
     name: Android release
-    needs: [changes, android-gate]
+    needs: [changes, android-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45

@@ -8,13 +8,15 @@
 # appended to $GITHUB_OUTPUT when it is set, otherwise to stdout. A missing or all-zero base (first
 # push, rewritten history) or one git cannot resolve means "everything changed".
 #
-# Mapping (anything not listed, e.g. *.md, .sdd/, .github/dependabot.yml, iosApp/, runs no gate):
+# Mapping (anything not listed, e.g. *.md, .sdd/, .github/dependabot.yml, runs no gate):
 #   server/**, deploy/**, .github/workflows/server.yml          -> server
-#   androidApp/**, .github/workflows/android.yml                 -> android (android.yml: also ios,
-#                                                                   whose job lives in that workflow)
+#   androidApp/**, .github/workflows/android.yml                 -> android
+#   iosApp/**, .github/workflows/ios.yml                          -> ios
 #   composeApp/**, theme/**                                       -> android, ios
 #   gradle/**, root Gradle files, gradlew(.bat), buildSrc/**,
 #   .github/actions/**, .github/scripts/**                        -> server, android, ios
+#
+# Every case is pinned by changed-components-test.sh, which each workflow runs first.
 set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
@@ -47,9 +49,11 @@ else
     case "$file" in
       server/* | deploy/* | .github/workflows/server.yml)
         server=true ;;
-      androidApp/*)
+      androidApp/* | .github/workflows/android.yml)
         android=true ;;
-      .github/workflows/android.yml | composeApp/* | theme/*)
+      iosApp/* | .github/workflows/ios.yml)
+        ios=true ;;
+      composeApp/* | theme/*)
         android=true
         ios=true ;;
       gradle/* | build.gradle.kts | settings.gradle.kts | gradle.properties | gradlew | gradlew.bat \

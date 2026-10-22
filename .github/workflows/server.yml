@@ -1,10 +1,10 @@
 # The server's pipeline: test, package, scan and — on main only — publish the container image.
 #
 # Triggered by every pull request into develop or main and every push to main, with no path filter,
-# so its gate always reports and can be a required check. The `changes` job asks
-# .github/scripts/changed-components.sh (the one path -> component mapping, shared with
-# android.yml) whether the server changed; when it did not, the gate is skipped, which GitHub counts
-# as passed, and nothing is published. See deploy/README.md.
+# so its gate always reports and can be a required check. The `changes` job first runs the
+# self-test of .github/scripts/changed-components.sh (the one path -> component mapping, shared
+# with android.yml and ios.yml), then asks it whether the server changed; when it did not, the gate
+# is skipped, which GitHub counts as passed, and nothing is published. See deploy/README.md.
 name: Server
 
 on:
@@ -37,6 +37,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # A broken mapping must fail every pipeline, not silently skip a gate.
+      - name: Test the change detection
+        run: .github/scripts/changed-components-test.sh
 
       # Pull request: everything since its base; push to main: everything since the previous tip.
       - name: Detect the changed components

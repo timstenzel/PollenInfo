@@ -90,13 +90,17 @@ call reports no JDK, export `JAVA_HOME` for that one call).
 - `gradle-wrapper.jar` is committed (CI validates it); regenerate only with `./gradlew wrapper`.
 - CI: every pull request into `develop`/`main` and every push to `main` runs the gates of the
   components it changed, decided by `.github/scripts/changed-components.sh` (the one path →
-  component mapping; docs-only changes run nothing, shared build files run everything). Server gate:
+  component mapping; docs-only changes run nothing, shared build files run everything; **change
+  it together with its table-driven self-test `changed-components-test.sh`**, which every
+  workflow's `changes` job runs first — bash 3.2, run it locally). Server gate:
   `.github/workflows/server.yml` (`Test, build and scan`: server tests, image, Trivy; publishes on
-  `main`). Android gate: `.github/workflows/android.yml` (`android-gate`: app tests,
+  `main`). Android gate: `.github/workflows/android.yml` (`android-tests`: app tests,
   `checkTranslations`, `:androidApp:lintRelease`, debug and unsigned release build, the two
-  debug-only merged-manifest `grep`s of this file). iOS compile gate: `ios-compile` in the same
-  workflow (macOS, `:composeApp:compileTestKotlinIosSimulatorArm64`, when shared app code or shared
-  build files change). Android release: job `Android release` on a push to `main` that changed the
+  debug-only merged-manifest `grep`s of this file). iOS gate: `.github/workflows/ios.yml`
+  (`ios-tests`, when `iosApp/`, shared app code or shared build files change: `macos-26` with
+  Xcode 26.6 pinned via `xcode-select`, `:composeApp:iosSimulatorArm64Test`, unsigned Debug and
+  Release Simulator `xcodebuild`s; raise runner and Xcode together, see `deploy/README.md`).
+  Required checks: `Test, build and scan`, `android-tests`, `ios-tests`. Android release: job `Android release` on a push to `main` that changed the
   app (environment `android-release`, the only job with `contents: write`): signed APK and bundle,
   mapping uploaded, GitHub prerelease `android-v<versionName>-<versionCode>`. Shared setup in
   `.github/actions/setup-jvm`; every action pinned by commit SHA. Rules in `deploy/README.md`.

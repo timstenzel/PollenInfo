@@ -396,8 +396,8 @@ are merged from `develop` into `main` with a merge commit, nothing else lands on
    - Block force pushes: on.
    - Require a pull request before merging: on, **0** required approvals; allowed merge methods:
      **Squash** only.
-   - Require status checks to pass: on, with the checks `Test, build and scan`, `android-gate` and
-     `ios-compile`; "Require branches to be up to date before merging": **off**.
+   - Require status checks to pass: on, with the checks `Test, build and scan`, `android-tests` and
+     `ios-tests`; "Require branches to be up to date before merging": **off**.
 3. **Ruleset `main`** (target branch `main`): the same as `develop` — deletions restricted, force
    pushes blocked, pull request required with 0 approvals, the same three required checks, branches
    up to date off — but allowed merge methods: **Merge** only.
@@ -414,10 +414,12 @@ is not blocked by the required checks.
 
 ## CI
 
-Two workflows, `.github/workflows/server.yml` (backend) and `.github/workflows/android.yml` (app).
-Both run on **every** pull request into `develop` or `main` and on every push to `main`, without a
-path filter, so their gates always report and can be required checks. In each, a first job,
-`changes`, runs `.github/scripts/changed-components.sh` on the change: for a pull request everything since its base,
+Three workflows, `.github/workflows/server.yml` (backend), `.github/workflows/android.yml` (Android
+app) and `.github/workflows/ios.yml` (iPhone app). All run on **every** pull request into `develop`
+or `main` and on every push to `main`, without a path filter, so their gates always report and can
+be required checks. In each, a first job, `changes`, runs the self-test
+`.github/scripts/changed-components-test.sh` (below) and then `.github/scripts/changed-components.sh`
+on the change: for a pull request everything since its base,
 for a push to `main` everything since the previous tip (a release pull request is therefore checked
 for everything changed since the last release). An unknown or all-zero base counts as "everything
 changed". The script is the one place that maps paths to components:
@@ -425,10 +427,21 @@ changed". The script is the one place that maps paths to components:
 | Paths | server | android | ios |
 | --- | --- | --- | --- |
 | `server/`, `deploy/`, `.github/workflows/server.yml` | yes | | |
-| `androidApp/` | | yes | |
-| `composeApp/`, `theme/`, `.github/workflows/android.yml` | | yes | yes |
+| `androidApp/`, `.github/workflows/android.yml` | | yes | |
+| `iosApp/`, `.github/workflows/ios.yml` | | | yes |
+| `composeApp/`, `theme/` | | yes | yes |
 | `gradle/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `buildSrc/`, `.github/actions/`, `.github/scripts/` | yes | yes | yes |
 | anything else (`*.md`, `.sdd/`, `.github/dependabot.yml`, …) | | | |
+
+**The mapping's self-test**, `.github/scripts/changed-components-test.sh`, builds a throwaway git
+repository in a temporary directory (fixed throwaway identity, no commit signing, no hooks), commits
+one change per case and compares the script's output with the expected components: one case per
+row above, documentation-only changes, mixed changes, and an empty, all-zero or unresolvable base.
+It stops at the first mismatch, printing expected and actual. It runs first in every workflow's
+`changes` job, so a broken mapping fails every pipeline instead of silently skipping a gate; and
+since `.github/scripts/` maps to every component, a change to either script runs every gate. Run it
+locally with `.github/scripts/changed-components-test.sh` (plain bash 3.2, so macOS's `/bin/bash`
+works).
 
 ### Server: `.github/workflows/server.yml`
 
@@ -444,7 +457,7 @@ passed — and nothing is published. Otherwise the gate runs:
 
 ### Android: `.github/workflows/android.yml`
 
-When `android` is false, the gate `android-gate` (Linux) is skipped and counts as passed. Otherwise
+When `android` is false, the gate `android-tests` (Linux) is skipped and counts as passed. Otherwise
 it runs:
 
 1. `./gradlew :composeApp:testAndroidHostTest :composeApp:checkTranslations :androidApp:lintRelease
@@ -457,15 +470,8 @@ it runs:
    `firebase_crashlytics_collection_enabled` must appear in the **debug** merged manifest only, so a
    release can never talk to a server unencrypted or ship with crash reporting switched off.
 
-When `ios` is true (shared app code in `composeApp/` or `theme/`, the Android workflow itself or
-shared build configuration changed), the job `ios-compile` runs on a macOS runner:
-`./gradlew :composeApp:compileTestKotlinIosSimulatorArm64` compiles the shared code and its tests for
-the iOS simulator, so JVM-only code in shared sources fails the pull request. It needs no Xcode
-project (there is none yet) and runs no tests (those need full Xcode). Otherwise it is skipped and
-counts as passed. Publishing an iOS build (TestFlight) comes with the iOS feature.
-
 On a push to `main` (a merged release) that changed the app, the job `Android release` runs after
-`android-gate` passed, in the environment `android-release` (the only place the signing secrets
+`android-tests` passed, in the environment `android-release` (the only place the signing secrets
 exist):
 
 1. checks out the full history (the version code is the commit count), writes the keystore from
@@ -483,6 +489,29 @@ release.
 
 Concurrency group `android-<ref>`; a newer push cancels a running pull request run, never a run on
 `main`.
+
+### iOS: `.github/workflows/ios.yml`
+
+When `ios` is false, the gate `ios-tests` is skipped and counts as passed. Otherwise it runs on the
+macOS runner image `macos-26` with **Xcode 26.6** selected by `xcode-select` (both fixed, so a runner
+image update cannot change the build unnoticed):
+
+1. `./gradlew :composeApp:iosSimulatorArm64Test` — the whole shared test suite (`commonTest`) on an
+   iOS Simulator, so code or tests that fail only on iOS fail the pull request,
+2. `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -destination
+   'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`, and the same for `Release` —
+   the Xcode wrapper unsigned for the Simulator, catching broken project, configuration, Info.plist,
+   asset or build-phase files (the build runs Gradle itself through its "Compile Kotlin" phase).
+
+Nothing is signed or published (no paid Apple Developer account yet; TestFlight comes later).
+
+**Xcode version** (chosen 2026-10-22): development uses Xcode 27.0, but GitHub offers it only on the
+preview image `xcode-27`; the newest stable combination, `macos-26` with Xcode 26.6 (the image's
+default), is pinned instead. The project's format (`objectVersion` 77) opens in both. To raise it,
+check the image's README (`actions/runner-images`, `images/macos/`) for the installed Xcode
+versions, change `runs-on` and `XCODE_APP` in `ios.yml` together, and record the choice here.
+
+Concurrency group `ios-<ref>`, as for Android.
 
 Rules every workflow in `.github/` follows:
 

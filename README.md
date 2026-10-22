@@ -248,12 +248,16 @@ exist yet. The `Info.plist` keys and entitlements it will need are listed in
 ## CI
 
 CI is GitHub Actions, one workflow per shipped artifact: the backend's
-[`.github/workflows/server.yml`](.github/workflows/server.yml) (below) and the app's
-[`.github/workflows/android.yml`](.github/workflows/android.yml), whose gate `android-gate` runs the
+[`.github/workflows/server.yml`](.github/workflows/server.yml) (below), the Android app's
+[`.github/workflows/android.yml`](.github/workflows/android.yml), whose gate `android-tests` runs the
 app tests, the translation check, Android Lint, a debug and an unsigned release build, and checks that cleartext,
-local-network access and "crash reports off" exist only in the debug build. Both run on every pull
-request into `develop` or `main` and every push to `main`; `.github/scripts/changed-components.sh`
-decides which gates actually run. A push to `main` that changed the app also builds a **signed**
+local-network access and "crash reports off" exist only in the debug build, and the iPhone app's
+[`.github/workflows/ios.yml`](.github/workflows/ios.yml), whose gate `ios-tests` runs the shared
+tests on an iOS Simulator and builds the Xcode wrapper unsigned in Debug and Release (pinned macOS
+runner and Xcode). All three run on every pull request into `develop` or `main` and every push to
+`main`; `.github/scripts/changed-components.sh` decides which gates actually run, and its self-test
+`changed-components-test.sh` runs first in every workflow. Required checks: `Test, build and
+scan`, `android-tests`, `ios-tests` ([CI](deploy/README.md#ci)). A push to `main` that changed the app also builds a **signed**
 APK and app bundle (version code = commit count) and publishes them with the R8 mapping as a GitHub
 prerelease `android-v<versionName>-<versionCode>` ([signing](deploy/README.md#android-release-signing),
 [cutting a release](deploy/README.md#cutting-a-release)).
