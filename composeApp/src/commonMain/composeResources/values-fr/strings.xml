@@ -196,7 +196,7 @@
     <string name="diary_range_week">Semaine</string>
     <string name="diary_range_month">Mois</string>
     <string name="diary_range_year">Année</string>
-    <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.*</string>
+    <string name="diary_intro">Comparez votre ressenti avec les niveaux de pollen d’une station.</string>
     <string name="diary_no_entries_hint">Répondez à « %1$s » dans l’onglet %2$s pour voir votre courbe ici.</string>
     <string name="diary_species_heading">Types de pollen</string>
     <string name="diary_feeling_legend">Votre ressenti</string>

@@ -193,7 +193,7 @@
     <string name="diary_range_week">Woche</string>
     <string name="diary_range_month">Monat</string>
     <string name="diary_range_year">Jahr</string>
-    <string name="diary_intro">Vergleiche, wie du dich gefühlt hast, mit der Pollenbelastung an einer Station.*</string>
+    <string name="diary_intro">Vergleiche, wie du dich gefühlt hast, mit der Pollenbelastung an einer Station.</string>
     <string name="diary_no_entries_hint">Beantworte «%1$s» unter %2$s, um hier deine Linie zu sehen.</string>
     <string name="diary_species_heading">Pollenarten</string>
     <string name="diary_feeling_legend">Dein Befinden</string>

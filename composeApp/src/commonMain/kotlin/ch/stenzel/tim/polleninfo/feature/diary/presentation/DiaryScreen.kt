@@ -253,12 +253,6 @@ private fun ColumnScope.DiaryView(content: DiaryUiState.Content, actions: DiaryA
             )
         }
     }
-    Spacer(Modifier.height(DIARY_SECTION_GAP))
-    Text(
-        text = stringResource(Res.string.diary_disclaimer),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /**

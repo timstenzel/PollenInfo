@@ -193,7 +193,7 @@
     <string name="diary_range_week">Settimana</string>
     <string name="diary_range_month">Mese</string>
     <string name="diary_range_year">Anno</string>
-    <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.*</string>
+    <string name="diary_intro">Confronti come stava con i livelli di polline in una stazione.</string>
     <string name="diary_no_entries_hint">Risponda a «%1$s» nella scheda %2$s per vedere qui la Sua linea.</string>
     <string name="diary_species_heading">Tipi di polline</string>
     <string name="diary_feeling_legend">Il suo stato</string>

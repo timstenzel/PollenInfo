@@ -221,7 +221,7 @@
     <string name="diary_range_week">Week</string>
     <string name="diary_range_month">Month</string>
     <string name="diary_range_year">Year</string>
-    <string name="diary_intro">Compare how you felt with the pollen levels at a station.*</string>
+    <string name="diary_intro">Compare how you felt with the pollen levels at a station.</string>
     <string name="diary_no_entries_hint">Answer “%1$s” on %2$s to see your line here.</string>
     <string name="diary_species_heading">Pollen types</string>
     <string name="diary_feeling_legend">Your feeling</string>
