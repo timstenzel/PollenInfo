@@ -10,7 +10,7 @@ navigationEvent = "1.1.0"
 haze = "2.0.1"
 ktor = "3.6.0"
 koin = "4.2.2"
-serialization = "1.11.0"
+serialization = "1.12.0"
 coroutines = "1.11.0"
 # Strict, so it wins over the `0.8.0-0.6.x-compat` artifact Ktor 3.6 asks for (`ktor-openapi-schema`,
 # which names the old types only as strings): the app uses `kotlin.time.Instant` / `Clock`, and the
