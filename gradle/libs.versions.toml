@@ -30,7 +30,7 @@ hikari = "7.1.0"
 # flyway-core and flyway-database-postgresql must stay on one version.
 flyway = "13.10.0"
 testcontainers = "2.0.5"
-firebaseBom = "35.0.0"
+firebaseBom = "35.1.0"
 googleServices = "4.5.0"
 # The Crashlytics Gradle plugin: uploads the R8 mapping of every release build.
 firebaseCrashlyticsPlugin = "3.0.8"
