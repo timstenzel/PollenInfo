@@ -16,9 +16,10 @@ Feature: `ios-app` · Requirements: `.sdd/ios-app/requirements.md`
 The tracer bullet: an Xcode project that builds the shared Kotlin code, hosts the shared app and
 launches it on the iOS Simulator, talking to the backend chosen by its build configuration. Debug
 uses the local backend with plain HTTP allowed; Release always uses production with no exception.
-Both have their final bundle identifiers and display names, install side by side, iPhone only,
-portrait and landscape. **Simulator only** — device installs start in task 04, with the local
-settings file, so the final identifier is never registered with Apple.
+Both have their bundle identifiers (for now the placeholder `ch.stenzel.tim.testproject`, the final
+`ch.stenzel.tim.polleninfo` once the paid Apple account is ready) and display names, install side by
+side, iPhone only, portrait and landscape. **Simulator only** — device installs start in task 04,
+with the local settings file, so the final identifier is never registered with Apple.
 
 ### Implementation steps
 
@@ -36,7 +37,7 @@ settings file, so the final identifier is never registered with Apple.
 - [ ] ~~With the local backend running, the Debug app on an iPhone Simulator shows onboarding, and after picking a station Home shows readings served by the local backend.~~ *(skipped: no Simulator UI or tapping tool on this Mac, so the station could not be picked by hand. Verified instead: onboarding shows with the station list from the local backend; with the station stored in the preferences file, Home shows Zürich's reading and the server logs `GET /pollen/stations/PZH/measurements`. The maintainer should pick a station in onboarding once.)*
 - [x] The Release app on the Simulator shows readings from `https://api.polleninfo.ch`.
 - [x] The processed Release Info.plist contains no App Transport Security exception; the Debug one contains `NSAllowsLocalNetworking`.
-- [x] Built bundle identifiers are `ch.stenzel.tim.polleninfo.debug` (Debug) and `ch.stenzel.tim.polleninfo` (Release); both apps appear side by side on the Simulator home screen as "PollenInfo (debug)" and "PollenInfo".
+- [x] Built bundle identifiers are `ch.stenzel.tim.testproject.debug` (Debug) and `ch.stenzel.tim.testproject` (Release) — placeholders until the paid Apple account is ready, then `ch.stenzel.tim.polleninfo(.debug)`; both apps appear side by side on the Simulator home screen as "PollenInfo (debug)" and "PollenInfo".
 - [x] `env -u JAVA_HOME xcodebuild … -configuration Debug … build` succeeds.
 - [x] `grep -rn 'localhost:8080\|api.polleninfo.ch' composeApp/src` finds nothing.
 
@@ -122,7 +123,7 @@ reachable from the phone.
 
 ### Acceptance criteria
 
-- [x] Without a local settings file, `xcodebuild -showBuildSettings` for Debug and Release shows the identifiers and addresses from task 01. *(Debug `ch.stenzel.tim.polleninfo.debug` / `http://localhost:8080`, Release `ch.stenzel.tim.polleninfo` / `https://api.polleninfo.ch`, no `DEVELOPMENT_TEAM`.)*
+- [x] Without a local settings file, `xcodebuild -showBuildSettings` for Debug and Release shows the identifiers and addresses from task 01. *(Debug `ch.stenzel.tim.testproject.debug` / `http://localhost:8080`, Release `ch.stenzel.tim.testproject` / `https://api.polleninfo.ch`, no `DEVELOPMENT_TEAM`; re-checked 2026-10-24 after the switch to the placeholder.)*
 - [ ] ~~With a local file setting a throwaway base identifier and team, `xcodebuild -showBuildSettings` for Debug and Release shows only the throwaway `PRODUCT_BUNDLE_IDENTIFIER`s, and both builds install and launch on the maintainer's iPhone.~~ *(skipped in part: no iPhone connected and no signing identity here. Build settings verified with a test `Local.xcconfig`: `ch.example.throwaway.polleninfo.debug` / `ch.example.throwaway.polleninfo`, team `TEST123456` in both. Install and launch on the iPhone: checklist row 5, for the maintainer.)*
 - [ ] ~~With a local Debug backend address set to the Mac's LAN IP, the Debug app on the iPhone shows readings from the local backend.~~ *(skipped: no iPhone connected. The built Debug Info.plist has `API_BASE_URL = http://192.168.1.20:8080` and `NSAllowsLocalNetworking = true`. Checklist row 6, for the maintainer.)*
 - [x] With a backend address in the local file, the processed Release Info.plist still contains `https://api.polleninfo.ch`. *(Simulator Release build with a test `Local.xcconfig` setting `http://192.168.1.20:8080`: `plutil -extract API_BASE_URL` → `https://api.polleninfo.ch`, no `NSAppTransportSecurity`.)*

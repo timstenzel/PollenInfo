@@ -319,7 +319,9 @@ The Xcode wrapper is `iosApp/` (configurations in `iosApp/Config/`, hand-written
 - **Own iPhone (free Apple ID, "Personal Team"):** both configurations end with `#include?
   "Local.xcconfig"` (git-ignored; `Local.xcconfig.example` documents it): `DEVELOPMENT_TEAM`, a
   throwaway `BUNDLE_ID_BASE` (a Personal Team install registers the identifier with Apple — **never**
-  the final `ch.stenzel.tim.polleninfo`) and, Debug only, an `API_BASE_URL` the phone can reach (the
+  the final `ch.stenzel.tim.polleninfo`; until the paid Apple Developer account is ready, the
+  committed `BUNDLE_ID_BASE` in `Base.xcconfig` is the placeholder `ch.stenzel.tim.testproject`,
+  with a TODO to switch) and, Debug only, an `API_BASE_URL` the phone can reach (the
   Mac's LAN address; `NSAllowsLocalNetworking` covers it). Release re-assigns production after the
   include. Never commit a team, a personal identifier or a private address. A Personal Team install
   expires after seven days — reinstall from Xcode.

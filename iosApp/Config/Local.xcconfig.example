@@ -8,7 +8,8 @@
 DEVELOPMENT_TEAM = ABCDE12345
 
 // A throwaway identifier of your own. A Personal Team install registers the identifier with Apple,
-// so never use the app's final one (ch.stenzel.tim.polleninfo). Debug appends ".debug".
+// so never use the app's final one (ch.stenzel.tim.polleninfo). Without it, the committed placeholder
+// ch.stenzel.tim.testproject is used. Debug appends ".debug".
 BUNDLE_ID_BASE = ch.example.yourname.polleninfo
 
 // Debug only: a backend address your iPhone can reach, e.g. the Mac's address in the same Wi-Fi

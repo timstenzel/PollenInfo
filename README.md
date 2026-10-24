@@ -228,6 +228,8 @@ Simulator; the build compiles the shared Kotlin code itself. Debug ("PollenInfo 
 2. Copy [`iosApp/Config/Local.xcconfig.example`](iosApp/Config/Local.xcconfig.example) to
    `iosApp/Config/Local.xcconfig` (git-ignored) and set your team ID and a throwaway base identifier
    — never the app's final `ch.stenzel.tim.polleninfo`, which an install would register with Apple.
+   Without one, the committed placeholder `ch.stenzel.tim.testproject` is used (`Base.xcconfig`;
+   switched to the final identifier once the paid Apple Developer account is ready).
 3. For the debug build against your Mac, set `API_BASE_URL` there to the Mac's address in the same
    Wi-Fi (e.g. `http:/$()/192.168.1.20:8080`) and run `./gradlew :server:run`. Release ignores it.
 4. Connect the iPhone, turn on Developer Mode (Settings → Privacy & Security), pick it as the run

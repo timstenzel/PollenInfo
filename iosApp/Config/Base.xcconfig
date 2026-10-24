@@ -1,8 +1,10 @@
 // Settings shared by Debug and Release. Technical target settings live in the Xcode project;
 // identity, names, version and backend address live here and in Debug/Release.xcconfig.
 
-// The app's final identifier. Debug appends ".debug" so both builds install side by side.
-BUNDLE_ID_BASE = ch.stenzel.tim.polleninfo
+// A placeholder identifier for now, so no device install can register the app's final one
+// (ch.stenzel.tim.polleninfo) with Apple. Debug appends ".debug" so both builds install side by side.
+// TODO: change to ch.stenzel.tim.polleninfo once the paid Apple Developer account is ready.
+BUNDLE_ID_BASE = ch.stenzel.tim.testproject
 
 // Keep in step with appVersionName in androidApp/build.gradle.kts.
 MARKETING_VERSION = 1.0.0

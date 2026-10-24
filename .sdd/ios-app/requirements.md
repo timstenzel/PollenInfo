@@ -31,9 +31,10 @@ installable on the iOS Simulator and on the maintainer's own iPhone using a free
   developer's local backend (overridable per developer, e.g. to reach the Mac from a real iPhone),
   and a **release** build named "PollenInfo" that always talks to the production backend. Both can
   be installed side by side. The Android debug build gets the same "PollenInfo (debug)" name.
-- The app's final identity (`ch.stenzel.tim.polleninfo`) stays in the repository but is never
-  claimed by a Personal Team install: each developer's private, untracked settings substitute a
-  throwaway identifier and their own signing team.
+- The app's final identity (`ch.stenzel.tim.polleninfo`) is never claimed by a Personal Team
+  install: until the paid Apple Developer account is ready, the repository holds the placeholder
+  `ch.stenzel.tim.testproject` (to be switched to the final identifier then), and each developer's
+  private, untracked settings may substitute a throwaway identifier and their own signing team.
 - iOS gets its own app icon (default, dark and tinted), designed in Figma from the chosen gauge
   concept and reviewed by the maintainer, a launch screen in the app's surface colour, a location
   permission text in all four app languages, and a privacy manifest.
@@ -262,7 +263,7 @@ installable on the iOS Simulator and on the maintainer's own iPhone using a free
 
 ```
 // Base.xcconfig
-BUNDLE_ID_BASE = ch.stenzel.tim.polleninfo
+BUNDLE_ID_BASE = ch.stenzel.tim.testproject   // placeholder; ch.stenzel.tim.polleninfo once the paid Apple account is ready
 MARKETING_VERSION = 1.0.0            // keep in step with appVersionName in androidApp/build.gradle.kts
 CURRENT_PROJECT_VERSION = 1          // overwritten in the built Info.plist by "Stamp Build Number"
 DEVELOPMENT_TEAM =
