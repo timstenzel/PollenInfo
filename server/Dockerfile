@@ -8,7 +8,7 @@
 #   docker build -t polleninfo-server:local server
 #
 # No secrets and no test classes: the build context is only build/install/server (.dockerignore).
-FROM eclipse-temurin:21.0.12.1_1-jre-resolute@sha256:e9a838377dc3719c0a0e7d1ac2e13d6f49c5cacd643f9a22024845736bb00ad9
+FROM eclipse-temurin:21.0.13_9-jre-resolute@sha256:f8622d0220c9e218d7a33f24a7b9e1ad6bc726085f8b0ae74e1adf85f67f05c4
 
 # A fixed uid, so secret files on the host can be owned by exactly this user (mode 0400).
 ARG APP_UID=10001
