@@ -21,7 +21,7 @@ x-hardening: &hardening
 services:
   caddy:
     <<: *hardening
-    image: caddy:2.11.7
+    image: caddy:2.11.8
     mem_limit: 128m
     environment:
       # The site Caddy serves and obtains a certificate for; compose.local.yaml sets localhost.
